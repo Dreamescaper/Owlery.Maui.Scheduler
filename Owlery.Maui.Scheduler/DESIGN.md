@@ -490,6 +490,25 @@ model — and that is also what moves it back if the call failed.
 so an `async` handler must do its validation *before* its first `await`. Checks that must veto a drag
 (external calendars, offline) therefore belong in `AppointmentDragStarting`, which is synchronous.
 
+### Reaching off-screen hours
+
+Edge paging solves reaching another period; the same problem exists vertically, because the day is
+taller than the viewport. Holding a dragged appointment against the top or bottom scrolls the
+timeline, with two deliberate differences from paging: it starts immediately rather than after a
+dwell — dragging towards an off-screen hour is unambiguous, whereas the first and last columns are
+somewhere a person legitimately wants to drop — and it moves continuously rather than a page at a
+time.
+
+The subtlety is which coordinates the touch arrives in. Points come from the drawing surface, which
+lives *inside* the timeline's scroll view, so they are in content coordinates: a finger held still
+over a scrolling grid is over a different time each frame, yet raises no new touch events. Each scroll
+step therefore advances the remembered point by exactly what it scrolled and re-resolves the target,
+which is what keeps the appointment under the finger while the hours move beneath it.
+
+`ViewportHeight` is taken from what the control itself was allocated rather than read back off the
+scroll view, which reports `-1` until the platform has measured it — so relying on the scroll view
+would have meant the feature silently never triggered, and could not be tested at all.
+
 **Known risk.** The Android branch of `SetScrollingEnabled` is untested — see section 15.
 
 ---

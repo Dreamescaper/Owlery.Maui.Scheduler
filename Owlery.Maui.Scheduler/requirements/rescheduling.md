@@ -47,8 +47,8 @@ A label the indicator merely touches stays, so the gutter does not appear to los
 **DND-11** An appointment cannot be dragged outside the day window, and cannot be positioned so that
 part of it would fall outside it.
 
-**DND-12** Neither the calendar nor the timeline scrolls while an appointment is being dragged, so the
-grid stays still under it.
+**DND-12** Moving a dragged appointment never scrolls the calendar as a side effect: the grid stays
+still under it, except where it is deliberately held against an edge.
 
 **DND-13** The appointment being dragged is drawn above everything else on the grid.
 
@@ -90,6 +90,23 @@ data loading keep up with the drag.
 leaving appointments movable only within the week they are already in.
 
 **DND-33** The faded copy disappears as soon as the finger lifts, whatever the outcome.
+
+## Reaching hours that are off screen
+
+**DND-40** Holding a dragged appointment against the top or bottom of the timeline scrolls it, so a
+time that is off screen can be reached without putting the appointment down first.
+
+**DND-41** This begins as soon as the edge is reached, without the pause that changing period
+requires. Dragging towards an hour that is off screen means only one thing, whereas the first and last
+columns are somewhere a person legitimately wants to drop.
+
+**DND-42** The appointment stays under the finger while the hours move beneath it, so the time it
+would take follows the scrolling rather than the finger having to chase it.
+
+**DND-43** Scrolling stops at the first and last hour of the day; there is nothing beyond them to
+reach.
+
+**DND-44** Moving away from the edge stops it, and the timeline stays where it got to.
 
 ## Dropping
 

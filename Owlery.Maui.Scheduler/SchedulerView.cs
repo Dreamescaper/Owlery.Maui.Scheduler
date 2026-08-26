@@ -22,6 +22,8 @@ public partial class SchedulerView : ContentView
     private const double DragMovementToleranceDp = 12;
     private const double TapMovementToleranceDp = 8;
     private const int EdgePagingDwellMs = 600;
+    private const double EdgeScrollStepDp = 14;
+    private const int EdgeScrollIntervalMs = 60;
     private const int DayCountAnimationMs = 220;
     private const string DayCountAnimationName = "SchedulerDayCount";
     private const double GhostOpacity = 0.5;
@@ -65,6 +67,7 @@ public partial class SchedulerView : ContentView
     private bool snapping;
     private bool suppressDisplayDateSync;
     private bool initialised;
+    private double allocatedHeight;
 
     private View? dragView;
     private View? pressedView;
@@ -72,6 +75,8 @@ public partial class SchedulerView : ContentView
     private ISchedulerAppointment? floatingAppointment;
     private IDispatcherTimer? edgePagingTimer;
     private int edgePagingDirection;
+    private IDispatcherTimer? edgeScrollTimer;
+    private int edgeScrollDirection;
     private bool pagingDuringDrag;
     private Point lastDragPoint;
     private bool dragArmed;
@@ -254,11 +259,17 @@ public partial class SchedulerView : ContentView
         if (width <= 0)
             return;
 
+        allocatedHeight = height;
+
         var viewport = Math.Max(0, width - TimeGutterWidth);
-        if (Math.Abs(viewport - geometry.ViewportWidth) < 0.5 && initialised)
-            return;
+        var unchanged = Math.Abs(viewport - geometry.ViewportWidth) < 0.5 && initialised;
 
         geometry.ViewportWidth = viewport;
+        geometry.ViewportHeight = Math.Max(0, height - HeaderHeight);
+
+        if (unchanged)
+            return;
+
         ApplyGeometry();
     }
 
@@ -354,6 +365,8 @@ public partial class SchedulerView : ContentView
         geometry.EndHour = EndHour;
         geometry.FirstDayOfWeek = FirstDayOfWeek;
         geometry.Now = NowInZone();
+
+        geometry.ViewportHeight = Math.Max(0, allocatedHeight - HeaderHeight);
 
         gutterDrawable.HourFormat = TimeFormat;
         gutterDrawable.Width = TimeGutterWidth;

@@ -254,6 +254,7 @@ public partial class SchedulerView
             return;
 
         StopEdgePaging();
+        StopEdgeScrolling();
         SetScrollingEnabled(true);
         ClearDragIndicator();
         HideDraggedAppointment();
@@ -414,6 +415,7 @@ public partial class SchedulerView
         }
 
         UpdateEdgePaging(point);
+        UpdateEdgeScrolling(point);
     }
 
     /// <summary>
@@ -453,6 +455,79 @@ public partial class SchedulerView
         edgePagingTimer.IsRepeating = true;
         edgePagingTimer.Tick += (_, _) => _ = PageDuringDragAsync();
         edgePagingTimer.Start();
+    }
+
+    /// <summary>
+    /// Holding a dragged appointment against the top or bottom of the timeline scrolls it, so times
+    /// that are off screen can be reached without putting the appointment down first.
+    /// </summary>
+    /// <remarks>
+    /// No dwell here, unlike edge paging. Dragging towards an hour that is off screen means only one
+    /// thing, whereas the leading and trailing columns are somewhere a person legitimately wants to
+    /// drop, so those needed protecting from an immediate flip.
+    /// </remarks>
+    private void UpdateEdgeScrolling(Point point)
+    {
+        if (!dragArmed)
+        {
+            StopEdgeScrolling();
+            return;
+        }
+
+        var direction = EdgeScrollDetector.DirectionFor(point.Y - verticalScroll.ScrollY, geometry.ViewportHeight);
+
+        if (direction == 0)
+        {
+            StopEdgeScrolling();
+            return;
+        }
+
+        if (direction == edgeScrollDirection)
+            return;
+
+        StopEdgeScrolling();
+        edgeScrollDirection = direction;
+
+        edgeScrollTimer = Dispatcher.CreateTimer();
+        edgeScrollTimer.Interval = TimeSpan.FromMilliseconds(EdgeScrollIntervalMs);
+        edgeScrollTimer.IsRepeating = true;
+        edgeScrollTimer.Tick += (_, _) => ScrollDuringDrag();
+        edgeScrollTimer.Start();
+    }
+
+    private void StopEdgeScrolling()
+    {
+        edgeScrollTimer?.Stop();
+        edgeScrollTimer = null;
+        edgeScrollDirection = 0;
+    }
+
+    private void ScrollDuringDrag()
+    {
+        if (!dragArmed || edgeScrollDirection == 0)
+        {
+            StopEdgeScrolling();
+            return;
+        }
+
+        var furthest = Math.Max(0, geometry.ContentHeight - geometry.ViewportHeight);
+        var target = Math.Clamp(verticalScroll.ScrollY + (edgeScrollDirection * EdgeScrollStepDp), 0, furthest);
+        var travelled = target - verticalScroll.ScrollY;
+
+        // Already showing as much of the day as there is in that direction.
+        if (Math.Abs(travelled) < 0.5)
+        {
+            StopEdgeScrolling();
+            return;
+        }
+
+        _ = verticalScroll.ScrollToAsync(0, target, false);
+
+        // The finger has not moved, but the hours under it have. Touch points arrive in the timeline's
+        // own coordinates rather than the screen's, so the same finger is now over a time further down
+        // by exactly what was scrolled.
+        lastDragPoint = new Point(lastDragPoint.X, lastDragPoint.Y + travelled);
+        UpdateDragPosition(lastDragPoint);
     }
 
     private void ClearDragIndicator()
@@ -530,6 +605,7 @@ public partial class SchedulerView
         longPressTimer?.Stop();
         longPressTimer = null;
         StopEdgePaging();
+        StopEdgeScrolling();
 
         var wasArmed = dragArmed;
         var appointment = floatingAppointment;

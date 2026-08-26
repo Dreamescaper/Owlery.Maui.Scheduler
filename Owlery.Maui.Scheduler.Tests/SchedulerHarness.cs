@@ -39,6 +39,7 @@ internal sealed class SchedulerHarness
     public List<(double ScrollX, bool Animated)> PagerScrolls { get; } = [];
 
     private readonly ScrollView pagerScroll;
+    private readonly ScrollView timelineScroll;
     private readonly List<Action> pendingScrollCompletions = [];
     private readonly IGraphicsView surfaceView;
     private readonly TimeGutterDrawable gutterDrawable;
@@ -81,6 +82,8 @@ internal sealed class SchedulerHarness
         // GraphicsView inside it.
         pagerScroll = Descendants(Scheduler).OfType<ScrollView>()
             .First(scrollView => scrollView.Orientation == ScrollOrientation.Horizontal);
+        timelineScroll = Descendants(Scheduler).OfType<ScrollView>()
+            .First(scrollView => scrollView.Orientation == ScrollOrientation.Vertical);
         surface = (Layout)pagerScroll.Content;
         surfaceView = Descendants(surface).OfType<GraphicsView>().First();
 
@@ -184,6 +187,21 @@ internal sealed class SchedulerHarness
     /// <summary>Releases an in-progress drag.</summary>
     public void Release(Point point) =>
         surfaceView.EndInteraction([new PointF((float)point.X, (float)point.Y)], isInsideBounds: true);
+
+    /// <summary>How far down the day the timeline is scrolled.</summary>
+    public double TimelineScrollY => timelineScroll.ScrollY;
+
+    /// <summary>How much of the day is on screen.</summary>
+    public double TimelineViewportHeight => ViewHeight - Scheduler.HeaderHeight;
+
+    /// <summary>Elapses one step of the scroll that runs while dragging against the top or bottom.</summary>
+    public void FireEdgeScrollTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(60));
+
+    /// <summary>A point inside the bottom edge zone of the visible timeline.</summary>
+    public Point BottomEdge(double x) => new(x, TimelineScrollY + TimelineViewportHeight - 8);
+
+    /// <summary>A point inside the top edge zone of the visible timeline.</summary>
+    public Point TopEdge(double x) => new(x, TimelineScrollY + 8);
 
     /// <summary>Elapses the dwell that pages to the next week while dragging against an edge.</summary>
     public void FireEdgePagingTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(600));

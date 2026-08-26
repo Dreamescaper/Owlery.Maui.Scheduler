@@ -285,6 +285,81 @@ public class SchedulerViewTests
     }
 
     [Test]
+    public void The_timeline_has_a_viewport_shorter_than_the_day()
+    {
+        // What makes scrolling while dragging meaningful in the first place.
+        var harness = new SchedulerHarness(Monday);
+
+        Assert.That(harness.TimelineViewportHeight, Is.GreaterThan(0));
+        Assert.That(harness.TimelineViewportHeight, Is.LessThan((23 - 8) * 50));
+    }
+
+    [Test]
+    public void Dragging_against_the_bottom_edge_scrolls_towards_later_hours()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+
+        harness.BeginDrag(grab);
+        harness.DragTo(harness.BottomEdge(grab.X));
+        harness.FireEdgeScrollTimer();
+
+        Assert.That(harness.TimelineScrollY, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void Scrolling_while_dragging_carries_the_appointment_with_it()
+    {
+        // The finger does not move, but the hours under it do, so the time on offer has to follow.
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+
+        harness.BeginDrag(grab);
+        harness.DragTo(harness.BottomEdge(grab.X));
+
+        var before = harness.DragTimeIndicator;
+        harness.FireEdgeScrollTimer();
+        harness.FireEdgeScrollTimer();
+
+        Assert.That(harness.DragTimeIndicator, Is.Not.EqualTo(before));
+    }
+
+    [Test]
+    public void Moving_away_from_the_edge_stops_the_scrolling()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+
+        harness.BeginDrag(grab);
+        harness.DragTo(harness.BottomEdge(grab.X));
+        harness.FireEdgeScrollTimer();
+
+        var reached = harness.TimelineScrollY;
+
+        harness.DragTo(grab);
+        harness.FireEdgeScrollTimer();
+
+        Assert.That(harness.TimelineScrollY, Is.EqualTo(reached));
+    }
+
+    [Test]
+    public void Scrolling_stops_at_the_end_of_the_day()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+
+        harness.BeginDrag(grab);
+        harness.DragTo(harness.BottomEdge(grab.X));
+
+        for (var i = 0; i < 50; i++)
+            harness.FireEdgeScrollTimer();
+
+        var furthest = ((23 - 8) * 50) - harness.TimelineViewportHeight;
+
+        Assert.That(harness.TimelineScrollY, Is.EqualTo(furthest).Within(1));
+    }
+
+    [Test]
     public void Moving_without_holding_is_a_scroll_and_never_starts_a_drag()
     {
         var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);

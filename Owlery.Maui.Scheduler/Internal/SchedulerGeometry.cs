@@ -12,6 +12,15 @@ internal sealed class SchedulerGeometry
     /// <summary>Width of a single rendered page, i.e. the visible width.</summary>
     public double ViewportWidth { get; set; }
 
+    /// <summary>
+    /// How much of the day is on screen: the control's height less the day headers.
+    /// </summary>
+    /// <remarks>
+    /// Taken from what the control itself was allocated rather than read back off the timeline's
+    /// scroll view, which reports -1 until the platform has measured it.
+    /// </remarks>
+    public double ViewportHeight { get; set; }
+
     /// <summary>How many days a page shows. Seven for a week, one for a day, and anything between.</summary>
     public int VisibleDays { get; set; } = 7;
 
