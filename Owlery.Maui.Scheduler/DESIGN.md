@@ -648,12 +648,68 @@ One generalisation was taken while passing. `VisibleDatesChanged` derives its pr
 a month grid opens on the tail of the previous month, and the host has to be told to fetch that far
 back. For a timeline the two are the same value.
 
+## 18. The month surface
+
+Only the arithmetic exists so far — `MonthGeometry` and `MonthLayoutEngine`. The visual tree, the
+drawable and the mode switch come later; this section records the decisions those two encode.
+
+### Six rows, always
+
+A month needs five or six week rows depending on where it starts. The grid is fixed at six anyway,
+because a varying count would make `ContentHeight` depend on which page you are looking at — and all
+three slots share one surface and one canvas, so the neighbours either side would be drawn at the
+centre page's row height. Fixing it keeps every page identical in size, which is the same property
+that makes the ring buffer work at all.
+
+The cost is real and shows up twice a decade: a 28-day February beginning on `FirstDayOfWeek` fills
+exactly four rows, so the last two are entirely March. Apple's calendar makes the same trade.
+
+A page is identified by the **first of its month**, not by the first cell of its grid. That keeps
+`NextPage` a plain `AddMonths(1)` and makes "is this day from another month" a comparison against the
+page's own identity rather than against a computed range. `GridStart` derives the top-left cell by
+walking back to `FirstDayOfWeek`.
+
+Because of that walk, adjacent pages overlap: a page's greyed trailing days are the next page's real
+leading days. So the same appointment can be bound to a view on two slots at once, which never
+happened with weeks — they were always disjoint. Nothing breaks, since `appointmentsByView` is keyed
+by view rather than by appointment, but it is worth knowing before reading a test that counts views.
+
+### Overflow, and why the marker eats a line
+
+A cell fits `LinesPerCell` chips beneath its day number. When a day has more, the last line is given
+over to a "+N more" marker, so one *fewer* appointment is shown than would physically fit and `N`
+counts the appointment whose line the marker took. Showing five and hiding the rest silently would be
+worse: the cell would look complete when it was not.
+
+The marker is drawn on the canvas rather than rented from the pool. It carries no data and needs no
+interaction of its own — a touch anywhere in the cell already resolves to that day — so making it a
+view would put something in the pool that is not an appointment for no gain.
+
+Dots instead of chips were considered and rejected. The host's appointments are lessons, and the
+useful content is a person's name; a dot says only that the day is not empty.
+
+### What the month engine does not do
+
+No overlap packing — a month cell has no time axis, so nothing can collide and appointments are
+simply listed in the order they start. No visible-hours window either: the timeline clips to
+`StartHour`..`EndHour`, but a 06:00 lesson appears in a month regardless. And no multi-day spanning,
+matching the timeline (section 14) — an appointment is placed on the day it starts.
+
+Ordering is `OrderBy(Start).ThenByDescending(duration)`, and LINQ's sort is stable, so appointments
+starting together keep the order the host supplied. That is load-bearing rather than cosmetic:
+`PopulateSlot` reuses views positionally, so an unchanged reload has to lay out identically or every
+chip on screen repaints.
+
 ## 15. Verification status
 
 `Owlery.Maui.Scheduler.Tests` covers the platform-independent behaviour headlessly on `net10.0`:
 overlap layout and clipping, appointment placement, view reuse across a refresh, cell and appointment
 taps, long-press-to-drag including refusal and the scroll-not-drag case, and week paging. It runs
 without a simulator, and found two bugs that had already shipped.
+
+The month arithmetic of section 18 is covered to the same standard — grid alignment for Monday and
+Sunday weeks, the six-row window, per-day stacking and the overflow rule. Nothing month-shaped has
+been seen on a device yet, because nothing draws it.
 
 Rendering, paging, week rotation, overlap layout, the current-time line and appointment semantics have
 also been checked on the iOS simulator through DevFlow.
