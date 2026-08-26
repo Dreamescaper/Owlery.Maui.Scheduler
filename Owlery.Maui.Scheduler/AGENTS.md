@@ -85,6 +85,30 @@ cited `DESIGN.md` section first.
 - XML doc comments on public members are copied into the generated component, so they become the
   tooltips Razor authors see.
 
+## File Layout
+
+`SchedulerView` is a partial class split by concern. Keep the split as it is rather than adding
+members wherever they are convenient:
+
+| File | Holds |
+|---|---|
+| `SchedulerView.cs` | **All fields**, the constructor, lifecycle, geometry, platform setup |
+| `SchedulerView.Properties.cs` | Bindable properties, events, property-changed handlers |
+| `SchedulerView.Rendering.cs` | Laying appointments out, the day-count transition |
+| `SchedulerView.Pager.cs` | Snapping, rotating the ring buffer, recentring |
+| `SchedulerView.Interaction.cs` | Taps, cell selection, drag and drop |
+
+State lives in one file on purpose. Fields declared next to the code that uses them is how a partial
+class ends up with two of them meaning the same thing.
+
+Logic that is arithmetic rather than view manipulation belongs in `Internal/` as an ordinary type —
+`DropTargetResolver`, `EdgePagingDetector`, `AppointmentLayoutEngine`, `CellSelectionOverlay`. Those
+are directly unit-testable without the MAUI test host, and that is the point of moving them.
+
+Resist extracting the drag machinery wholesale behind an interface. It legitimately touches the
+geometry, the pages, the pool, the scroll views and the events, so the interface would have a dozen
+members and would relocate the coupling rather than reduce it.
+
 ## Build
 
 ```sh
