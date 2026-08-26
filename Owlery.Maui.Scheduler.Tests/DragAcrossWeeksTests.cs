@@ -95,7 +95,7 @@ public class DragAcrossWeeksTests
             Assert.That(ghost, Is.Not.Null);
             Assert.That(ghost!.Opacity, Is.EqualTo(0.5).Within(0.001));
             Assert.That(harness.BoundsOf(ghost).Y, Is.EqualTo(100).Within(0.01), "the ghost stays at the original time");
-            Assert.That(harness.LiftedAppointment, Is.Not.Null);
+            Assert.That(harness.DraggedAppointment, Is.Not.Null, "the follower lives on the overlay");
         });
     }
 
@@ -107,9 +107,13 @@ public class DragAcrossWeeksTests
         harness.DragTo(harness.TrailingEdge(grab.Y));
         harness.FireEdgePagingTimer();
 
-        // The ghost and the lifted view, and nothing from the new week's layout: the appointment is
-        // left out of the weeks for as long as it is being dragged.
-        Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(2));
+        // Only the ghost is on the scrolling surface — the follower is on the overlay — and nothing
+        // from the new week's layout: the appointment is left out of the weeks while it is dragged.
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(1));
+            Assert.That(harness.DraggedAppointment, Is.Not.Null);
+        });
     }
 
     [Test]
@@ -145,6 +149,44 @@ public class DragAcrossWeeksTests
             (SchedulerHarness.PageWidth * 2, false),
             (SchedulerHarness.PageWidth, true)
         }).AsCollection);
+    }
+
+    [Test]
+    public void The_dragged_appointment_is_unaffected_by_the_surface_scrolling()
+    {
+        // The point of keeping it off the scrolling surface: no compensation, nothing to get behind.
+        var (harness, _) = DragInProgress();
+        var before = harness.DraggedAppointmentBounds;
+
+        harness.ScrollPagerTo(SchedulerHarness.PageWidth / 2);
+        harness.ScrollPagerTo(0);
+
+        Assert.That(harness.DraggedAppointmentBounds, Is.EqualTo(before));
+    }
+
+    [Test]
+    public void Cells_are_not_snapped_to_while_a_period_change_is_still_sliding()
+    {
+        var (harness, grab) = DragInProgress();
+        var edge = harness.TrailingEdge(grab.Y);
+        harness.DragTo(edge);
+
+        var beforeSlide = harness.DraggedAppointmentBounds;
+
+        // Hold the slide in flight, then move the finger while the pager is between pages.
+        harness.DeferPagerScrolls = true;
+        harness.FireEdgePagingTimer();
+        harness.DragTo(new Point(edge.X, edge.Y + 50));
+
+        Assert.That(
+            harness.DraggedAppointmentBounds.X,
+            Is.EqualTo(beforeSlide.X).Within(0.01),
+            "a column resolved mid-slide belongs to a week that is only half on screen, so the "
+            + "appointment jumps into a cell that is not where the finger is");
+
+        harness.CompletePendingScrolls();
+
+        Assert.That(harness.DragTimeIndicator, Is.Not.Null, "and it catches up once the slide settles");
     }
 
     [Test]
@@ -228,9 +270,13 @@ public class DragAcrossWeeksTests
         harness.DragTo(harness.TrailingEdge(grab.Y));
         harness.FireEdgePagingTimer();
 
-        // Still only the ghost and the lifted view — the replacement must not be laid out as a
-        // second copy of the appointment being dragged.
-        Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(2));
+        // Still only the ghost on the surface — the replacement must not be laid out as a second copy
+        // of the appointment being dragged.
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(1));
+            Assert.That(harness.DraggedAppointment, Is.Not.Null);
+        });
     }
 
     [Test]

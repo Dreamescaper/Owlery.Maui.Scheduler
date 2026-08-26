@@ -387,9 +387,10 @@ Instead the appointment **leaves the weeks entirely for the duration of the drag
 excluded from what the slots lay out, and becomes two views that belong to no week:
 
 - a **ghost** — the original view, detached where it stood and faded to half opacity, so the slot
-  being vacated stays visible. It is shifted by one viewport whenever the weeks rotate, so it travels
-  with the week it came from and slides off screen behind the drag.
-- a **lifted view**, rented from the pool, riding the finger.
+  being vacated stays visible. It stays on the scrolling surface, because it belongs to the week it
+  came from: it is shifted by one viewport whenever the weeks rotate, travelling with that week and
+  sliding off screen behind the drag.
+- a **follower**, on an overlay above the whole control, riding the finger.
 
 Because neither is in a slot, rotation and reconciliation cannot touch them, and a mid-drag data load
 is harmless. The drop target is always read from the centre slot, whichever week has been rotated into
@@ -406,10 +407,46 @@ reverse: jump instantly to wherever the *outgoing* week has landed (slot 0 going
 back), which is pixel-identical to the frame before, then animate across to the centre. The result is
 the same motion a swipe produces.
 
-That slide moves the surface, and the lifted view lives in surface coordinates, so it would ride along
-and leave the finger. `OnPagerScrolled` therefore pushes it back by each scroll delta while a drag is
-armed, keeping it screen-stationary. The same handler stops scheduling snaps while dragging, since the
-pager is being driven by the drag rather than by the user.
+That slide moves the surface — which is why the follower is not on it.
+
+The first attempt kept the dragged appointment among the other views and pushed it back by each scroll
+delta in `OnPagerScrolled`. That is correct on paper and unpleasant in the hand: the correction can
+only be applied *after* a scroll event, so every frame of the slide moves the appointment away from
+the finger and then puts it back, and any event the platform coalesces is a frame where it simply
+runs. Chasing a moving surface from inside it cannot be made smooth.
+
+The follower therefore lives on a transparent, input-transparent overlay spanning the whole control,
+outside both scroll views, and is positioned in the control's own coordinates:
+
+```
+overlayX = TimeGutterWidth + slotOffset + snappedX - pagerScroll.ScrollX
+overlayY = HeaderHeight    + snappedY            - verticalScroll.ScrollY
+```
+
+Nothing scrolls out there, so there is nothing to correct — the view stays where it was last put, and
+a slide that raises no touch events simply doesn't move it. Subtracting the live scroll offsets also
+makes the conversion self-correcting: a given finger position resolves to the same place on screen
+wherever the pager happens to be mid-slide, so a finger that *does* move during the animation is still
+tracked correctly.
+
+One thing the overlay does not solve is *when* the drop target may be resolved. The positioning maths
+assumes the pager is at rest on the centre slot, and a touch point arrives in surface coordinates that
+include the scroll offset — so resolving a column while the slide is in flight picks a column out of a
+week that is only half on screen, and the appointment jumps a whole page sideways. The target is
+therefore held for the duration of the slide and recomputed from the last touch point once the pager
+settles. The recompute has to happen *after* the in-flight flag is cleared, or the guard swallows the
+very update that applies the new week.
+
+Because only one appointment can be dragged at a time, the overlay keeps a single view built from
+`AppointmentTemplate` and rebinds it, rather than renting from the pool — the pool's views all belong
+to the surface, and nothing is ever reparented.
+
+On an accepted drop the ghost takes over: it moves to the dropped position and returns to full
+strength as the follower is hidden. That keeps the result on the scrolling surface, where it scrolls
+with the calendar as it should, without anything having to change parents.
+
+`OnPagerScrolled` still stops scheduling snaps while dragging, since the pager is being driven by the
+drag rather than by the user.
 
 Edge paging makes this the sharpest test of the identity rule in section 6. Paging raises
 `VisibleDatesChanged`, a host loads the periods it is moving through, and the collection is rebuilt

@@ -69,7 +69,11 @@ those two columns unusable.
 **DND-34** The calendar slides to the new week rather than changing contents in place, so the change
 is as visible as it is when swiping between weeks by hand.
 
-**DND-35** The appointment being dragged stays under the finger while the weeks slide behind it.
+**DND-39** While that slide is running the appointment does not jump to a new day or time. The day and
+time it would take are settled once the calendar has come to rest on the new period.
+
+**DND-35** The appointment being dragged stays under the finger while the weeks slide behind it, with
+no visible lag or drift.
 
 **DND-28** Moving away from the edge stops it, and the calendar stays on the week it reached.
 

@@ -39,6 +39,7 @@ internal sealed class SchedulerHarness
     public List<(double ScrollX, bool Animated)> PagerScrolls { get; } = [];
 
     private readonly ScrollView pagerScroll;
+    private readonly List<Action> pendingScrollCompletions = [];
     private readonly IGraphicsView surfaceView;
     private readonly TimeGutterDrawable gutterDrawable;
     private readonly Layout surface;
@@ -65,7 +66,7 @@ internal sealed class SchedulerHarness
         application.Windows[0].Page = new ContentPage { Content = Scheduler };
 
         foreach (var scrollView in Descendants(Scheduler).OfType<ScrollView>())
-            ShimScrolling(scrollView, PagerScrolls);
+            ShimScrolling(scrollView);
 
         // Laying the control out is what gives it a viewport width and builds the three weeks.
         ((IView)Scheduler).Measure(ViewWidth, ViewHeight);
@@ -104,13 +105,18 @@ internal sealed class SchedulerHarness
 
     public void Tap(Point point) => Tap(point.X, point.Y);
 
-    /// <summary>The view riding the finger during a drag, identified by being lifted above the rest.</summary>
-    public TestAppointmentView? LiftedAppointment =>
-        VisibleAppointments.FirstOrDefault(view => view.ZIndex == 100);
+    /// <summary>The view riding the finger during a drag. It lives on the overlay, not the surface.</summary>
+    public TestAppointmentView? DraggedAppointment => Descendants(Scheduler)
+        .OfType<TestAppointmentView>()
+        .FirstOrDefault(view => view.IsVisible && !ReferenceEquals(view.Parent, surface));
 
-    /// <summary>The faded original left behind at the start of a drag.</summary>
+    /// <summary>The faded original left behind in its week at the start of a drag.</summary>
     public TestAppointmentView? GhostAppointment =>
-        VisibleAppointments.FirstOrDefault(view => view.ZIndex != 100 && view.Opacity < 1);
+        VisibleAppointments.FirstOrDefault(view => view.Opacity < 1);
+
+    /// <summary>Where the dragged view sits in the control's own coordinates.</summary>
+    public Rect DraggedAppointmentBounds =>
+        DraggedAppointment is null ? Rect.Zero : AbsoluteLayout.GetLayoutBounds(DraggedAppointment);
 
     /// <summary>The time shown in the gutter while an appointment is being dragged.</summary>
     public string? DragTimeIndicator => gutterDrawable.HighlightText;
@@ -182,6 +188,22 @@ internal sealed class SchedulerHarness
     /// <summary>Simulates an ancestor scroll view claiming the gesture part-way through.</summary>
     public void CancelInteraction() => surfaceView.CancelInteraction();
 
+    /// <summary>When set, programmatic pager scrolls do not report as finished until asked.</summary>
+    public bool DeferPagerScrolls { get; set; }
+
+    /// <summary>Lets every held-back pager scroll report as finished, settling the slide.</summary>
+    public void CompletePendingScrolls()
+    {
+        var completions = pendingScrollCompletions.ToArray();
+        pendingScrollCompletions.Clear();
+
+        foreach (var complete in completions)
+            complete();
+    }
+
+    /// <summary>Moves the pager, as a frame of the slide edge paging performs would.</summary>
+    public void ScrollPagerTo(double x) => pagerScroll.SetScrolledPosition(x, 0);
+
     public void FireSnapTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(90));
 
     public void FireLongPressTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(350));
@@ -190,15 +212,23 @@ internal sealed class SchedulerHarness
     /// Stands in for the platform scroll view: applies the requested offset and reports the scroll
     /// as finished, so awaited programmatic scrolls complete.
     /// </summary>
-    private static void ShimScrolling(ScrollView scrollView, List<(double ScrollX, bool Animated)> log)
+    private void ShimScrolling(ScrollView scrollView)
     {
+        var horizontal = scrollView.Orientation == ScrollOrientation.Horizontal;
+
         scrollView.ScrollToRequested += (_, e) =>
         {
-            if (scrollView.Orientation == ScrollOrientation.Horizontal)
-                log.Add((e.ScrollX, e.ShouldAnimate));
+            if (horizontal)
+                PagerScrolls.Add((e.ScrollX, e.ShouldAnimate));
 
             scrollView.SetScrolledPosition(e.ScrollX, e.ScrollY);
-            scrollView.SendScrollFinished();
+
+            // Deferring the completion leaves the awaited scroll in flight, which is the only way to
+            // observe the control mid-slide: the shim is otherwise instantaneous.
+            if (horizontal && DeferPagerScrolls)
+                pendingScrollCompletions.Add(scrollView.SendScrollFinished);
+            else
+                scrollView.SendScrollFinished();
         };
     }
 
