@@ -36,6 +36,17 @@ internal abstract class PageGeometry
     /// <summary>First day rendered by each physical slot, left to right.</summary>
     public DateOnly[] SlotStarts { get; } = new DateOnly[SlotCount];
 
+    /// <summary>
+    /// Horizontal shift applied to the pages while a transition is animating.
+    /// </summary>
+    /// <remarks>
+    /// A transition usually moves where the centre page starts — three days from Wednesday becomes a
+    /// week from Monday — so without this the content would jump sideways before it began changing.
+    /// Holding what was already on screen in place and easing the shift to zero makes the new content
+    /// grow in from whichever side it belongs on. Zero at rest, and on a surface that never animates.
+    /// </remarks>
+    public double AnimationOffsetX { get; set; }
+
     public double SurfaceWidth => ViewportWidth * SlotCount;
 
     /// <summary>How far apart the pages sit.</summary>

@@ -7,7 +7,8 @@ namespace Owlery.Maui.Scheduler;
 /// <summary>Taps, cell selection, and drag-and-drop.</summary>
 public partial class SchedulerView
 {
-    private void UpdateSelectionView() => cellSelection.Update(SelectedSlot, slots, TimeFormat);
+    private void UpdateSelectionView() =>
+        cellSelection.Update(SelectedSlot, slots, ActiveGeometry, pageSurface, TimeFormat);
 
     // All input for the scrolling surface is handled here, on the drawing surface, rather than by
     // gesture recognizers attached to each appointment.
@@ -19,7 +20,7 @@ public partial class SchedulerView
     // Handling everything here also means pooled views need no recognizers attached at all.
     private void OnSurfaceStartInteraction(object? sender, TouchEventArgs e)
     {
-        if (e.Touches.Length == 0 || geometry.ViewportWidth <= 0)
+        if (e.Touches.Length == 0 || ActiveGeometry.ViewportWidth <= 0)
             return;
 
         var point = new Point(e.Touches[0].X, e.Touches[0].Y);
@@ -28,7 +29,7 @@ public partial class SchedulerView
         interactionMoved = false;
         pressedView = HitTestAppointment(point);
 
-        if (pressedView is not null && AllowDragAndDrop)
+        if (pressedView is not null && DraggingEnabled)
             BeginDragCandidate(pressedView, point);
     }
 

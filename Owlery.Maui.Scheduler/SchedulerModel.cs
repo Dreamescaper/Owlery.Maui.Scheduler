@@ -1,5 +1,15 @@
 namespace Owlery.Maui.Scheduler;
 
+/// <summary>What kind of page the scheduler shows.</summary>
+public enum SchedulerViewMode
+{
+    /// <summary>Columns of hours — a week, three days or a single day, per <see cref="SchedulerView.VisibleDays"/>.</summary>
+    Timeline,
+
+    /// <summary>A calendar month on a fixed six-by-seven grid of days.</summary>
+    Month
+}
+
 /// <summary>
 /// An item the scheduler places on the week grid.
 /// </summary>

@@ -46,10 +46,16 @@ internal sealed class SchedulerHarness
     private readonly Layout surface;
 
     private readonly int visibleDays;
+    private readonly SchedulerViewMode viewMode;
 
-    public SchedulerHarness(DateTime displayDate, IEnumerable<ISchedulerAppointment>? items = null, int visibleDays = 7)
+    public SchedulerHarness(
+        DateTime displayDate,
+        IEnumerable<ISchedulerAppointment>? items = null,
+        int visibleDays = 7,
+        SchedulerViewMode viewMode = SchedulerViewMode.Timeline)
     {
         this.visibleDays = visibleDays;
+        this.viewMode = viewMode;
 
         var (application, dispatcher) = TestApplication.Create();
         Dispatcher = dispatcher;
@@ -57,8 +63,10 @@ internal sealed class SchedulerHarness
         Scheduler = new SchedulerView
         {
             AppointmentTemplate = new DataTemplate(() => new TestAppointmentView()),
+            MonthAppointmentTemplate = new DataTemplate(() => new TestAppointmentView()),
             TimeGutterWidth = GutterWidth,
             VisibleDays = visibleDays,
+            ViewMode = viewMode,
             DisplayDate = displayDate,
             ItemsSource = items
         };
@@ -103,15 +111,36 @@ internal sealed class SchedulerHarness
         .OfType<View>()
         .FirstOrDefault(view => view is Border && view.IsVisible);
 
+    /// <summary>How far apart the three rendered pages sit. A month has no gutter to give up.</summary>
+    public double PageStride => viewMode is SchedulerViewMode.Month ? ViewWidth : PageWidth;
+
     /// <summary>The appointments on the page currently on screen, ignoring the two either side.</summary>
     public IReadOnlyList<TestAppointmentView> CentrePageAppointments =>
     [
         .. VisibleAppointments.Where(view =>
         {
             var x = BoundsOf(view).X;
-            return x >= PageWidth && x < PageWidth * 2;
+            return x >= PageStride && x < PageStride * 2;
         })
     ];
+
+    public double MonthCellWidth => ViewWidth / 7;
+
+    public double MonthCellHeight => (ViewHeight - Scheduler.HeaderHeight) / 6;
+
+    /// <summary>The middle of one cell of a month page, addressed by its index in the 42-day grid.</summary>
+    public Point MonthCellAt(int slotIndex, int cellIndex) => new(
+        slotIndex * ViewWidth + (cellIndex % 7 + 0.5) * MonthCellWidth,
+        (cellIndex / 7 + 0.5) * MonthCellHeight);
+
+    /// <summary>Which cell of the centre page a view has been placed in.</summary>
+    public int CellOf(View view)
+    {
+        var bounds = BoundsOf(view);
+        var column = (int)((bounds.X - PageStride) / MonthCellWidth);
+
+        return (int)(bounds.Y / MonthCellHeight) * 7 + column;
+    }
 
     /// <summary>Every appointment view ever created, including pooled ones lying hidden.</summary>
     public IReadOnlyList<TestAppointmentView> AllAppointmentViews => [.. surface.OfType<TestAppointmentView>()];
@@ -223,7 +252,7 @@ internal sealed class SchedulerHarness
     /// <summary>Scrolls the pager to a page and lets the snap settle, as a completed swipe would.</summary>
     public void SwipeToPage(int page)
     {
-        pagerScroll.SetScrolledPosition(page * PageWidth, 0);
+        pagerScroll.SetScrolledPosition(page * PageStride, 0);
         FireSnapTimer();
     }
 

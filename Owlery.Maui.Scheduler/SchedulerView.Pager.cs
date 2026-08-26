@@ -39,7 +39,7 @@ public partial class SchedulerView
 
     private async Task SnapAsync()
     {
-        if (snapping || recentring || geometry.ViewportWidth <= 0)
+        if (snapping || recentring || ActiveGeometry.ViewportWidth <= 0)
             return;
 
         // An accepted drop waits for the host to feed the change back before rejoining a week. If that
@@ -49,14 +49,14 @@ public partial class SchedulerView
         if (floatingAppointment is not null)
             RepopulateAllSlots();
 
-        var page = (int)Math.Round(lastScrollX / geometry.ViewportWidth);
+        var page = (int)Math.Round(lastScrollX / ActiveGeometry.ViewportWidth);
         page = Math.Clamp(page, 0, SchedulerGeometry.SlotCount - 1);
 
         if (page == 1)
         {
             // Already centred; only correct a partial drag that did not change week.
-            if (Math.Abs(lastScrollX - geometry.ViewportWidth) > 0.5)
-                await pagerScroll.ScrollToAsync(geometry.ViewportWidth, 0, true);
+            if (Math.Abs(lastScrollX - ActiveGeometry.ViewportWidth) > 0.5)
+                await pagerScroll.ScrollToAsync(ActiveGeometry.ViewportWidth, 0, true);
             return;
         }
 
@@ -65,7 +65,7 @@ public partial class SchedulerView
         {
             // Let the page the user chose settle under the finger first. This one is animated and
             // visible, so Scrolled must keep running to drag the day headers along with it.
-            await pagerScroll.ScrollToAsync(page * geometry.ViewportWidth, 0, true);
+            await pagerScroll.ScrollToAsync(page * ActiveGeometry.ViewportWidth, 0, true);
 
             // Now rotate and jump back to the middle. Scroll handling is suppressed for this part so
             // nothing repaints the header between the rotation and the instant recentre.
@@ -76,9 +76,9 @@ public partial class SchedulerView
             else
                 Retreat();
 
-            headerSurface.TranslationX = -geometry.ViewportWidth;
-            await pagerScroll.ScrollToAsync(geometry.ViewportWidth, 0, false);
-            lastScrollX = geometry.ViewportWidth;
+            headerSurface.TranslationX = -ActiveGeometry.ViewportWidth;
+            await pagerScroll.ScrollToAsync(ActiveGeometry.ViewportWidth, 0, false);
+            lastScrollX = ActiveGeometry.ViewportWidth;
         }
         finally
         {
@@ -122,15 +122,15 @@ public partial class SchedulerView
 
     private async Task RecentreAsync(bool animated)
     {
-        if (geometry.ViewportWidth <= 0)
+        if (ActiveGeometry.ViewportWidth <= 0)
             return;
 
         recentring = true;
         try
         {
-            headerSurface.TranslationX = -geometry.ViewportWidth;
-            await pagerScroll.ScrollToAsync(geometry.ViewportWidth, 0, animated);
-            lastScrollX = geometry.ViewportWidth;
+            headerSurface.TranslationX = -ActiveGeometry.ViewportWidth;
+            await pagerScroll.ScrollToAsync(ActiveGeometry.ViewportWidth, 0, animated);
+            lastScrollX = ActiveGeometry.ViewportWidth;
         }
         finally
         {

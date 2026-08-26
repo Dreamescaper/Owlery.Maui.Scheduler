@@ -28,6 +28,9 @@ internal sealed class MonthGeometry : PageGeometry
     /// <summary>Space between chips, and between the last chip and the bottom of its cell.</summary>
     public const double ChipGap = 2;
 
+    /// <summary>Space left either side of a chip, so it does not touch the cell's borders.</summary>
+    public const double ChipInset = 2;
+
     /// <summary>A month is never taller than the viewport — it does not scroll.</summary>
     public override double ContentHeight => ViewportHeight;
 

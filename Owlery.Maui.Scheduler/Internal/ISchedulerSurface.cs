@@ -51,4 +51,14 @@ internal interface ISchedulerSurface
 
     /// <summary>What a touch on empty space selects, or <c>null</c> when it resolves to nothing.</summary>
     SchedulerTimeSlot? SlotAt(Point point, PageSlot[] pages);
+
+    /// <summary>
+    /// How many appointments each of a page's cells could not show, for the drawable to mark. Empty
+    /// where the question does not arise.
+    /// </summary>
+    /// <remarks>
+    /// Answered from the last <see cref="Layout"/> of that page rather than recomputed, so it must be
+    /// read straight after laying the page out — which is what <c>PopulateSlot</c> does.
+    /// </remarks>
+    IReadOnlyList<int> OverflowFor(DateOnly pageStart);
 }

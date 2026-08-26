@@ -14,9 +14,21 @@ public partial class SchedulerView
         nameof(ItemsSource), typeof(IEnumerable<ISchedulerAppointment>), typeof(SchedulerView), null,
         propertyChanged: OnItemsSourceChanged);
 
+    public static readonly BindableProperty ViewModeProperty = BindableProperty.Create(
+        nameof(ViewMode), typeof(SchedulerViewMode), typeof(SchedulerView), SchedulerViewMode.Timeline,
+        propertyChanged: OnViewModeChanged);
+
     public static readonly BindableProperty AppointmentTemplateProperty = BindableProperty.Create(
         nameof(AppointmentTemplate), typeof(DataTemplate), typeof(SchedulerView), null,
         propertyChanged: OnAppointmentTemplateChanged);
+
+    public static readonly BindableProperty MonthAppointmentTemplateProperty = BindableProperty.Create(
+        nameof(MonthAppointmentTemplate), typeof(DataTemplate), typeof(SchedulerView), null,
+        propertyChanged: OnAppointmentTemplateChanged);
+
+    public static readonly BindableProperty MonthOverflowFormatProperty = BindableProperty.Create(
+        nameof(MonthOverflowFormat), typeof(string), typeof(SchedulerView), "+{0} more",
+        propertyChanged: OnGeometryChanged);
 
     public static readonly BindableProperty CellSelectionTemplateProperty = BindableProperty.Create(
         nameof(CellSelectionTemplate), typeof(DataTemplate), typeof(SchedulerView), null,
@@ -93,6 +105,20 @@ public partial class SchedulerView
     }
 
     /// <summary>
+    /// Whether the control shows columns of hours or a calendar month.
+    /// </summary>
+    /// <remarks>
+    /// The two are different surfaces rather than different settings of one: a month has no time
+    /// gutter, does not scroll, and ignores <see cref="VisibleDays"/>, <see cref="StartHour"/>,
+    /// <see cref="EndHour"/> and <see cref="HourHeight"/>. Dragging is not offered in a month.
+    /// </remarks>
+    public SchedulerViewMode ViewMode
+    {
+        get => (SchedulerViewMode)GetValue(ViewModeProperty);
+        set => SetValue(ViewModeProperty, value);
+    }
+
+    /// <summary>
     /// Template for an appointment box. Instances are pooled and rebound, so the template must not
     /// depend on being constructed per appointment.
     /// </summary>
@@ -100,6 +126,29 @@ public partial class SchedulerView
     {
         get => (DataTemplate?)GetValue(AppointmentTemplateProperty);
         set => SetValue(AppointmentTemplateProperty, value);
+    }
+
+    /// <summary>
+    /// Template for an appointment chip in a month cell.
+    /// </summary>
+    /// <remarks>
+    /// A separate template because a chip is a single line a few device-independent units tall,
+    /// whereas an appointment box is sized by its duration; one template rarely reads well at both.
+    /// Falls back to <see cref="AppointmentTemplate"/> when not set.
+    /// </remarks>
+    public DataTemplate? MonthAppointmentTemplate
+    {
+        get => (DataTemplate?)GetValue(MonthAppointmentTemplateProperty);
+        set => SetValue(MonthAppointmentTemplateProperty, value);
+    }
+
+    /// <summary>
+    /// Composed with the number of appointments a month cell could not show, e.g. <c>"+3 more"</c>.
+    /// </summary>
+    public string MonthOverflowFormat
+    {
+        get => (string)GetValue(MonthOverflowFormatProperty);
+        set => SetValue(MonthOverflowFormatProperty, value);
     }
 
     /// <summary>Optional template for the selected-cell affordance. Bound to the selected <see cref="SchedulerTimeSlot"/>.</summary>
@@ -140,7 +189,8 @@ public partial class SchedulerView
     /// <remarks>
     /// Anything from 1 to 7 works — 5 gives a working week. Only a full week snaps to
     /// <see cref="FirstDayOfWeek"/>; shorter pages start on <see cref="DisplayDate"/>, and swiping
-    /// moves by exactly one page.
+    /// moves by exactly one page. Ignored while <see cref="ViewMode"/> is
+    /// <see cref="SchedulerViewMode.Month"/>.
     /// </remarks>
     public int VisibleDays
     {
@@ -294,6 +344,9 @@ public partial class SchedulerView
             PopulateSlot(slots[i], i);
     }
 
+    private static void OnViewModeChanged(BindableObject bindable, object oldValue, object newValue)
+        => ((SchedulerView)bindable).ChangeViewMode((SchedulerViewMode)newValue);
+
     private static void OnAppointmentTemplateChanged(BindableObject bindable, object oldValue, object newValue)
     {
         var view = (SchedulerView)bindable;
@@ -308,7 +361,7 @@ public partial class SchedulerView
         }
 
         view.pool.Clear();
-        view.pool.Template = (DataTemplate?)newValue;
+        view.pool.Template = view.ActiveTemplate;
         view.RepopulateAllSlots();
     }
 

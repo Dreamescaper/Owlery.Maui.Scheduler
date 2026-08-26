@@ -35,8 +35,12 @@ public partial class SchedulerView : ContentView
     private const int DraggedAppointmentZIndex = 100;
 
     private readonly SchedulerGeometry geometry = new();
-    private readonly ISchedulerSurface pageSurface;
+    private readonly MonthGeometry monthGeometry = new();
+    private readonly ISchedulerSurface timelineSurface;
+    private readonly ISchedulerSurface monthSurface;
+    private ISchedulerSurface pageSurface;
     private readonly SchedulerGridDrawable gridDrawable;
+    private readonly MonthGridDrawable monthDrawable;
     private readonly TimeGutterDrawable gutterDrawable;
     private readonly AppointmentViewPool pool;
     private readonly CellSelectionOverlay cellSelection;
@@ -45,6 +49,8 @@ public partial class SchedulerView : ContentView
     private readonly Dictionary<View, PageSlot> slotsByView = [];
 
     private readonly Grid root;
+    private readonly Grid monthHeader;
+    private readonly Label[] monthHeaderLabels = new Label[MonthGeometry.Columns];
     private readonly Grid headerClip;
     private readonly AbsoluteLayout headerSurface;
     private readonly Label headerCorner;
@@ -66,6 +72,7 @@ public partial class SchedulerView : ContentView
     private bool snapping;
     private bool suppressDisplayDateSync;
     private bool initialised;
+    private double allocatedWidth;
     private double allocatedHeight;
 
     private View? dragView;
@@ -92,7 +99,11 @@ public partial class SchedulerView : ContentView
 
         // Read through a delegate rather than copied in: SnapMinutes has no property-changed handler,
         // so a snapshot taken here would go stale the moment the host changed it.
-        pageSurface = new TimelineSurface(geometry, () => SnapMinutes);
+        timelineSurface = new TimelineSurface(geometry, () => SnapMinutes);
+        monthSurface = new MonthSurface(monthGeometry);
+        pageSurface = timelineSurface;
+
+        monthDrawable = new MonthGridDrawable(monthGeometry, slots);
 
         gutterView = new GraphicsView { Drawable = gutterDrawable, InputTransparent = true };
 
@@ -109,7 +120,7 @@ public partial class SchedulerView : ContentView
         // Appointments never handle their own input: every touch on the surface is resolved by
         // OnSurfaceStartInteraction, which hit-tests them arithmetically.
         pool = new AppointmentViewPool(surface) { ViewCreated = view => view.InputTransparent = true };
-        cellSelection = new CellSelectionOverlay(surface, geometry, pageSurface, SelectionZIndex);
+        cellSelection = new CellSelectionOverlay(surface, SelectionZIndex);
 
         pagerScroll = new ScrollView
         {
@@ -154,6 +165,28 @@ public partial class SchedulerView : ContentView
         headerClip = new Grid { IsClippedToBounds = true };
         headerClip.Add(headerSurface);
 
+        // A month's weekday row is the same on every page, so unlike the timeline's day headers it
+        // neither scrolls nor needs one strip per slot. The two share a cell; only one is ever shown.
+        monthHeader = new Grid
+        {
+            IsVisible = false,
+            ColumnDefinitions =
+                [.. Enumerable.Range(0, MonthGeometry.Columns).Select(_ => new ColumnDefinition(GridLength.Star))]
+        };
+
+        for (var column = 0; column < MonthGeometry.Columns; column++)
+        {
+            monthHeaderLabels[column] = new Label
+            {
+                FontSize = 11,
+                HorizontalTextAlignment = TextAlignment.Center,
+                VerticalTextAlignment = TextAlignment.Center,
+                TextColor = Color.FromArgb("#6E6E6E")
+            };
+
+            monthHeader.Add(monthHeaderLabels[column], column);
+        }
+
         var headerGrid = new Grid
         {
             ColumnDefinitions =
@@ -164,6 +197,7 @@ public partial class SchedulerView : ContentView
         };
         headerGrid.Add(headerCorner, 0);
         headerGrid.Add(headerClip, 1);
+        headerGrid.Add(monthHeader, 1);
 
         for (var i = 0; i < slots.Length; i++)
             slots[i] = CreateSlot();
@@ -205,9 +239,28 @@ public partial class SchedulerView : ContentView
     }
 
 
-    /// <summary>Scrolls the timeline so that <paramref name="time"/> is near the top of the viewport.</summary>
+    /// <summary>The geometry of whichever surface is showing. Shared measurements only.</summary>
+    private PageGeometry ActiveGeometry => ViewMode is SchedulerViewMode.Month ? monthGeometry : geometry;
+
+    /// <summary>
+    /// The template the pool is filled from. A month falls back to the timeline's when the host has
+    /// not supplied one, which renders badly but renders.
+    /// </summary>
+    private DataTemplate? ActiveTemplate => ViewMode is SchedulerViewMode.Month
+        ? MonthAppointmentTemplate ?? AppointmentTemplate
+        : AppointmentTemplate;
+
+    private bool DraggingEnabled => AllowDragAndDrop && ViewMode is SchedulerViewMode.Timeline;
+
+    /// <summary>
+    /// Scrolls the timeline so that <paramref name="time"/> is near the top of the viewport.
+    /// Does nothing in a month, which shows every day whole and does not scroll.
+    /// </summary>
     public void ScrollToTime(TimeSpan time)
     {
+        if (ViewMode is SchedulerViewMode.Month)
+            return;
+
         var y = geometry.YFromMinutes(time.TotalMinutes);
         _ = verticalScroll.ScrollToAsync(0, Math.Max(0, y), false);
     }
@@ -223,7 +276,7 @@ public partial class SchedulerView : ContentView
 
         // Open on the current time rather than at StartHour, like most calendars do.
         var now = NowInZone();
-        if (now.TimeOfDay.TotalMinutes > geometry.WindowStartMinutes)
+        if (ViewMode is SchedulerViewMode.Timeline && now.TimeOfDay.TotalMinutes > geometry.WindowStartMinutes)
             ScrollToTime(now.TimeOfDay - TimeSpan.FromHours(1));
     }
 
@@ -239,14 +292,14 @@ public partial class SchedulerView : ContentView
 
     private void OnCurrentTimeTick(object? sender, EventArgs e)
     {
-        var previousDate = geometry.Now.Date;
-        geometry.Now = NowInZone();
+        var previousDate = ActiveGeometry.Now.Date;
+        ActiveGeometry.Now = NowInZone();
         gridView.Invalidate();
 
         // The drawable re-evaluates "today" every time it repaints, but the day headers are real
         // labels that are only rewritten when a slot is rebuilt. Left alone they would keep marking
-        // yesterday until the next swipe.
-        if (previousDate == geometry.Now.Date)
+        // yesterday until the next swipe. A month has no such labels — its day numbers are painted.
+        if (previousDate == ActiveGeometry.Now.Date || ViewMode is SchedulerViewMode.Month)
             return;
 
         for (var i = 0; i < slots.Length; i++)
@@ -262,13 +315,14 @@ public partial class SchedulerView : ContentView
         if (width <= 0)
             return;
 
+        allocatedWidth = width;
         allocatedHeight = height;
 
-        var viewport = Math.Max(0, width - TimeGutterWidth);
-        var unchanged = Math.Abs(viewport - geometry.ViewportWidth) < 0.5 && initialised;
+        var viewport = Math.Max(0, width - ActiveGutterWidth);
+        var unchanged = Math.Abs(viewport - ActiveGeometry.ViewportWidth) < 0.5 && initialised;
 
-        geometry.ViewportWidth = viewport;
-        geometry.ViewportHeight = Math.Max(0, height - HeaderHeight);
+        ActiveGeometry.ViewportWidth = viewport;
+        ActiveGeometry.ViewportHeight = Math.Max(0, height - HeaderHeight);
 
         if (unchanged)
             return;
@@ -292,6 +346,11 @@ public partial class SchedulerView : ContentView
     /// </remarks>
     private void ChangeVisibleDays(int oldDays, int newDays)
     {
+        // A month is not made of a number of days the host chose. The new count is picked up by
+        // ApplyTimelineChrome whenever the timeline comes back.
+        if (ViewMode is SchedulerViewMode.Month)
+            return;
+
         var previousDayWidth = geometry.ViewportWidth / Math.Clamp(oldDays, 1, 7);
         var previousPageStart = slots[1].PageStart;
 
@@ -360,47 +419,134 @@ public partial class SchedulerView : ContentView
     }
 
 
+    /// <summary>A month reaches the left edge; only the timeline sets its hours aside a gutter.</summary>
+    private double ActiveGutterWidth => ViewMode is SchedulerViewMode.Month ? 0 : TimeGutterWidth;
+
     private void ApplyGeometry()
+    {
+        var active = ActiveGeometry;
+
+        active.FirstDayOfWeek = FirstDayOfWeek;
+        active.Now = NowInZone();
+        active.ViewportHeight = Math.Max(0, allocatedHeight - HeaderHeight);
+
+        gridView.BackgroundColor = GridBackgroundColor;
+
+        if (ViewMode is SchedulerViewMode.Month)
+            ApplyMonthChrome();
+        else
+            ApplyTimelineChrome();
+
+        if (active.ViewportWidth <= 0)
+            return;
+
+        surface.WidthRequest = active.SurfaceWidth;
+        surface.HeightRequest = active.ContentHeight;
+        AbsoluteLayout.SetLayoutBounds(gridView, new Rect(0, 0, active.SurfaceWidth, active.ContentHeight));
+
+        if (ViewMode is SchedulerViewMode.Timeline)
+        {
+            gutterView.HeightRequest = geometry.ContentHeight;
+            headerSurface.WidthRequest = geometry.SurfaceWidth;
+
+            for (var i = 0; i < slots.Length; i++)
+            {
+                if (slots[i].DayNameLabels.Length != geometry.VisibleDays)
+                    BuildSlotHeader(slots[i]);
+
+                AbsoluteLayout.SetLayoutBounds(slots[i].Header, new Rect(0, 0, geometry.ViewportWidth, HeaderHeight));
+            }
+        }
+
+        RebuildAll(pageSurface.StartOfPage(DateOnly.FromDateTime(DisplayDate)));
+        initialised = true;
+    }
+
+    private void ApplyTimelineChrome()
     {
         geometry.HourHeight = HourHeight;
         geometry.VisibleDays = Math.Clamp(VisibleDays, 1, 7);
         geometry.StartHour = StartHour;
         geometry.EndHour = EndHour;
-        geometry.FirstDayOfWeek = FirstDayOfWeek;
-        geometry.Now = NowInZone();
 
-        geometry.ViewportHeight = Math.Max(0, allocatedHeight - HeaderHeight);
+        gridView.Drawable = gridDrawable;
 
         gutterDrawable.HourFormat = TimeFormat;
         gutterDrawable.Width = TimeGutterWidth;
-        gridView.BackgroundColor = GridBackgroundColor;
 
-        if (geometry.ViewportWidth <= 0)
-            return;
-
-        surface.WidthRequest = geometry.SurfaceWidth;
-        surface.HeightRequest = geometry.ContentHeight;
-        AbsoluteLayout.SetLayoutBounds(gridView, new Rect(0, 0, geometry.SurfaceWidth, geometry.ContentHeight));
-
+        gutterView.IsVisible = true;
         gutterView.WidthRequest = TimeGutterWidth;
-        gutterView.HeightRequest = geometry.ContentHeight;
 
         headerCorner.WidthRequest = TimeGutterWidth;
-        headerClip.HeightRequest = HeaderHeight;
-        headerSurface.WidthRequest = geometry.SurfaceWidth;
-        headerSurface.HeightRequest = HeaderHeight;
         headerCorner.Text = TimeZoneAbbreviation();
 
-        for (var i = 0; i < slots.Length; i++)
-        {
-            if (slots[i].DayNameLabels.Length != geometry.VisibleDays)
-                BuildSlotHeader(slots[i]);
+        headerClip.IsVisible = true;
+        headerClip.HeightRequest = HeaderHeight;
+        headerSurface.HeightRequest = HeaderHeight;
 
-            AbsoluteLayout.SetLayoutBounds(slots[i].Header, new Rect(0, 0, geometry.ViewportWidth, HeaderHeight));
+        monthHeader.IsVisible = false;
+
+        foreach (var slot in slots)
+            slot.Header.IsVisible = true;
+    }
+
+    private void ApplyMonthChrome()
+    {
+        monthDrawable.OverflowFormat = MonthOverflowFormat;
+
+        gridView.Drawable = monthDrawable;
+
+        // Collapsed rather than merely blank: both live in Auto-sized cells, so a width of zero is
+        // what actually gives the month the full width of the control.
+        gutterView.IsVisible = false;
+        gutterView.WidthRequest = 0;
+        headerCorner.WidthRequest = 0;
+        headerCorner.Text = string.Empty;
+
+        headerClip.IsVisible = false;
+        monthHeader.IsVisible = true;
+        monthHeader.HeightRequest = HeaderHeight;
+
+        // The timeline's per-page day headers mean nothing here, and they would otherwise show
+        // through beside the weekday row.
+        foreach (var slot in slots)
+            slot.Header.IsVisible = false;
+
+        UpdateMonthHeader();
+    }
+
+    /// <summary>
+    /// Swaps the surface, and everything that belongs to the one being left behind.
+    /// </summary>
+    /// <remarks>
+    /// The two modes do not share a template or a geometry, so every placed view goes back to the
+    /// pool and the pool itself is emptied — a chip and an appointment box are different templates,
+    /// and a spare built from one is no use to the other.
+    /// </remarks>
+    private void ChangeViewMode(SchedulerViewMode mode)
+    {
+        CancelDragCandidate();
+
+        foreach (var slot in slots)
+            ReleaseSlot(slot);
+
+        pool.Clear();
+
+        if (dragOverlayView is not null)
+        {
+            dragOverlay.Remove(dragOverlayView);
+            dragOverlayView = null;
         }
 
-        RebuildAll(pageSurface.StartOfPage(DateOnly.FromDateTime(DisplayDate)));
-        initialised = true;
+        pageSurface = mode is SchedulerViewMode.Month ? monthSurface : timelineSurface;
+        pool.Template = ActiveTemplate;
+        cellSelection.Reset();
+
+        // The gutter appears or disappears with the mode, so the viewport is a different width now.
+        // Nothing re-allocates the control's size, so this is the only place that would notice.
+        ActiveGeometry.ViewportWidth = Math.Max(0, allocatedWidth - ActiveGutterWidth);
+
+        ApplyGeometry();
     }
 
     private string TimeZoneAbbreviation()

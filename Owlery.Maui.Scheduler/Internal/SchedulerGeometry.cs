@@ -15,17 +15,6 @@ internal sealed class SchedulerGeometry : PageGeometry
     /// </summary>
     public double? DayWidthOverride { get; set; }
 
-    /// <summary>
-    /// Horizontal shift applied to the centre page while a day count change is animating.
-    /// </summary>
-    /// <remarks>
-    /// A new day count usually moves where the page starts — three days from Wednesday becomes a week
-    /// from Monday — so without this the content would jump sideways before it began resizing. Holding
-    /// the day that was already on screen in place and easing the shift to zero makes the new days
-    /// grow in from whichever side they belong on.
-    /// </remarks>
-    public double AnimationOffsetX { get; set; }
-
     public double HourHeight { get; set; } = 50;
 
     public int StartHour { get; set; } = 8;

@@ -12,8 +12,10 @@ Namespace: `Owlery.Maui.Scheduler`
 
 - [Quick start](#quick-start)
 - [SchedulerView](#schedulerweekview)
+  - [View mode](#view-mode)
   - [Data and templates](#data-and-templates)
   - [Time window and layout](#time-window-and-layout)
+  - [Month layout](#month-layout)
   - [Interaction](#interaction)
   - [Appearance and state](#appearance-and-state)
   - [Events](#events)
@@ -53,13 +55,42 @@ you assign `ItemsSource`.
 
 Every property below is backed by a `BindableProperty` named `<PropertyName>Property`.
 
+### View mode
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `ViewMode` | `SchedulerViewMode` | `Timeline` | Whether the control shows columns of hours or a calendar month. |
+
+```csharp
+public enum SchedulerViewMode { Timeline, Month }
+```
+
+The two are different surfaces rather than two settings of one, so a fair amount does not carry over.
+In `Month`:
+
+- `VisibleDays`, `StartHour`, `EndHour`, `HourHeight` and `TimeGutterWidth` are ignored. There is no
+  hour gutter, and a month is never taller than the viewport — it does not scroll.
+- Every appointment on a day is shown regardless of the hour it starts at, whereas the timeline clips
+  to `StartHour`..`EndHour`.
+- Dragging is not offered, whatever `AllowDragAndDrop` says, so `AppointmentDragStarting` and
+  `AppointmentDropped` are never raised. `ScrollToTime` does nothing.
+- `CellTapped` reports a slot a **day** long rather than `SnapMinutes` — a month cell has no finer
+  target. The `Duration` is what tells the two apart.
+- `VisibleDatesChanged` reports all 42 days of the grid, and its prefetch range spans the grids either
+  side — roughly four months rather than three weeks. Size your queries accordingly.
+
+The grid is always six rows, so a short month beginning on `FirstDayOfWeek` shows two full rows of the
+next one. Leading and trailing days from the neighbouring months are drawn muted but behave normally:
+they hold appointments and can be tapped.
+
 ### Data and templates
 
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `ItemsSource` | `IEnumerable<ISchedulerAppointment>?` | `null` | Every appointment the host has loaded, across as many weeks as it likes. The control selects what belongs to each rendered week. Honours `INotifyCollectionChanged`; assigning a new collection instance also refreshes. |
 | `AppointmentTemplate` | `DataTemplate?` | `null` | Template for one appointment box. Its binding context is the `ISchedulerAppointment`. The grid still draws without it, but no appointments appear. |
-| `CellSelectionTemplate` | `DataTemplate?` | `null` | Optional template for the selected-cell affordance, bound to the selected `SchedulerTimeSlot`. When `null` the control draws a bordered **+** box. |
+| `MonthAppointmentTemplate` | `DataTemplate?` | `null` | Template for one appointment chip in a month cell. Falls back to `AppointmentTemplate` when not set — which renders, but rarely reads well: a chip is one line about 16 units tall, not a box sized by its duration. |
+| `CellSelectionTemplate` | `DataTemplate?` | `null` | Optional template for the selected-cell affordance, bound to the selected `SchedulerTimeSlot`. In a month it is stretched across the whole day cell. When `null` the control draws a bordered **+** box. |
 
 > Views created from `AppointmentTemplate` are **pooled and rebound**, never rebuilt. A template must
 > therefore tolerate its binding context changing — build the whole subtree up front and toggle it,
@@ -72,7 +103,7 @@ Every property below is backed by a `BindableProperty` named `<PropertyName>Prop
 | `StartHour` | `int` | `8` | First hour shown on the timeline. |
 | `EndHour` | `int` | `23` | Last hour shown. Content height is `(EndHour - StartHour) * HourHeight`. |
 | `HourHeight` | `double` | `50` | Height in device-independent pixels of one hour row. |
-| `VisibleDays` | `int` | `7` | How many days a page shows. `7` is a week, `3` a three-day view, `1` a single day; `5` gives a working week. Changing it animates the columns to their new width. |
+| `VisibleDays` | `int` | `7` | How many days a page shows. `7` is a week, `3` a three-day view, `1` a single day; `5` gives a working week. Changing it animates the columns to their new width. Ignored while `ViewMode` is `Month`. |
 | `FirstDayOfWeek` | `DayOfWeek` | `Monday` | Which day starts the week. Only applies when `VisibleDays` is 7 — shorter pages start on `DisplayDate` instead, which is what puts today in the leading column. |
 | `TimeGutterWidth` | `double` | `52` | Width of the fixed left column holding the hour labels. |
 | `HeaderHeight` | `double` | `52` | Height of the day-name/day-number strip above the grid. |
@@ -84,6 +115,14 @@ running past midnight is clipped to its own day.
 
 **Changing any property in this group rebuilds all three rendered weeks.** They are configuration, not
 per-frame state — set them once rather than animating them.
+
+### Month layout
+
+Only meaningful while `ViewMode` is `Month`.
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `MonthOverflowFormat` | `string` | `"+{0} more"` | Composed with the number of appointments a day could not show. Cell capacity comes from the control's height; when a day has more than fits, the last line becomes this marker, so one *fewer* appointment is shown than would physically fit and `{0}` counts the one the marker displaced. |
 
 ### Interaction
 
@@ -120,7 +159,7 @@ implement tap-to-arm-then-tap-to-confirm; that is host policy.
 
 | Method | Description |
 |---|---|
-| `void ScrollToTime(TimeSpan time)` | Scrolls the timeline so `time` sits near the top of the viewport. The control calls this itself on load to open near the current time. |
+| `void ScrollToTime(TimeSpan time)` | Scrolls the timeline so `time` sits near the top of the viewport. The control calls this itself on load to open near the current time. Does nothing while `ViewMode` is `Month`. |
 
 ---
 
@@ -165,7 +204,7 @@ public readonly record struct SchedulerTimeSlot(DateTime Start, TimeSpan Duratio
 | Member | Type | Description |
 |---|---|---|
 | `Start` | `DateTime` | Snapped start of the slot. |
-| `Duration` | `TimeSpan` | Slot length — `SnapMinutes` for a tapped cell. |
+| `Duration` | `TimeSpan` | Slot length — `SnapMinutes` for a cell tapped on the timeline, one day for a cell tapped in a month. |
 | `End` | `DateTime` | `Start + Duration`. |
 | `Date` | `DateOnly` | Calendar day the slot falls on. |
 

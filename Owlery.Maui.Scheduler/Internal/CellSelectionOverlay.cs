@@ -11,11 +11,7 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// re-placed afterwards. It is anchored to a column like an appointment, which is why it has to be
 /// re-placed whenever the columns move, not only when the selection changes.
 /// </remarks>
-internal sealed class CellSelectionOverlay(
-    AbsoluteLayout host,
-    SchedulerGeometry geometry,
-    ISchedulerSurface surface,
-    int zIndex)
+internal sealed class CellSelectionOverlay(AbsoluteLayout host, int zIndex)
 {
     private View? view;
 
@@ -32,7 +28,12 @@ internal sealed class CellSelectionOverlay(
     }
 
     /// <summary>Places the marker on the given slot, or hides it when nothing is selected or on screen.</summary>
-    public void Update(SchedulerTimeSlot? selected, PageSlot[] pages, string timeFormat)
+    public void Update(
+        SchedulerTimeSlot? selected,
+        PageSlot[] pages,
+        PageGeometry geometry,
+        ISchedulerSurface surface,
+        string timeFormat)
     {
         if (selected is not { } slot || geometry.ViewportWidth <= 0)
         {
@@ -40,7 +41,7 @@ internal sealed class CellSelectionOverlay(
             return;
         }
 
-        var pageIndex = PageIndexFor(DateOnly.FromDateTime(slot.Start), pages);
+        var pageIndex = PageIndexFor(DateOnly.FromDateTime(slot.Start), pages, surface);
 
         if (pageIndex < 0)
         {
@@ -63,7 +64,7 @@ internal sealed class CellSelectionOverlay(
     }
 
     /// <summary>Which rendered page holds a date, or -1 when none of them do.</summary>
-    private int PageIndexFor(DateOnly date, PageSlot[] pages)
+    private static int PageIndexFor(DateOnly date, PageSlot[] pages, ISchedulerSurface surface)
     {
         for (var i = 0; i < pages.Length; i++)
         {

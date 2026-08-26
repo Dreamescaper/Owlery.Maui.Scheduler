@@ -544,9 +544,9 @@ The accessible surface is therefore the meaningful elements only:
 
 The following are absent by design, not by oversight:
 
-- **Month and Agenda views.** These need a different surface, not a different day count. Day and
-  three-day views *are* supported — see section 16. The app keeps its Syncfusion-based `SchedulePage`
-  for month and agenda.
+- **Agenda view.** It needs a different surface again, and the app keeps its Syncfusion-based
+  `SchedulePage` for it. Month view *is* now supported — see sections 17 and 18 — as are day and
+  three-day views, see section 16.
 - **All-day / multi-day appointments.** There is no all-day row; an appointment is clipped to its
   starting day.
 - **Resizing an appointment by dragging its edges.**
@@ -650,9 +650,6 @@ back. For a timeline the two are the same value.
 
 ## 18. The month surface
 
-Only the arithmetic exists so far — `MonthGeometry` and `MonthLayoutEngine`. The visual tree, the
-drawable and the mode switch come later; this section records the decisions those two encode.
-
 ### Six rows, always
 
 A month needs five or six week rows depending on where it starts. The grid is fixed at six anyway,
@@ -688,6 +685,36 @@ view would put something in the pool that is not an appointment for no gain.
 Dots instead of chips were considered and rejected. The host's appointments are lessons, and the
 useful content is a person's name; a dot says only that the day is not empty.
 
+### The chrome, and what a mode switch costs
+
+The two modes are one visual tree, not two. `pagerScroll`, the surface and the pool are shared, and
+what changes is settled by `ApplyMonthChrome` / `ApplyTimelineChrome`: the gutter and the header
+corner collapse to zero width, the timeline's scrolling day-header strip hides and a static weekday
+row takes its place, and `gridView.Drawable` swaps. Reparenting the pager between two containers was
+the alternative and it buys nothing — a month's content is exactly the viewport height, so the
+vertical `ScrollView` it already sits in simply has nothing to scroll.
+
+The weekday row is one row rather than one per page, and never moves. Every month page starts on
+`FirstDayOfWeek`, so the columns mean the same thing whichever month is showing — which also means
+none of the header-mirroring machinery of section 8 applies here.
+
+Day numbers are painted, not labelled. There are 42 to a page and three pages rendered at all times,
+so labels would mean 126 views that do nothing but show a number. Chips stay as views because they
+carry the host's template; the "+N more" marker is painted for the same reason the numbers are.
+
+Switching modes empties the pool rather than reusing it. A chip and an appointment box come from
+different templates, so a spare built from one is no use to the other — and `MonthAppointmentTemplate`
+exists precisely because one template rarely reads well at both sizes: a chip is a single line of
+about 16 units, an appointment box is sized by its duration. It falls back to `AppointmentTemplate`
+when unset, which renders badly but renders.
+
+The switch is a hard cut today. The cross-fade belongs with the transition work, and the seam it needs
+is already there: both surfaces can measure the same appointment.
+
+`DisplayDate` is deliberately *not* rewritten on a mode change. It means "some day on the page" and is
+only written back by a swipe, so switching to a month and back leaves the user on the day they were
+looking at rather than collapsing them to the first of the month.
+
 ### What the month engine does not do
 
 No overlap packing — a month cell has no time axis, so nothing can collide and appointments are
@@ -707,9 +734,14 @@ overlap layout and clipping, appointment placement, view reuse across a refresh,
 taps, long-press-to-drag including refusal and the scroll-not-drag case, and week paging. It runs
 without a simulator, and found two bugs that had already shipped.
 
-The month arithmetic of section 18 is covered to the same standard — grid alignment for Monday and
-Sunday weeks, the six-row window, per-day stacking and the overflow rule. Nothing month-shaped has
-been seen on a device yet, because nothing draws it.
+The month surface of section 18 is covered to the same standard: grid alignment for Monday and Sunday
+weeks, the six-row window, per-day stacking and the overflow rule as arithmetic; then, through the
+control, chip placement, month paging across a year boundary, the 42-day visible-dates report, whole-
+day cell selection, that a held chip is not picked up, and that switching modes leaves nothing of the
+old one behind.
+
+Nothing month-shaped has been seen on a device. The colours, the chip and row proportions, and how the
+grid reads at a real phone size are all unverified, and the host does not yet offer the mode.
 
 Rendering, paging, week rotation, overlap layout, the current-time line and appointment semantics have
 also been checked on the iOS simulator through DevFlow.

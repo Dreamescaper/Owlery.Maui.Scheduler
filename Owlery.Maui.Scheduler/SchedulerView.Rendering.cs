@@ -52,6 +52,28 @@ public partial class SchedulerView
         slot.DayNumberLabels = numberLabels;
     }
 
+    /// <summary>
+    /// Writes the seven weekday names above a month.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the timeline's day headers there is one row rather than one per page, and it never
+    /// moves: every month page starts on <see cref="FirstDayOfWeek"/>, so the columns mean the same
+    /// thing whichever month is on screen.
+    /// </remarks>
+    private void UpdateMonthHeader()
+    {
+        var culture = CultureInfo.CurrentUICulture;
+
+        for (var column = 0; column < monthHeaderLabels.Length; column++)
+        {
+            var day = (DayOfWeek)(((int)FirstDayOfWeek + column) % 7);
+
+            monthHeaderLabels[column].Text = culture.DateTimeFormat
+                .GetAbbreviatedDayName(day)
+                .ToUpper(culture);
+        }
+    }
+
     private void RebuildAll(DateOnly centrePage)
     {
         // Same reasoning as in SnapAsync: do not carry a waiting drop across a change of period.
@@ -74,7 +96,7 @@ public partial class SchedulerView
     private void SyncSlotStarts()
     {
         for (var i = 0; i < slots.Length; i++)
-            geometry.SlotStarts[i] = slots[i].PageStart;
+            ActiveGeometry.SlotStarts[i] = slots[i].PageStart;
 
         gridView.Invalidate();
     }
@@ -99,7 +121,7 @@ public partial class SchedulerView
         UpdateSlotHeader(slot, slotIndex);
 
         IReadOnlyList<IAppointmentPlacement> positions =
-            AppointmentTemplate is null || ItemsSource is null || geometry.ViewportWidth <= 0
+            ActiveTemplate is null || ItemsSource is null || ActiveGeometry.ViewportWidth <= 0
                 ? []
                 : pageSurface.Layout(LayoutItems(), slot.PageStart);
 
@@ -249,7 +271,7 @@ public partial class SchedulerView
         }
 
         // The slot offset lives in TranslationX so rotating pages never triggers a layout pass.
-        view.TranslationX = slotIndex * geometry.PageSpan + geometry.AnimationOffsetX;
+        view.TranslationX = slotIndex * ActiveGeometry.PageSpan + ActiveGeometry.AnimationOffsetX;
         view.TranslationY = 0;
         view.ZIndex = AppointmentZIndex;
     }
@@ -257,7 +279,7 @@ public partial class SchedulerView
     /// <summary>Moves an untouched week to a new physical position — the cheap half of a rotation.</summary>
     private void ShiftSlot(PageSlot slot, int slotIndex)
     {
-        var offset = slotIndex * geometry.PageSpan;
+        var offset = slotIndex * ActiveGeometry.PageSpan;
 
         foreach (var view in slot.Views)
             view.TranslationX = offset;

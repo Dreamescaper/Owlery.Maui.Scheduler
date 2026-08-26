@@ -67,6 +67,9 @@ internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snap
         return new Rect(dayIndex * geometry.DayWidth, y, geometry.DayWidth, height);
     }
 
+    /// <summary>Nothing overflows on a timeline: an appointment gets the height its duration asks for.</summary>
+    public IReadOnlyList<int> OverflowFor(DateOnly pageStart) => [];
+
     public SchedulerTimeSlot? SlotAt(Point point, PageSlot[] pages)
     {
         if (geometry.ViewportWidth <= 0)
