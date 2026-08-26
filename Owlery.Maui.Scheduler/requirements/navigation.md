@@ -1,12 +1,18 @@
 # Navigation and the time axis
 
-How the week view decides what is on screen, and how someone moves around it.
+How the scheduler decides what is on screen, and how someone moves around it.
 
 ## The visible week
 
-**NAV-1** The view shows exactly seven consecutive days, side by side, one column each.
+**NAV-1** The view shows a run of consecutive days, side by side, one column each.
 
-**NAV-2** Which day the week starts on is configurable. Monday is the default.
+**NAV-1a** How many days is configurable: a week, three days, or a single day. Anything from one to
+seven works, so a working week of five is available too. Seven is the default.
+
+**NAV-1b** The columns divide the width between them, so fewer days means wider columns.
+
+**NAV-2** Which day the week starts on is configurable. Monday is the default. It applies only when a
+full week is shown; a shorter run starts on the date being displayed, so that today leads.
 
 **NAV-3** Each day column is headed by an abbreviated day name and the day number, both in the
 person's language and regional format.
@@ -19,7 +25,7 @@ when weeks are changed.
 **NAV-5** Swiping horizontally moves to the previous or next week. There is no limit in either
 direction — any week, past or future, can be reached by continuing to swipe.
 
-**NAV-6** One swipe moves exactly one week.
+**NAV-6** One swipe moves exactly one page — a week, three days or a day, whichever is being shown.
 
 **NAV-7** The view commits to a week when the finger is lifted, not after the movement has come to
 rest. A flick is enough; the person does not have to wait for the calendar to stop moving to find out
@@ -29,6 +35,10 @@ which week they landed on.
 
 **NAV-9** Weeks that have not been swiped to are still prepared, so moving to an adjacent week does
 not show a blank or partially drawn calendar.
+
+**NAV-28** Changing how many days are shown expands or contracts the columns into their new width
+rather than cutting from one layout to the other, so it is clear that the same calendar is being
+looked at differently.
 
 **NAV-27** Neither axis rubber-bands past its content. There is no first or last week to come up
 against, and pulling the grid away from the edge would only expose empty space behind it.

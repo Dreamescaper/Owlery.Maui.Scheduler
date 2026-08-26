@@ -1,7 +1,7 @@
 namespace Owlery.Maui.Scheduler.Tests;
 
 [TestFixture]
-public class SchedulerWeekViewTests
+public class SchedulerViewTests
 {
     private static readonly DateTime Monday = new(2026, 8, 24);
     private const int CentreSlot = 1;

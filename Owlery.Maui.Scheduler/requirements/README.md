@@ -1,14 +1,14 @@
-# Week view — functional requirements
+# Scheduler — functional requirements
 
-What the week view does, described as behaviour. No implementation detail: how any of it is achieved
+What the scheduler does, described as behaviour. No implementation detail: how any of it is achieved
 is in [../DESIGN.md](../DESIGN.md), and the properties and events that expose it are in
 [../API.md](../API.md).
 
 ## Purpose
 
-A calendar surface that shows one week at a time as a vertical timeline, so someone can see how their
-week is laid out, find a free slot, and move things around — the shape of interaction people already
-know from Google Calendar and the iOS Calendar week view.
+A calendar surface that shows a run of days as a vertical timeline — a week, three days or one — so
+someone can see how their time is laid out, find a free slot, and move things around. The shape of
+interaction people already know from Google Calendar and the iOS Calendar.
 
 ## Documents
 
@@ -23,11 +23,11 @@ know from Google Calendar and the iOS Calendar week view.
 
 ## Who does what
 
-The week view **displays and reports**. It does not own the data and never changes it.
+The scheduler **displays and reports**. It does not own the data and never changes it.
 
 - The **host app** supplies appointments, decides what a tap means, performs any change, and reports
   the result back.
-- The **week view** decides what is visible, where things sit on the grid, and how gestures are
+- The **scheduler** decides what is visible, where things sit on the grid, and how gestures are
   interpreted, then tells the host what the person did.
 
 This split matters for reading these requirements: where one says "the view reports", the visible
@@ -40,7 +40,7 @@ outcome depends on the host acting on it.
 | **Appointment** | One item occupying a span of time on the grid. |
 | **Slot** | A position on the grid a person can select, rounded to the snap interval. |
 | **Snap interval** | The granularity times are rounded to. 15 minutes by default. |
-| **Visible week** | The seven days currently on screen. |
+| **Page** | The run of days currently on screen — a week, three days or one. |
 | **Day window** | The range of hours shown vertically, 08:00–23:00 by default. |
 
 ## Where the build does not yet meet these
@@ -58,7 +58,7 @@ Requirements state what is intended. These are the known gaps as things stand:
 
 Deliberately not provided, and not planned as part of this component:
 
-- Day, month, agenda or multi-week views.
+- Month, agenda or multi-week views. Day and three-day views are supported; see `NAV-1a`.
 - All-day appointments, and appointments spanning more than one day.
 - Changing an appointment's duration by dragging its edges.
 - Creating, editing or deleting appointments — the view reports intent; the host acts.

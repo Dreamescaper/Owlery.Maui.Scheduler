@@ -9,8 +9,29 @@ internal sealed class SchedulerGeometry
 {
     public const int SlotCount = 3;
 
-    /// <summary>Width of a single rendered week, i.e. the visible page width.</summary>
+    /// <summary>Width of a single rendered page, i.e. the visible width.</summary>
     public double ViewportWidth { get; set; }
+
+    /// <summary>How many days a page shows. Seven for a week, one for a day, and anything between.</summary>
+    public int VisibleDays { get; set; } = 7;
+
+    /// <summary>
+    /// Day width to use instead of the one implied by <see cref="VisibleDays"/>, while a change of
+    /// day count is being animated. Everything measures through <see cref="DayWidth"/>, so setting
+    /// this widens or narrows the grid, the appointments and the headers together.
+    /// </summary>
+    public double? DayWidthOverride { get; set; }
+
+    /// <summary>
+    /// Horizontal shift applied to the centre page while a day count change is animating.
+    /// </summary>
+    /// <remarks>
+    /// A new day count usually moves where the page starts — three days from Wednesday becomes a week
+    /// from Monday — so without this the content would jump sideways before it began resizing. Holding
+    /// the day that was already on screen in place and easing the shift to zero makes the new days
+    /// grow in from whichever side they belong on.
+    /// </remarks>
+    public double AnimationOffsetX { get; set; }
 
     public double HourHeight { get; set; } = 50;
 
@@ -23,12 +44,19 @@ internal sealed class SchedulerGeometry
     /// <summary>Current wall-clock time in the control's time zone. Refreshed by the minute.</summary>
     public DateTime Now { get; set; } = DateTime.Now;
 
-    /// <summary>Week start rendered by each physical slot, left to right.</summary>
-    public DateOnly[] SlotWeeks { get; } = new DateOnly[SlotCount];
+    /// <summary>First day rendered by each physical slot, left to right.</summary>
+    public DateOnly[] SlotStarts { get; } = new DateOnly[SlotCount];
 
-    public double DayWidth => ViewportWidth / 7;
+    public double DayWidth => DayWidthOverride ?? ViewportWidth / Math.Max(1, VisibleDays);
 
     public double SurfaceWidth => ViewportWidth * SlotCount;
+
+    /// <summary>
+    /// How far apart the pages sit. Normally one viewport, but while a day count change is animating
+    /// the columns are not yet their final width, so the pages have to be spaced by what they
+    /// currently measure or they would overlap each other.
+    /// </summary>
+    public double PageSpan => VisibleDays * DayWidth;
 
     public double ContentHeight => Math.Max(0, EndHour - StartHour) * HourHeight;
 

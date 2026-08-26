@@ -9,7 +9,7 @@ namespace Owlery.Maui.Scheduler.Tests;
 internal sealed class TestAppointmentView : ContentView;
 
 /// <summary>
-/// A <see cref="SchedulerWeekView"/> hosted in a headless MAUI app, arranged to a known size, with
+/// A <see cref="SchedulerView"/> hosted in a headless MAUI app, arranged to a known size, with
 /// scrolling and touch wired up so tests can drive it the way a person would.
 /// </summary>
 internal sealed class SchedulerHarness
@@ -21,7 +21,7 @@ internal sealed class SchedulerHarness
     /// <summary>Width of one week page — what the control calls the viewport.</summary>
     public const double PageWidth = ViewWidth - GutterWidth;
 
-    public SchedulerWeekView Scheduler { get; }
+    public SchedulerView Scheduler { get; }
 
     public TestDispatcher Dispatcher { get; }
 
@@ -44,15 +44,20 @@ internal sealed class SchedulerHarness
     private readonly TimeGutterDrawable gutterDrawable;
     private readonly Layout surface;
 
-    public SchedulerHarness(DateTime displayDate, IEnumerable<ISchedulerAppointment>? items = null)
+    private readonly int visibleDays;
+
+    public SchedulerHarness(DateTime displayDate, IEnumerable<ISchedulerAppointment>? items = null, int visibleDays = 7)
     {
+        this.visibleDays = visibleDays;
+
         var (application, dispatcher) = TestApplication.Create();
         Dispatcher = dispatcher;
 
-        Scheduler = new SchedulerWeekView
+        Scheduler = new SchedulerView
         {
             AppointmentTemplate = new DataTemplate(() => new TestAppointmentView()),
             TimeGutterWidth = GutterWidth,
+            VisibleDays = visibleDays,
             DisplayDate = displayDate,
             ItemsSource = items
         };
@@ -90,15 +95,34 @@ internal sealed class SchedulerHarness
     public IReadOnlyList<TestAppointmentView> VisibleAppointments =>
         [.. surface.OfType<TestAppointmentView>().Where(view => view.IsVisible)];
 
+    /// <summary>The "+" affordance marking the selected cell, if one is showing.</summary>
+    public View? CellSelectionAffordance => surface
+        .OfType<View>()
+        .FirstOrDefault(view => view is Border && view.IsVisible);
+
+    /// <summary>The appointments on the page currently on screen, ignoring the two either side.</summary>
+    public IReadOnlyList<TestAppointmentView> CentrePageAppointments =>
+    [
+        .. VisibleAppointments.Where(view =>
+        {
+            var x = BoundsOf(view).X;
+            return x >= PageWidth && x < PageWidth * 2;
+        })
+    ];
+
     /// <summary>Every appointment view ever created, including pooled ones lying hidden.</summary>
     public IReadOnlyList<TestAppointmentView> AllAppointmentViews => [.. surface.OfType<TestAppointmentView>()];
 
+    /// <summary>Column width for a full week, for tests that do not vary the day count.</summary>
     public static double DayWidth => PageWidth / 7;
+
+    /// <summary>Column width for this harness's day count.</summary>
+    public double ColumnWidth => PageWidth / visibleDays;
 
     /// <summary>A point on the scrolling surface, addressed the way a person would think about it.</summary>
     public Point PointAt(int slotIndex, int dayIndex, TimeSpan time, double acrossDay = 0.5)
     {
-        var x = slotIndex * PageWidth + (dayIndex + acrossDay) * DayWidth;
+        var x = slotIndex * PageWidth + (dayIndex + acrossDay) * ColumnWidth;
         var y = (time.TotalMinutes - Scheduler.StartHour * 60) / 60 * Scheduler.HourHeight;
         return new Point(x, y);
     }
@@ -124,7 +148,7 @@ internal sealed class SchedulerHarness
     /// <summary>Minute of day the gutter indicator points at.</summary>
     public double? DragTimeIndicatorMinutes => gutterDrawable.HighlightMinutes;
 
-    public Rect BoundsOf(TestAppointmentView view)
+    public Rect BoundsOf(View view)
     {
         var bounds = AbsoluteLayout.GetLayoutBounds(view);
         return new Rect(bounds.X + view.TranslationX, bounds.Y + view.TranslationY, bounds.Width, bounds.Height);

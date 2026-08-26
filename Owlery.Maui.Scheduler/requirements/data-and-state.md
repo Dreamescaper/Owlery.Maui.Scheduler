@@ -1,10 +1,10 @@
 # Data and state
 
-What the week view needs from the host, and how it behaves while waiting.
+What the scheduler needs from the host, and how it behaves while waiting.
 
 ## Where the data comes from
 
-**DAT-1** The week view holds no data of its own and fetches nothing. The host supplies appointments;
+**DAT-1** The scheduler holds no data of its own and fetches nothing. The host supplies appointments;
 the view decides what to show from them.
 
 **DAT-2** The host may supply appointments covering any span of time. The view selects the ones

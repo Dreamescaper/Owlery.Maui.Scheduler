@@ -18,7 +18,10 @@ it is.
 **SEL-5** Only one slot is selected at a time. Tapping elsewhere moves the selection.
 
 **SEL-6** The marker stays anchored to its slot while the calendar is scrolled, and remains in place
-when weeks are changed and the selected slot is still on screen.
+when periods are changed and the selected slot is still on screen.
+
+**SEL-14** When the number of days shown changes, the marker widens or narrows with the column it
+marks and travels with it, rather than staying where it was while the grid moves underneath.
 
 **SEL-7** The host can set or clear the selection itself — for example to restore a previous choice,
 or to clear it after acting on it.

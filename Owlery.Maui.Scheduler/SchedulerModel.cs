@@ -5,7 +5,7 @@ namespace Owlery.Maui.Scheduler;
 /// </summary>
 /// <remarks>
 /// <see cref="Start"/> and <see cref="End"/> are wall-clock values in
-/// <see cref="SchedulerWeekView.TimeZone"/>. The control never converts between time zones;
+/// <see cref="SchedulerView.TimeZone"/>. The control never converts between time zones;
 /// the caller decides what "now" means and hands over already-converted values.
 /// </remarks>
 public interface ISchedulerAppointment
@@ -62,7 +62,7 @@ public sealed class SchedulerAppointmentDroppedEventArgs(ISchedulerAppointment a
 {
     public ISchedulerAppointment Appointment { get; } = appointment;
 
-    /// <summary>The snapped start the appointment was dropped on, in <see cref="SchedulerWeekView.TimeZone"/>.</summary>
+    /// <summary>The snapped start the appointment was dropped on, in <see cref="SchedulerView.TimeZone"/>.</summary>
     public DateTime DropStart { get; } = dropStart;
 
     /// <summary>Set to <c>true</c> to reject the drop and snap the appointment back.</summary>

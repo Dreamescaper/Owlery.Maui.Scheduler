@@ -59,17 +59,20 @@ internal sealed class AppointmentViewPool(AbsoluteLayout host)
     }
 }
 
-/// <summary>One of the three rendered weeks. Its identity is stable; only the week it shows rotates.</summary>
-internal sealed class WeekSlot
+/// <summary>One of the three rendered pages. Its identity is stable; only the days it shows rotate.</summary>
+internal sealed class PageSlot
 {
-    public DateOnly WeekStart { get; set; }
+    public DateOnly PageStart { get; set; }
 
     public List<View> Views { get; } = [];
 
-    /// <summary>The seven day headers for this week, moved as a unit.</summary>
-    public required Layout Header { get; init; }
+    /// <summary>Where each of <see cref="Views"/> sits, kept so they can be re-placed without a re-layout.</summary>
+    public List<PositionedAppointment> Positions { get; } = [];
 
-    public required Label[] DayNameLabels { get; init; }
+    /// <summary>The day headers for this page, moved as a unit.</summary>
+    public required Grid Header { get; init; }
 
-    public required Label[] DayNumberLabels { get; init; }
+    public Label[] DayNameLabels { get; set; } = [];
+
+    public Label[] DayNumberLabels { get; set; } = [];
 }

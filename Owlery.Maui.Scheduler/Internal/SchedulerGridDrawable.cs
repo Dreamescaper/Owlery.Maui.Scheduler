@@ -4,7 +4,7 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// Draws the entire scrollable background — every day column, hour line and shading for all three
 /// rendered weeks — onto one canvas. See DESIGN.md for why this is not a grid of cell views.
 /// </summary>
-internal sealed class WeekGridDrawable(SchedulerGeometry geometry) : IDrawable
+internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawable
 {
     public Color HourLineColor { get; set; } = Color.FromArgb("#E0E0E0");
 
@@ -23,6 +23,12 @@ internal sealed class WeekGridDrawable(SchedulerGeometry geometry) : IDrawable
         if (geometry.ViewportWidth <= 0 || geometry.ContentHeight <= 0)
             return;
 
+        if (geometry.AnimationOffsetX != 0)
+        {
+            canvas.SaveState();
+            canvas.Translate((float)geometry.AnimationOffsetX, 0);
+        }
+
         var dayWidth = (float)geometry.DayWidth;
         var height = (float)geometry.ContentHeight;
         var today = DateOnly.FromDateTime(geometry.Now);
@@ -31,17 +37,20 @@ internal sealed class WeekGridDrawable(SchedulerGeometry geometry) : IDrawable
         DrawHourLines(canvas);
         DrawDaySeparators(canvas, dayWidth, height);
         DrawCurrentTimeLine(canvas, today);
+
+        if (geometry.AnimationOffsetX != 0)
+            canvas.RestoreState();
     }
 
     private void DrawDayBackgrounds(ICanvas canvas, float dayWidth, float height, DateOnly today)
     {
         for (var slot = 0; slot < SchedulerGeometry.SlotCount; slot++)
         {
-            var slotOffset = (float)(slot * geometry.ViewportWidth);
+            var slotOffset = (float)(slot * geometry.PageSpan);
 
-            for (var day = 0; day < 7; day++)
+            for (var day = 0; day < geometry.VisibleDays; day++)
             {
-                var date = geometry.SlotWeeks[slot].AddDays(day);
+                var date = geometry.SlotStarts[slot].AddDays(day);
 
                 var fill = date == today
                     ? TodayBackgroundColor
@@ -84,10 +93,12 @@ internal sealed class WeekGridDrawable(SchedulerGeometry geometry) : IDrawable
         canvas.StrokeColor = DaySeparatorColor;
         canvas.StrokeSize = 1;
 
-        for (var column = 0; column <= 7 * SchedulerGeometry.SlotCount; column++)
+        for (var slot = 0; slot < SchedulerGeometry.SlotCount; slot++)
         {
-            var x = column * dayWidth;
-            canvas.DrawLine(x, 0, x, height);
+            var slotOffset = (float)(slot * geometry.PageSpan);
+
+            for (var column = 0; column <= geometry.VisibleDays; column++)
+                canvas.DrawLine(slotOffset + column * dayWidth, 0, slotOffset + column * dayWidth, height);
         }
     }
 
@@ -103,15 +114,15 @@ internal sealed class WeekGridDrawable(SchedulerGeometry geometry) : IDrawable
 
         for (var slot = 0; slot < SchedulerGeometry.SlotCount; slot++)
         {
-            var dayIndex = today.DayNumber - geometry.SlotWeeks[slot].DayNumber;
-            if (dayIndex is < 0 or > 6)
+            var dayIndex = today.DayNumber - geometry.SlotStarts[slot].DayNumber;
+            if (dayIndex < 0 || dayIndex >= geometry.VisibleDays)
                 continue;
 
-            var slotOffset = (float)(slot * geometry.ViewportWidth);
+            var slotOffset = (float)(slot * geometry.PageSpan);
 
             canvas.StrokeColor = CurrentTimeColor;
             canvas.StrokeSize = 2;
-            canvas.DrawLine(slotOffset, y, slotOffset + 7 * dayWidth, y);
+            canvas.DrawLine(slotOffset, y, slotOffset + geometry.VisibleDays * dayWidth, y);
 
             canvas.FillColor = CurrentTimeColor;
             canvas.FillCircle(slotOffset + dayIndex * dayWidth + 4, y, 4);

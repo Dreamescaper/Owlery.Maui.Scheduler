@@ -6,13 +6,14 @@ using Owlery.Maui.Scheduler.Internal;
 namespace Owlery.Maui.Scheduler;
 
 /// <summary>
-/// A Google-Calendar-style week view built from plain .NET MAUI primitives.
+/// A Google-Calendar-style timeline built from plain .NET MAUI primitives, showing a week, three days
+/// or a single day depending on <see cref="VisibleDays"/>.
 /// </summary>
 /// <remarks>
-/// Three week pages are rendered at all times and rotated as a ring buffer, so swiping is infinite
+/// Three pages are rendered at all times and rotated as a ring buffer, so swiping is infinite
 /// while only one page is ever rebuilt. See DESIGN.md for the reasoning behind each decision.
 /// </remarks>
-public class SchedulerWeekView : ContentView
+public class SchedulerView : ContentView
 {
     private const double AppointmentGap = 1;
     private const double MinimumAppointmentHeight = 18;
@@ -22,6 +23,8 @@ public class SchedulerWeekView : ContentView
     private const double TapMovementToleranceDp = 8;
     private const double EdgePagingZoneDp = 32;
     private const int EdgePagingDwellMs = 600;
+    private const int DayCountAnimationMs = 220;
+    private const string DayCountAnimationName = "SchedulerDayCount";
     private const double GhostOpacity = 0.5;
     private const double LiftedOpacity = 0.85;
 
@@ -33,12 +36,12 @@ public class SchedulerWeekView : ContentView
     private const int DraggedAppointmentZIndex = 100;
 
     private readonly SchedulerGeometry geometry = new();
-    private readonly WeekGridDrawable gridDrawable;
+    private readonly SchedulerGridDrawable gridDrawable;
     private readonly TimeGutterDrawable gutterDrawable;
     private readonly AppointmentViewPool pool;
-    private readonly WeekSlot[] slots = new WeekSlot[SchedulerGeometry.SlotCount];
+    private readonly PageSlot[] slots = new PageSlot[SchedulerGeometry.SlotCount];
     private readonly Dictionary<View, ISchedulerAppointment> appointmentsByView = [];
-    private readonly Dictionary<View, WeekSlot> slotsByView = [];
+    private readonly Dictionary<View, PageSlot> slotsByView = [];
 
     private readonly Grid root;
     private readonly Grid headerClip;
@@ -79,9 +82,9 @@ public class SchedulerWeekView : ContentView
     private bool interactionMoved;
     private DateTime dragDropStart;
 
-    public SchedulerWeekView()
+    public SchedulerView()
     {
-        gridDrawable = new WeekGridDrawable(geometry);
+        gridDrawable = new SchedulerGridDrawable(geometry);
         gutterDrawable = new TimeGutterDrawable(geometry);
 
         gutterView = new GraphicsView { Drawable = gutterDrawable, InputTransparent = true };
@@ -196,69 +199,72 @@ public class SchedulerWeekView : ContentView
     #region Bindable properties
 
     public static readonly BindableProperty DisplayDateProperty = BindableProperty.Create(
-        nameof(DisplayDate), typeof(DateTime), typeof(SchedulerWeekView), DateTime.Today,
+        nameof(DisplayDate), typeof(DateTime), typeof(SchedulerView), DateTime.Today,
         BindingMode.TwoWay, propertyChanged: OnDisplayDateChanged);
 
     public static readonly BindableProperty ItemsSourceProperty = BindableProperty.Create(
-        nameof(ItemsSource), typeof(IEnumerable<ISchedulerAppointment>), typeof(SchedulerWeekView), null,
+        nameof(ItemsSource), typeof(IEnumerable<ISchedulerAppointment>), typeof(SchedulerView), null,
         propertyChanged: OnItemsSourceChanged);
 
     public static readonly BindableProperty AppointmentTemplateProperty = BindableProperty.Create(
-        nameof(AppointmentTemplate), typeof(DataTemplate), typeof(SchedulerWeekView), null,
+        nameof(AppointmentTemplate), typeof(DataTemplate), typeof(SchedulerView), null,
         propertyChanged: OnAppointmentTemplateChanged);
 
     public static readonly BindableProperty CellSelectionTemplateProperty = BindableProperty.Create(
-        nameof(CellSelectionTemplate), typeof(DataTemplate), typeof(SchedulerWeekView), null,
+        nameof(CellSelectionTemplate), typeof(DataTemplate), typeof(SchedulerView), null,
         propertyChanged: OnCellSelectionTemplateChanged);
 
     public static readonly BindableProperty SelectedSlotProperty = BindableProperty.Create(
-        nameof(SelectedSlot), typeof(SchedulerTimeSlot?), typeof(SchedulerWeekView), null,
+        nameof(SelectedSlot), typeof(SchedulerTimeSlot?), typeof(SchedulerView), null,
         BindingMode.TwoWay, propertyChanged: OnSelectedSlotChanged);
 
     public static readonly BindableProperty StartHourProperty = BindableProperty.Create(
-        nameof(StartHour), typeof(int), typeof(SchedulerWeekView), 8, propertyChanged: OnGeometryChanged);
+        nameof(StartHour), typeof(int), typeof(SchedulerView), 8, propertyChanged: OnGeometryChanged);
 
     public static readonly BindableProperty EndHourProperty = BindableProperty.Create(
-        nameof(EndHour), typeof(int), typeof(SchedulerWeekView), 23, propertyChanged: OnGeometryChanged);
+        nameof(EndHour), typeof(int), typeof(SchedulerView), 23, propertyChanged: OnGeometryChanged);
 
     public static readonly BindableProperty HourHeightProperty = BindableProperty.Create(
-        nameof(HourHeight), typeof(double), typeof(SchedulerWeekView), 50d, propertyChanged: OnGeometryChanged);
+        nameof(HourHeight), typeof(double), typeof(SchedulerView), 50d, propertyChanged: OnGeometryChanged);
+
+    public static readonly BindableProperty VisibleDaysProperty = BindableProperty.Create(
+        nameof(VisibleDays), typeof(int), typeof(SchedulerView), 7, propertyChanged: OnVisibleDaysChanged);
 
     public static readonly BindableProperty FirstDayOfWeekProperty = BindableProperty.Create(
-        nameof(FirstDayOfWeek), typeof(DayOfWeek), typeof(SchedulerWeekView), DayOfWeek.Monday,
+        nameof(FirstDayOfWeek), typeof(DayOfWeek), typeof(SchedulerView), DayOfWeek.Monday,
         propertyChanged: OnGeometryChanged);
 
     public static readonly BindableProperty TimeZoneProperty = BindableProperty.Create(
-        nameof(TimeZone), typeof(TimeZoneInfo), typeof(SchedulerWeekView), TimeZoneInfo.Local,
+        nameof(TimeZone), typeof(TimeZoneInfo), typeof(SchedulerView), TimeZoneInfo.Local,
         propertyChanged: OnGeometryChanged);
 
     public static readonly BindableProperty TimeFormatProperty = BindableProperty.Create(
-        nameof(TimeFormat), typeof(string), typeof(SchedulerWeekView), "HH:mm",
+        nameof(TimeFormat), typeof(string), typeof(SchedulerView), "HH:mm",
         propertyChanged: OnGeometryChanged);
 
     public static readonly BindableProperty TimeGutterWidthProperty = BindableProperty.Create(
-        nameof(TimeGutterWidth), typeof(double), typeof(SchedulerWeekView), 52d, propertyChanged: OnGeometryChanged);
+        nameof(TimeGutterWidth), typeof(double), typeof(SchedulerView), 52d, propertyChanged: OnGeometryChanged);
 
     public static readonly BindableProperty HeaderHeightProperty = BindableProperty.Create(
-        nameof(HeaderHeight), typeof(double), typeof(SchedulerWeekView), 52d, propertyChanged: OnGeometryChanged);
+        nameof(HeaderHeight), typeof(double), typeof(SchedulerView), 52d, propertyChanged: OnGeometryChanged);
 
     public static readonly BindableProperty SnapMinutesProperty = BindableProperty.Create(
-        nameof(SnapMinutes), typeof(int), typeof(SchedulerWeekView), 15);
+        nameof(SnapMinutes), typeof(int), typeof(SchedulerView), 15);
 
     public static readonly BindableProperty AllowDragAndDropProperty = BindableProperty.Create(
-        nameof(AllowDragAndDrop), typeof(bool), typeof(SchedulerWeekView), true);
+        nameof(AllowDragAndDrop), typeof(bool), typeof(SchedulerView), true);
 
     public static readonly BindableProperty AllowDragAcrossPeriodsProperty = BindableProperty.Create(
-        nameof(AllowDragAcrossPeriods), typeof(bool), typeof(SchedulerWeekView), true);
+        nameof(AllowDragAcrossPeriods), typeof(bool), typeof(SchedulerView), true);
 
     public static readonly BindableProperty ShowDragTimeIndicatorProperty = BindableProperty.Create(
-        nameof(ShowDragTimeIndicator), typeof(bool), typeof(SchedulerWeekView), true);
+        nameof(ShowDragTimeIndicator), typeof(bool), typeof(SchedulerView), true);
 
     public static readonly BindableProperty IsBusyProperty = BindableProperty.Create(
-        nameof(IsBusy), typeof(bool), typeof(SchedulerWeekView), false, propertyChanged: OnIsBusyChanged);
+        nameof(IsBusy), typeof(bool), typeof(SchedulerView), false, propertyChanged: OnIsBusyChanged);
 
     public static readonly BindableProperty GridBackgroundColorProperty = BindableProperty.Create(
-        nameof(GridBackgroundColor), typeof(Color), typeof(SchedulerWeekView), Colors.White,
+        nameof(GridBackgroundColor), typeof(Color), typeof(SchedulerView), Colors.White,
         propertyChanged: OnGeometryChanged);
 
     /// <summary>Any date inside the week to display. Updated by the control after each swipe.</summary>
@@ -318,6 +324,20 @@ public class SchedulerWeekView : ContentView
     {
         get => (double)GetValue(HourHeightProperty);
         set => SetValue(HourHeightProperty, value);
+    }
+
+    /// <summary>
+    /// How many days a page shows: 7 for a week, 3 for a three-day view, 1 for a single day.
+    /// </summary>
+    /// <remarks>
+    /// Anything from 1 to 7 works — 5 gives a working week. Only a full week snaps to
+    /// <see cref="FirstDayOfWeek"/>; shorter pages start on <see cref="DisplayDate"/>, and swiping
+    /// moves by exactly one page.
+    /// </remarks>
+    public int VisibleDays
+    {
+        get => (int)GetValue(VisibleDaysProperty);
+        set => SetValue(VisibleDaysProperty, value);
     }
 
     public DayOfWeek FirstDayOfWeek
@@ -491,11 +511,93 @@ public class SchedulerWeekView : ContentView
     }
 
     private static void OnGeometryChanged(BindableObject bindable, object oldValue, object newValue)
-        => ((SchedulerWeekView)bindable).ApplyGeometry();
+        => ((SchedulerView)bindable).ApplyGeometry();
+
+    private static void OnVisibleDaysChanged(BindableObject bindable, object oldValue, object newValue)
+        => ((SchedulerView)bindable).ChangeVisibleDays((int)oldValue, (int)newValue);
+
+    /// <summary>
+    /// Applies a new day count, growing or shrinking the columns into place rather than cutting.
+    /// </summary>
+    /// <remarks>
+    /// The page is laid out for the new count first, then the column width is animated from the old
+    /// one to the new. Everything measures through <see cref="SchedulerGeometry.DayWidth"/>, so the
+    /// grid, the appointments and the day headers move together for free.
+    /// </remarks>
+    private void ChangeVisibleDays(int oldDays, int newDays)
+    {
+        var previousDayWidth = geometry.ViewportWidth / Math.Clamp(oldDays, 1, 7);
+        var previousPageStart = slots[1].PageStart;
+
+        ApplyGeometry();
+
+        var newDayWidth = geometry.ViewportWidth / Math.Clamp(newDays, 1, 7);
+
+        // Nothing to animate before there is a platform to animate on. Without a handler there is no
+        // animation ticker either, and a transition that starts but never advances would leave the
+        // column width pinned at its first frame — which is the old width, so the new day count would
+        // be laid out at the old size and stay there.
+        if (Handler is null || !IsLoaded || geometry.ViewportWidth <= 0
+            || Math.Abs(previousDayWidth - newDayWidth) < 0.5)
+        {
+            return;
+        }
+
+        // Puts the day that was already on screen back at the left edge of the viewport, so the new
+        // days grow in from the side they belong on — Monday and Tuesday from the left, Saturday and
+        // Sunday from the right — instead of the whole page sliding sideways first. Pages are
+        // spaced by what they currently measure, so the centre page starts one page-span in, and the
+        // shift has to undo both that and the columns preceding the anchored day.
+        var shiftedDays = previousPageStart.DayNumber - slots[1].PageStart.DayNumber;
+        var startOffset = geometry.ViewportWidth
+            - ((geometry.VisibleDays + shiftedDays) * previousDayWidth);
+
+        this.AbortAnimation(DayCountAnimationName);
+
+        new Animation(
+            progress =>
+            {
+                geometry.DayWidthOverride = previousDayWidth + ((newDayWidth - previousDayWidth) * progress);
+                geometry.AnimationOffsetX = startOffset * (1 - progress);
+                ApplyDayWidth();
+            },
+            0,
+            1,
+            Easing.CubicInOut)
+            .Commit(this, DayCountAnimationName, length: DayCountAnimationMs, finished: (_, _) =>
+            {
+                geometry.DayWidthOverride = null;
+                geometry.AnimationOffsetX = 0;
+                ApplyDayWidth();
+            });
+    }
+
+    /// <summary>Re-places what is already laid out at the current column width, without re-laying it out.</summary>
+    private void ApplyDayWidth()
+    {
+        for (var i = 0; i < slots.Length; i++)
+        {
+            var slot = slots[i];
+
+            for (var v = 0; v < slot.Views.Count && v < slot.Positions.Count; v++)
+                PositionAppointmentView(slot.Views[v], slot.Positions[v], i);
+
+            AbsoluteLayout.SetLayoutBounds(slot.Header, new Rect(0, 0, geometry.PageSpan, HeaderHeight));
+            slot.Header.TranslationX = i * geometry.PageSpan + geometry.AnimationOffsetX;
+        }
+
+        // The selected-cell affordance is anchored to a column like everything else, so it widens and
+        // travels with the day it marks rather than sitting still while the grid moves under it.
+        UpdateSelectionView();
+
+        gridView.Invalidate();
+    }
+
 
     private void ApplyGeometry()
     {
         geometry.HourHeight = HourHeight;
+        geometry.VisibleDays = Math.Clamp(VisibleDays, 1, 7);
         geometry.StartHour = StartHour;
         geometry.EndHour = EndHour;
         geometry.FirstDayOfWeek = FirstDayOfWeek;
@@ -522,9 +624,14 @@ public class SchedulerWeekView : ContentView
         headerCorner.Text = TimeZoneAbbreviation();
 
         for (var i = 0; i < slots.Length; i++)
-            AbsoluteLayout.SetLayoutBounds(slots[i].Header, new Rect(0, 0, geometry.ViewportWidth, HeaderHeight));
+        {
+            if (slots[i].DayNameLabels.Length != geometry.VisibleDays)
+                BuildSlotHeader(slots[i]);
 
-        RebuildAll(StartOfWeek(DateOnly.FromDateTime(DisplayDate)));
+            AbsoluteLayout.SetLayoutBounds(slots[i].Header, new Rect(0, 0, geometry.ViewportWidth, HeaderHeight));
+        }
+
+        RebuildAll(StartOfPage(DateOnly.FromDateTime(DisplayDate)));
         initialised = true;
     }
 
@@ -537,8 +644,19 @@ public class SchedulerWeekView : ContentView
             : $"GMT{sign}{Math.Abs(offset.Hours)}:{Math.Abs(offset.Minutes):00}";
     }
 
-    private DateOnly StartOfWeek(DateOnly date)
+    /// <summary>
+    /// The first day of the page containing <paramref name="date"/>.
+    /// </summary>
+    /// <remarks>
+    /// A full week snaps to <see cref="FirstDayOfWeek"/>, because a week that started on an arbitrary
+    /// day would not be one. Shorter pages start on the day asked for, which is what makes "today"
+    /// the leading column in a day or three-day view.
+    /// </remarks>
+    private DateOnly StartOfPage(DateOnly date)
     {
+        if (geometry.VisibleDays < 7)
+            return date;
+
         var diff = ((int)date.DayOfWeek - (int)FirstDayOfWeek + 7) % 7;
         return date.AddDays(-diff);
     }
@@ -547,17 +665,27 @@ public class SchedulerWeekView : ContentView
 
     #region Slot construction and population
 
-    private WeekSlot CreateSlot()
+    private PageSlot CreateSlot()
     {
-        var header = new Grid
-        {
-            ColumnDefinitions = [.. Enumerable.Range(0, 7).Select(_ => new ColumnDefinition(GridLength.Star))]
-        };
+        var header = new Grid();
 
-        var nameLabels = new Label[7];
-        var numberLabels = new Label[7];
+        headerSurface.Add(header);
 
-        for (var day = 0; day < 7; day++)
+        return new PageSlot { Header = header };
+    }
+
+    /// <summary>Rebuilds a page's day headers, which is what a change of day count needs.</summary>
+    private void BuildSlotHeader(PageSlot slot)
+    {
+        slot.Header.Clear();
+        slot.Header.ColumnDefinitions =
+            [.. Enumerable.Range(0, geometry.VisibleDays).Select(_ => new ColumnDefinition(GridLength.Star))];
+
+        var header = slot.Header;
+        var nameLabels = new Label[geometry.VisibleDays];
+        var numberLabels = new Label[geometry.VisibleDays];
+
+        for (var day = 0; day < geometry.VisibleDays; day++)
         {
             var stack = new VerticalStackLayout { Spacing = 2, Padding = new Thickness(0, 6) };
 
@@ -578,39 +706,33 @@ public class SchedulerWeekView : ContentView
             header.Add(stack, day);
         }
 
-        headerSurface.Add(header);
-
-        return new WeekSlot
-        {
-            Header = header,
-            DayNameLabels = nameLabels,
-            DayNumberLabels = numberLabels
-        };
+        slot.DayNameLabels = nameLabels;
+        slot.DayNumberLabels = numberLabels;
     }
 
-    private void RebuildAll(DateOnly centreWeek)
+    private void RebuildAll(DateOnly centrePage)
     {
         // Same reasoning as in SnapAsync: do not carry a waiting drop across a change of period.
         if (!dragArmed)
             ReleaseFloatingAppointment();
 
-        slots[0].WeekStart = centreWeek.AddDays(-7);
-        slots[1].WeekStart = centreWeek;
-        slots[2].WeekStart = centreWeek.AddDays(7);
+        slots[0].PageStart = centrePage.AddDays(-geometry.VisibleDays);
+        slots[1].PageStart = centrePage;
+        slots[2].PageStart = centrePage.AddDays(geometry.VisibleDays);
 
         for (var i = 0; i < slots.Length; i++)
             PopulateSlot(slots[i], i);
 
-        SyncSlotWeeks();
+        SyncSlotStarts();
         UpdateSelectionView();
         RaiseVisibleDatesChanged();
         _ = RecentreAsync(animated: false);
     }
 
-    private void SyncSlotWeeks()
+    private void SyncSlotStarts()
     {
         for (var i = 0; i < slots.Length; i++)
-            geometry.SlotWeeks[i] = slots[i].WeekStart;
+            geometry.SlotStarts[i] = slots[i].PageStart;
 
         gridView.Invalidate();
     }
@@ -630,13 +752,13 @@ public class SchedulerWeekView : ContentView
     /// genuine surplus or shortfall touches the pool.
     /// </para>
     /// </remarks>
-    private void PopulateSlot(WeekSlot slot, int slotIndex)
+    private void PopulateSlot(PageSlot slot, int slotIndex)
     {
         UpdateSlotHeader(slot, slotIndex);
 
         var positions = AppointmentTemplate is null || ItemsSource is null || geometry.ViewportWidth <= 0
             ? []
-            : AppointmentLayoutEngine.Layout(LayoutItems(), slot.WeekStart, StartHour, EndHour);
+            : AppointmentLayoutEngine.Layout(LayoutItems(), slot.PageStart, geometry.VisibleDays, StartHour, EndHour);
 
         // Index what this week already has by the identity of what it is showing.
         var available = new Dictionary<object, View>(slot.Views.Count);
@@ -662,6 +784,9 @@ public class SchedulerWeekView : ContentView
             arranged.Add(view);
             BindAppointmentView(view, position, slot, slotIndex);
         }
+
+        slot.Positions.Clear();
+        slot.Positions.AddRange(positions.Take(arranged.Count));
 
         // Whatever no appointment claimed is genuinely gone from this week.
         foreach (var surplus in available.Values)
@@ -713,7 +838,7 @@ public class SchedulerWeekView : ContentView
         return appointment;
     }
 
-    private void BindAppointmentView(View view, PositionedAppointment position, WeekSlot slot, int slotIndex)
+    private void BindAppointmentView(View view, PositionedAppointment position, PageSlot slot, int slotIndex)
     {
         view.BindingContext = position.Appointment;
         SetAppointmentSemantics(view, position.Appointment);
@@ -734,7 +859,7 @@ public class SchedulerWeekView : ContentView
             : $"{appointment.Subject}, {day}, {range}");
     }
 
-    private void ReleaseSlot(WeekSlot slot)
+    private void ReleaseSlot(PageSlot slot)
     {
         foreach (var view in slot.Views)
         {
@@ -746,14 +871,14 @@ public class SchedulerWeekView : ContentView
         slot.Views.Clear();
     }
 
-    private void UpdateSlotHeader(WeekSlot slot, int slotIndex)
+    private void UpdateSlotHeader(PageSlot slot, int slotIndex)
     {
         var culture = CultureInfo.CurrentUICulture;
         var today = DateOnly.FromDateTime(geometry.Now);
 
-        for (var day = 0; day < 7; day++)
+        for (var day = 0; day < slot.DayNameLabels.Length; day++)
         {
-            var date = slot.WeekStart.AddDays(day);
+            var date = slot.PageStart.AddDays(day);
             var isToday = date == today;
 
             slot.DayNameLabels[day].Text = culture.DateTimeFormat
@@ -766,7 +891,7 @@ public class SchedulerWeekView : ContentView
             number.TextColor = isToday ? Color.FromArgb("#4458C8") : Color.FromArgb("#212121");
         }
 
-        slot.Header.TranslationX = slotIndex * geometry.ViewportWidth;
+        slot.Header.TranslationX = slotIndex * geometry.PageSpan + geometry.AnimationOffsetX;
     }
 
     private void PositionAppointmentView(View view, PositionedAppointment position, int slotIndex)
@@ -786,16 +911,16 @@ public class SchedulerWeekView : ContentView
             AbsoluteLayout.SetLayoutBounds(view, bounds);
         }
 
-        // The slot offset lives in TranslationX so rotating weeks never triggers a layout pass.
-        view.TranslationX = slotIndex * geometry.ViewportWidth;
+        // The slot offset lives in TranslationX so rotating pages never triggers a layout pass.
+        view.TranslationX = slotIndex * geometry.PageSpan + geometry.AnimationOffsetX;
         view.TranslationY = 0;
         view.ZIndex = AppointmentZIndex;
     }
 
     /// <summary>Moves an untouched week to a new physical position — the cheap half of a rotation.</summary>
-    private void ShiftSlot(WeekSlot slot, int slotIndex)
+    private void ShiftSlot(PageSlot slot, int slotIndex)
     {
-        var offset = slotIndex * geometry.ViewportWidth;
+        var offset = slotIndex * geometry.PageSpan;
 
         foreach (var view in slot.Views)
             view.TranslationX = offset;
@@ -888,7 +1013,7 @@ public class SchedulerWeekView : ContentView
             snapping = false;
         }
 
-        SyncSlotWeeks();
+        SyncSlotStarts();
         UpdateSelectionView();
         SyncDisplayDate();
         RaiseVisibleDatesChanged();
@@ -904,7 +1029,7 @@ public class SchedulerWeekView : ContentView
         ShiftSlot(slots[0], 0);
         ShiftSlot(slots[1], 1);
 
-        recycled.WeekStart = slots[1].WeekStart.AddDays(7);
+        recycled.PageStart = slots[1].PageStart.AddDays(geometry.VisibleDays);
         PopulateSlot(recycled, 2);
     }
 
@@ -918,7 +1043,7 @@ public class SchedulerWeekView : ContentView
         ShiftSlot(slots[1], 1);
         ShiftSlot(slots[2], 2);
 
-        recycled.WeekStart = slots[1].WeekStart.AddDays(-7);
+        recycled.PageStart = slots[1].PageStart.AddDays(-geometry.VisibleDays);
         PopulateSlot(recycled, 0);
     }
 
@@ -942,15 +1067,15 @@ public class SchedulerWeekView : ContentView
 
     private void RaiseVisibleDatesChanged()
     {
-        var centre = slots[1].WeekStart;
-        var visible = Enumerable.Range(0, 7)
+        var centre = slots[1].PageStart;
+        var visible = Enumerable.Range(0, geometry.VisibleDays)
             .Select(i => centre.AddDays(i).ToDateTime(TimeOnly.MinValue))
             .ToArray();
 
         VisibleDatesChanged?.Invoke(this, new SchedulerVisibleDatesChangedEventArgs(
             visible,
-            slots[0].WeekStart.ToDateTime(TimeOnly.MinValue),
-            slots[2].WeekStart.AddDays(6).ToDateTime(TimeOnly.MaxValue)));
+            slots[0].PageStart.ToDateTime(TimeOnly.MinValue),
+            slots[2].PageStart.AddDays(geometry.VisibleDays - 1).ToDateTime(TimeOnly.MaxValue)));
     }
 
     private void SyncDisplayDate()
@@ -958,7 +1083,7 @@ public class SchedulerWeekView : ContentView
         suppressDisplayDateSync = true;
         try
         {
-            DisplayDate = slots[1].WeekStart.ToDateTime(TimeOnly.MinValue);
+            DisplayDate = slots[1].PageStart.ToDateTime(TimeOnly.MinValue);
         }
         finally
         {
@@ -972,13 +1097,13 @@ public class SchedulerWeekView : ContentView
 
     private static void OnDisplayDateChanged(BindableObject bindable, object oldValue, object newValue)
     {
-        var view = (SchedulerWeekView)bindable;
+        var view = (SchedulerView)bindable;
 
         if (view.suppressDisplayDateSync || !view.initialised)
             return;
 
-        var target = view.StartOfWeek(DateOnly.FromDateTime((DateTime)newValue));
-        if (target == view.slots[1].WeekStart)
+        var target = view.StartOfPage(DateOnly.FromDateTime((DateTime)newValue));
+        if (target == view.slots[1].PageStart)
             return;
 
         view.RebuildAll(target);
@@ -987,7 +1112,7 @@ public class SchedulerWeekView : ContentView
 
     private static void OnItemsSourceChanged(BindableObject bindable, object oldValue, object newValue)
     {
-        var view = (SchedulerWeekView)bindable;
+        var view = (SchedulerView)bindable;
 
         if (oldValue is INotifyCollectionChanged oldCollection)
             oldCollection.CollectionChanged -= view.OnItemsCollectionChanged;
@@ -1021,7 +1146,7 @@ public class SchedulerWeekView : ContentView
 
     private static void OnAppointmentTemplateChanged(BindableObject bindable, object oldValue, object newValue)
     {
-        var view = (SchedulerWeekView)bindable;
+        var view = (SchedulerView)bindable;
 
         foreach (var slot in view.slots)
             view.ReleaseSlot(slot);
@@ -1039,7 +1164,7 @@ public class SchedulerWeekView : ContentView
 
     private static void OnCellSelectionTemplateChanged(BindableObject bindable, object oldValue, object newValue)
     {
-        var view = (SchedulerWeekView)bindable;
+        var view = (SchedulerView)bindable;
 
         if (view.selectionView is not null)
         {
@@ -1051,11 +1176,11 @@ public class SchedulerWeekView : ContentView
     }
 
     private static void OnSelectedSlotChanged(BindableObject bindable, object oldValue, object newValue)
-        => ((SchedulerWeekView)bindable).UpdateSelectionView();
+        => ((SchedulerView)bindable).UpdateSelectionView();
 
     private static void OnIsBusyChanged(BindableObject bindable, object oldValue, object newValue)
     {
-        var view = (SchedulerWeekView)bindable;
+        var view = (SchedulerView)bindable;
         view.busyIndicator.IsVisible = (bool)newValue;
         view.busyIndicator.IsRunning = (bool)newValue;
     }
@@ -1085,13 +1210,13 @@ public class SchedulerWeekView : ContentView
         selectionView.BindingContext = slot;
         selectionView.IsVisible = true;
 
-        var dayIndex = DateOnly.FromDateTime(slot.Start).DayNumber - slots[slotIndex].WeekStart.DayNumber;
+        var dayIndex = DateOnly.FromDateTime(slot.Start).DayNumber - slots[slotIndex].PageStart.DayNumber;
         var y = geometry.YFromMinutes(slot.Start.TimeOfDay.TotalMinutes);
         var height = Math.Max(MinimumAppointmentHeight, geometry.YFromMinutes(slot.End.TimeOfDay.TotalMinutes) - y);
 
         AbsoluteLayout.SetLayoutFlags(selectionView, AbsoluteLayoutFlags.None);
         AbsoluteLayout.SetLayoutBounds(selectionView, new Rect(dayIndex * geometry.DayWidth, y, geometry.DayWidth, height));
-        selectionView.TranslationX = slotIndex * geometry.ViewportWidth;
+        selectionView.TranslationX = slotIndex * geometry.PageSpan + geometry.AnimationOffsetX;
 
         SemanticProperties.SetDescription(
             selectionView,
@@ -1125,8 +1250,8 @@ public class SchedulerWeekView : ContentView
     {
         for (var i = 0; i < slots.Length; i++)
         {
-            var offset = date.DayNumber - slots[i].WeekStart.DayNumber;
-            if (offset is >= 0 and < 7)
+            var offset = date.DayNumber - slots[i].PageStart.DayNumber;
+            if (offset >= 0 && offset < geometry.VisibleDays)
                 return i;
         }
 
@@ -1255,14 +1380,14 @@ public class SchedulerWeekView : ContentView
 
         var slotIndex = Math.Clamp((int)(point.X / geometry.ViewportWidth), 0, SchedulerGeometry.SlotCount - 1);
         var xInSlot = point.X - slotIndex * geometry.ViewportWidth;
-        var dayIndex = Math.Clamp((int)(xInSlot / geometry.DayWidth), 0, 6);
+        var dayIndex = Math.Clamp((int)(xInSlot / geometry.DayWidth), 0, geometry.VisibleDays - 1);
 
         var snap = Math.Max(1, SnapMinutes);
         var minutes = geometry.MinutesFromY(point.Y);
         var snapped = Math.Floor(minutes / snap) * snap;
         snapped = Math.Clamp(snapped, geometry.WindowStartMinutes, geometry.WindowEndMinutes - snap);
 
-        var date = slots[slotIndex].WeekStart.AddDays(dayIndex);
+        var date = slots[slotIndex].PageStart.AddDays(dayIndex);
         var start = date.ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
 
         return new SchedulerTimeSlot(start, TimeSpan.FromMinutes(snap));
@@ -1514,7 +1639,7 @@ public class SchedulerWeekView : ContentView
         var desiredX = point.X - dragGrabOffset.X - slotOffset;
         var desiredY = point.Y - dragGrabOffset.Y;
 
-        var dayIndex = Math.Clamp((int)Math.Round(desiredX / geometry.DayWidth), 0, 6);
+        var dayIndex = Math.Clamp((int)Math.Round(desiredX / geometry.DayWidth), 0, geometry.VisibleDays - 1);
 
         var snap = Math.Max(1, SnapMinutes);
         var minutes = geometry.MinutesFromY(desiredY);
@@ -1539,7 +1664,7 @@ public class SchedulerWeekView : ContentView
                 dragOriginalBounds.Height));
         }
 
-        dragDropStart = slots[slotIndex].WeekStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
+        dragDropStart = slots[slotIndex].PageStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
 
         // Shown in the time gutter rather than over the grid: anywhere near the appointment is under
         // the finger doing the dragging, which is precisely where it cannot be read.
@@ -1639,7 +1764,7 @@ public class SchedulerWeekView : ContentView
             if (floatingView is not null)
                 floatingView.TranslationX += forward ? -geometry.ViewportWidth : geometry.ViewportWidth;
 
-            SyncSlotWeeks();
+            SyncSlotStarts();
             UpdateSelectionView();
             SyncDisplayDate();
             RaiseVisibleDatesChanged();
@@ -1715,9 +1840,9 @@ public class SchedulerWeekView : ContentView
             return;
 
         var dayIndex = Math.Clamp(
-            DateOnly.FromDateTime(dragDropStart).DayNumber - slots[1].WeekStart.DayNumber,
+            DateOnly.FromDateTime(dragDropStart).DayNumber - slots[1].PageStart.DayNumber,
             0,
-            6);
+            geometry.VisibleDays - 1);
 
         AbsoluteLayout.SetLayoutFlags(floatingView, AbsoluteLayoutFlags.None);
         AbsoluteLayout.SetLayoutBounds(floatingView, new Rect(

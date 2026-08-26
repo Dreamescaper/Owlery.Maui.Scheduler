@@ -10,7 +10,7 @@ public class AppointmentLayoutEngineTests
     private const int EndHour = 23;
 
     private static List<PositionedAppointment> Layout(params ISchedulerAppointment[] appointments)
-        => AppointmentLayoutEngine.Layout(appointments, WeekStart, StartHour, EndHour);
+        => AppointmentLayoutEngine.Layout(appointments, WeekStart, 7, StartHour, EndHour);
 
     private static DateTime Day(int offset) => WeekStart.AddDays(offset).ToDateTime(TimeOnly.MinValue);
 
@@ -151,8 +151,8 @@ public class AppointmentLayoutEngineTests
             TestAppointment.At(Day(2), "10:00", 1, "c")
         ];
 
-        var forwards = AppointmentLayoutEngine.Layout(appointments, WeekStart, StartHour, EndHour);
-        var backwards = AppointmentLayoutEngine.Layout(appointments.Reverse(), WeekStart, StartHour, EndHour);
+        var forwards = AppointmentLayoutEngine.Layout(appointments, WeekStart, 7, StartHour, EndHour);
+        var backwards = AppointmentLayoutEngine.Layout(appointments.Reverse(), WeekStart, 7, StartHour, EndHour);
 
         Assert.That(
             backwards.Select(p => ((TestAppointment)p.Appointment).Subject),

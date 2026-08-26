@@ -20,23 +20,24 @@ internal static class AppointmentLayoutEngine
 {
     public static List<PositionedAppointment> Layout(
         IEnumerable<ISchedulerAppointment> appointments,
-        DateOnly weekStart,
+        DateOnly pageStart,
+        int dayCount,
         int startHour,
         int endHour)
     {
         var result = new List<PositionedAppointment>();
-        var dayBuckets = new List<ISchedulerAppointment>[7];
+        var dayBuckets = new List<ISchedulerAppointment>[dayCount];
 
         var windowStart = startHour * 60.0;
         var windowEnd = endHour * 60.0;
 
         foreach (var appointment in appointments)
         {
-            var dayIndex = DayIndexOf(appointment, weekStart);
+            var dayIndex = DayIndexOf(appointment, pageStart, dayCount);
             if (dayIndex < 0)
                 continue;
 
-            var day = weekStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue);
+            var day = pageStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue);
 
             // Tested against the appointment's own times, before any clamping. Clamping first would
             // pull an appointment that finishes before the window opens up to the window start and
@@ -52,13 +53,13 @@ internal static class AppointmentLayoutEngine
             (dayBuckets[dayIndex] ??= []).Add(appointment);
         }
 
-        for (var dayIndex = 0; dayIndex < 7; dayIndex++)
+        for (var dayIndex = 0; dayIndex < dayCount; dayIndex++)
         {
             var bucket = dayBuckets[dayIndex];
             if (bucket is null)
                 continue;
 
-            var day = weekStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue);
+            var day = pageStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue);
 
             var spans = bucket
                 .Select(a =>
@@ -161,9 +162,9 @@ internal static class AppointmentLayoutEngine
         }
     }
 
-    private static int DayIndexOf(ISchedulerAppointment appointment, DateOnly weekStart)
+    private static int DayIndexOf(ISchedulerAppointment appointment, DateOnly pageStart, int dayCount)
     {
-        var index = (DateOnly.FromDateTime(appointment.Start).DayNumber - weekStart.DayNumber);
-        return index is >= 0 and < 7 ? index : -1;
+        var index = DateOnly.FromDateTime(appointment.Start).DayNumber - pageStart.DayNumber;
+        return index >= 0 && index < dayCount ? index : -1;
     }
 }
