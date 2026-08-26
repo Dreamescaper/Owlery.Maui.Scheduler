@@ -92,6 +92,7 @@ per-frame state — set them once rather than animating them.
 | `SelectedSlot` | `SchedulerTimeSlot?` | `null` | The currently selected empty cell, or `null`. **Two-way**: set by the control when empty space is tapped, and settable by the host to move or clear the affordance. |
 | `SnapMinutes` | `int` | `15` | Granularity for cell selection and for dropped appointments. Selection rounds **down** into the containing cell; a drop rounds to the **nearest** boundary. |
 | `AllowDragAndDrop` | `bool` | `true` | When `false`, appointments cannot be picked up at all and no drag events are raised. |
+| `ShowDragTimeIndicator` | `bool` | `true` | Whether the time an appointment would take is shown in the hour gutter while it is being dragged. Turning it off does not affect rescheduling itself — only the readout. |
 | `AllowDragAcrossPeriods` | `bool` | `true` | Whether holding a dragged appointment against the leading or trailing edge pages to the adjacent period — here, the adjacent week — after a short dwell. When `false`, an appointment can only be moved within the period it started in. Has no effect unless `AllowDragAndDrop` is also `true`. Named for the period rather than the week because the behaviour belongs to paging itself. |
 
 Tapping empty space sets `SelectedSlot` **and** raises `CellTapped` on every tap. The control does not

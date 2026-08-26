@@ -358,9 +358,13 @@ fires on touch-*down*, before any movement. So the grid drawable owns all input:
 3. The timer firing raises `AppointmentDragStarting` (cancellable). If it is not cancelled, scrolling
    is frozen for the duration.
 4. `DragInteraction` applies movement via `TranslationX/Y` only, snapped to `SnapMinutes`, keeping the
-   grabbed point under the finger, with a floating label showing the target time. No layout pass runs
-   during the drag.
-5. `EndInteraction` raises `AppointmentDropped`, or — if the drag never armed and the finger did not
+   grabbed point under the finger. No layout pass runs during the drag.
+5. The time the appointment would take is drawn **in the hour gutter**, level with the line it would
+   start on. It began as a label floating just above the appointment, which put it under the hand
+   doing the dragging — legible in a screenshot, invisible in use. The gutter is the one column
+   guaranteed to be clear of the finger, and drawing it there costs no views: it is one more thing
+   `TimeGutterDrawable` paints, with the hour label it would collide with giving way.
+6. `EndInteraction` raises `AppointmentDropped`, or — if the drag never armed and the finger did not
    travel — is what raises the tap events instead.
 
 **This is the one place the control reaches past MAUI**, in `SetScrollingEnabled` and

@@ -34,6 +34,14 @@ the result.
 **DND-9** The proposed new time is displayed as text during the drag, so the person is not left to
 read it off the grid.
 
+**DND-36** That text appears in the hour gutter, level with the time the appointment would start at.
+It is never placed next to the appointment being dragged, where the hand doing the dragging covers it.
+
+**DND-37** An hour label is hidden only when the indicator covers enough of it to leave it unreadable.
+A label the indicator merely touches stays, so the gutter does not appear to lose entries at random.
+
+**DND-38** The readout can be switched off without affecting rescheduling itself.
+
 **DND-10** The appointment keeps its duration throughout. Dragging moves it; it never resizes.
 
 **DND-11** An appointment cannot be dragged outside the day window, and cannot be positioned so that

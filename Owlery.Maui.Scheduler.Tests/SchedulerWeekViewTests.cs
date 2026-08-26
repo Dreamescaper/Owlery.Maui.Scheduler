@@ -215,6 +215,76 @@ public class SchedulerWeekViewTests
     }
 
     [Test]
+    public void Dragging_shows_the_proposed_time_in_the_gutter()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+
+        harness.BeginDrag(grab);
+        harness.DragTo(new Point(grab.X, grab.Y + 100));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.DragTimeIndicator, Is.EqualTo("12:00"));
+            // Level with the line the appointment would start on, clear of the finger.
+            Assert.That(harness.DragTimeIndicatorMinutes, Is.EqualTo(12 * 60));
+        });
+    }
+
+    [Test]
+    public void The_gutter_time_indicator_follows_the_drag()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+
+        harness.BeginDrag(grab);
+        harness.DragTo(new Point(grab.X, grab.Y + 50));
+
+        Assert.That(harness.DragTimeIndicator, Is.EqualTo("11:00"));
+
+        harness.DragTo(new Point(grab.X, grab.Y + 175));
+
+        Assert.That(harness.DragTimeIndicator, Is.EqualTo("13:30"));
+    }
+
+    [Test]
+    public void The_gutter_time_indicator_can_be_switched_off()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        harness.Scheduler.ShowDragTimeIndicator = false;
+        var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+
+        harness.BeginDrag(grab);
+        harness.DragTo(new Point(grab.X, grab.Y + 100));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.DragTimeIndicator, Is.Null);
+            // Still reschedulable — only the readout is gone.
+            harness.Release(new Point(grab.X, grab.Y + 100));
+            Assert.That(harness.Drops, Has.Count.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void The_gutter_time_indicator_clears_when_the_drag_ends()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+        var target = new Point(grab.X, grab.Y + 100);
+
+        harness.BeginDrag(grab);
+        harness.DragTo(target);
+        harness.Release(target);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.DragTimeIndicator, Is.Null);
+            Assert.That(harness.DragTimeIndicatorMinutes, Is.Null);
+        });
+    }
+
+    [Test]
     public void Moving_without_holding_is_a_scroll_and_never_starts_a_drag()
     {
         var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);

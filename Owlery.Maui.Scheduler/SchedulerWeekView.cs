@@ -31,7 +31,6 @@ public class SchedulerWeekView : ContentView
     private const int SelectionZIndex = 1;
     private const int AppointmentZIndex = 2;
     private const int DraggedAppointmentZIndex = 100;
-    private const int DragLabelZIndex = 200;
 
     private readonly SchedulerGeometry geometry = new();
     private readonly WeekGridDrawable gridDrawable;
@@ -51,7 +50,6 @@ public class SchedulerWeekView : ContentView
     private readonly GraphicsView gridView;
     private readonly GraphicsView gutterView;
     private readonly ActivityIndicator busyIndicator;
-    private readonly Label dragTimeLabel;
 
     private View? selectionView;
     private IDispatcherTimer? snapTimer;
@@ -97,17 +95,6 @@ public class SchedulerWeekView : ContentView
         surface = new AbsoluteLayout();
         surface.Add(gridView);
 
-        dragTimeLabel = new Label
-        {
-            IsVisible = false,
-            FontSize = 12,
-            Padding = new Thickness(6, 2),
-            BackgroundColor = Color.FromArgb("#212121"),
-            TextColor = Colors.White,
-            InputTransparent = true,
-            ZIndex = DragLabelZIndex
-        };
-        surface.Add(dragTimeLabel);
 
         // Appointments never handle their own input: every touch on the surface is resolved by
         // OnSurfaceStartInteraction, which hit-tests them arithmetically.
@@ -255,6 +242,9 @@ public class SchedulerWeekView : ContentView
     public static readonly BindableProperty AllowDragAcrossPeriodsProperty = BindableProperty.Create(
         nameof(AllowDragAcrossPeriods), typeof(bool), typeof(SchedulerWeekView), true);
 
+    public static readonly BindableProperty ShowDragTimeIndicatorProperty = BindableProperty.Create(
+        nameof(ShowDragTimeIndicator), typeof(bool), typeof(SchedulerWeekView), true);
+
     public static readonly BindableProperty IsBusyProperty = BindableProperty.Create(
         nameof(IsBusy), typeof(bool), typeof(SchedulerWeekView), false, propertyChanged: OnIsBusyChanged);
 
@@ -363,6 +353,15 @@ public class SchedulerWeekView : ContentView
     {
         get => (bool)GetValue(AllowDragAndDropProperty);
         set => SetValue(AllowDragAndDropProperty, value);
+    }
+
+    /// <summary>
+    /// Whether the time an appointment would take is shown in the hour gutter while it is dragged.
+    /// </summary>
+    public bool ShowDragTimeIndicator
+    {
+        get => (bool)GetValue(ShowDragTimeIndicatorProperty);
+        set => SetValue(ShowDragTimeIndicatorProperty, value);
     }
 
     /// <summary>
@@ -817,7 +816,6 @@ public class SchedulerWeekView : ContentView
         if (dragArmed && dragView is not null)
         {
             dragView.TranslationX += scrollDelta;
-            dragTimeLabel.TranslationX += scrollDelta;
         }
 
         // A drag drives the pager itself, so nothing here should be mistaken for a swipe.
@@ -1347,7 +1345,6 @@ public class SchedulerWeekView : ContentView
         dragArmed = true;
 
         SetScrollingEnabled(false);
-        dragTimeLabel.IsVisible = true;
 
         UpdateDragPosition(new Point(
             dragOriginalBounds.X + lifted.TranslationX + dragGrabOffset.X,
@@ -1369,7 +1366,7 @@ public class SchedulerWeekView : ContentView
 
         StopEdgePaging();
         SetScrollingEnabled(true);
-        dragTimeLabel.IsVisible = false;
+        ClearDragIndicator();
         RepopulateAllSlots();
     }
 
@@ -1496,9 +1493,14 @@ public class SchedulerWeekView : ContentView
 
         dragDropStart = slots[slotIndex].WeekStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
 
-        dragTimeLabel.Text = dragDropStart.ToString(TimeFormat, CultureInfo.CurrentUICulture);
-        AbsoluteLayout.SetLayoutBounds(dragTimeLabel, new Rect(snappedX, Math.Max(0, snappedY - 20), 64, 20));
-        dragTimeLabel.TranslationX = slotOffset;
+        // Shown in the time gutter rather than over the grid: anywhere near the appointment is under
+        // the finger doing the dragging, which is precisely where it cannot be read.
+        if (ShowDragTimeIndicator)
+        {
+            gutterDrawable.HighlightMinutes = snapped;
+            gutterDrawable.HighlightText = dragDropStart.ToString(TimeFormat, CultureInfo.CurrentUICulture);
+            gutterView.Invalidate();
+        }
 
         UpdateEdgePaging(point);
     }
@@ -1545,6 +1547,13 @@ public class SchedulerWeekView : ContentView
         edgePagingTimer.IsRepeating = true;
         edgePagingTimer.Tick += (_, _) => _ = PageDuringDragAsync();
         edgePagingTimer.Start();
+    }
+
+    private void ClearDragIndicator()
+    {
+        gutterDrawable.HighlightMinutes = null;
+        gutterDrawable.HighlightText = null;
+        gutterView.Invalidate();
     }
 
     private void StopEdgePaging()
@@ -1625,7 +1634,7 @@ public class SchedulerWeekView : ContentView
             return;
 
         SetScrollingEnabled(true);
-        dragTimeLabel.IsVisible = false;
+        ClearDragIndicator();
         ReleaseGhost();
         view.ZIndex = AppointmentZIndex;
         view.Opacity = 1;

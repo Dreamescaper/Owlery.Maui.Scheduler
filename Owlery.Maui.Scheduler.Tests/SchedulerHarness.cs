@@ -1,4 +1,5 @@
 using Microsoft.Maui.Controls;
+using Owlery.Maui.Scheduler.Internal;
 using Microsoft.Maui.Graphics;
 using MC = Microsoft.Maui.Controls;
 
@@ -39,6 +40,7 @@ internal sealed class SchedulerHarness
 
     private readonly ScrollView pagerScroll;
     private readonly IGraphicsView surfaceView;
+    private readonly TimeGutterDrawable gutterDrawable;
     private readonly Layout surface;
 
     public SchedulerHarness(DateTime displayDate, IEnumerable<ISchedulerAppointment>? items = null)
@@ -75,6 +77,12 @@ internal sealed class SchedulerHarness
             .First(scrollView => scrollView.Orientation == ScrollOrientation.Horizontal);
         surface = (Layout)pagerScroll.Content;
         surfaceView = Descendants(surface).OfType<GraphicsView>().First();
+
+        gutterDrawable = Descendants(Scheduler)
+            .OfType<GraphicsView>()
+            .Select(view => view.Drawable)
+            .OfType<TimeGutterDrawable>()
+            .First();
     }
 
     /// <summary>The appointment views currently showing, in the order the surface holds them.</summary>
@@ -103,6 +111,12 @@ internal sealed class SchedulerHarness
     /// <summary>The faded original left behind at the start of a drag.</summary>
     public TestAppointmentView? GhostAppointment =>
         VisibleAppointments.FirstOrDefault(view => view.ZIndex != 100 && view.Opacity < 1);
+
+    /// <summary>The time shown in the gutter while an appointment is being dragged.</summary>
+    public string? DragTimeIndicator => gutterDrawable.HighlightText;
+
+    /// <summary>Minute of day the gutter indicator points at.</summary>
+    public double? DragTimeIndicatorMinutes => gutterDrawable.HighlightMinutes;
 
     public Rect BoundsOf(TestAppointmentView view)
     {
