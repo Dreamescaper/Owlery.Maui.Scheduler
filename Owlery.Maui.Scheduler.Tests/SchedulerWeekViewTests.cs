@@ -1,0 +1,243 @@
+namespace Owlery.Maui.Scheduler.Tests;
+
+[TestFixture]
+public class SchedulerWeekViewTests
+{
+    private static readonly DateTime Monday = new(2026, 8, 24);
+    private const int CentreSlot = 1;
+
+    private static TestAppointment[] ThreeAppointments() =>
+    [
+        TestAppointment.At(Monday, "09:00", 1, "a"),
+        TestAppointment.At(Monday.AddDays(2), "10:00", 1, "b"),
+        TestAppointment.At(Monday.AddDays(4), "14:00", 2, "c")
+    ];
+
+    [Test]
+    public void Lays_out_one_view_per_appointment_in_the_visible_week()
+    {
+        var harness = new SchedulerHarness(Monday, ThreeAppointments());
+
+        Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void Places_an_appointment_at_its_day_and_time()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+
+        var bounds = harness.BoundsOf(harness.VisibleAppointments[0]);
+
+        Assert.Multiple(() =>
+        {
+            // Wednesday is the third column of the centre week.
+            Assert.That(bounds.X, Is.EqualTo(CentreSlot * SchedulerHarness.PageWidth + 2 * SchedulerHarness.DayWidth).Within(2));
+            // 10:00 is two hours below an 08:00 window start, at 50px an hour.
+            Assert.That(bounds.Y, Is.EqualTo(100).Within(0.01));
+            Assert.That(bounds.Height, Is.EqualTo(50).Within(0.01));
+        });
+    }
+
+    [Test]
+    public void Reports_the_visible_week_and_a_three_week_prefetch_range()
+    {
+        var harness = new SchedulerHarness(Monday, ThreeAppointments());
+
+        var report = harness.VisibleDatesReports.Last();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(report.VisibleDates, Has.Count.EqualTo(7));
+            Assert.That(report.VisibleDates[0], Is.EqualTo(Monday));
+            Assert.That(report.VisibleDates[6], Is.EqualTo(Monday.AddDays(6)));
+            Assert.That(report.PrefetchFrom, Is.EqualTo(Monday.AddDays(-7)));
+            Assert.That(report.PrefetchTo.Date, Is.EqualTo(Monday.AddDays(13)));
+        });
+    }
+
+    [Test]
+    public void Shows_the_week_containing_the_display_date()
+    {
+        var wednesday = Monday.AddDays(2);
+        var harness = new SchedulerHarness(wednesday, ThreeAppointments());
+
+        Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0], Is.EqualTo(Monday));
+    }
+
+    [Test]
+    public void Refreshing_with_equivalent_data_keeps_every_appointment_on_its_own_view()
+    {
+        // Regression: releasing and re-renting made each view come back bound to a different
+        // appointment, so a refresh returning identical data repainted the whole week.
+        var harness = new SchedulerHarness(Monday, ThreeAppointments());
+        var before = harness.VisibleAppointments.ToArray();
+
+        harness.Scheduler.ItemsSource = ThreeAppointments();
+
+        Assert.That(harness.VisibleAppointments, Is.EqualTo(before).AsCollection);
+    }
+
+    [Test]
+    public void Refreshing_does_not_create_additional_views()
+    {
+        var harness = new SchedulerHarness(Monday, ThreeAppointments());
+
+        harness.Scheduler.ItemsSource = ThreeAppointments();
+        harness.Scheduler.ItemsSource = ThreeAppointments();
+
+        Assert.That(harness.AllAppointmentViews, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void Surplus_views_are_hidden_and_reused_rather_than_discarded()
+    {
+        var harness = new SchedulerHarness(Monday, ThreeAppointments());
+
+        harness.Scheduler.ItemsSource = [TestAppointment.At(Monday, "09:00", 1, "a")];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(1));
+            Assert.That(harness.AllAppointmentViews, Has.Count.EqualTo(3), "views should be pooled, not destroyed");
+        });
+
+        harness.Scheduler.ItemsSource = ThreeAppointments();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(3));
+            Assert.That(harness.AllAppointmentViews, Has.Count.EqualTo(3), "the pooled views should have been reused");
+        });
+    }
+
+    [Test]
+    public void Tapping_empty_space_selects_the_slot_it_landed_in()
+    {
+        var harness = new SchedulerHarness(Monday);
+
+        harness.Tap(harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:07")));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.CellTaps, Has.Count.EqualTo(1));
+            // Rounded down into the containing 15-minute slot.
+            Assert.That(harness.CellTaps[0].Slot.Start, Is.EqualTo(Monday.AddDays(2).AddHours(10)));
+            Assert.That(harness.Scheduler.SelectedSlot?.Start, Is.EqualTo(Monday.AddDays(2).AddHours(10)));
+        });
+    }
+
+    [Test]
+    public void Tapping_an_appointment_reports_it_and_does_not_select_a_cell()
+    {
+        var appointment = TestAppointment.At(Monday.AddDays(2), "10:00", 1);
+        var harness = new SchedulerHarness(Monday, [appointment]);
+
+        harness.Tap(harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30")));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.AppointmentTaps, Has.Count.EqualTo(1));
+            Assert.That(harness.AppointmentTaps[0].Appointment, Is.SameAs(appointment));
+            Assert.That(harness.CellTaps, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void Holding_then_dragging_reschedules_to_the_snapped_time()
+    {
+        var appointment = TestAppointment.At(Monday.AddDays(2), "10:00", 1);
+        var harness = new SchedulerHarness(Monday, [appointment]);
+
+        var from = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+        harness.LongPressDrag(from.X, from.Y, from.X, from.Y + 100);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.DragStarts, Has.Count.EqualTo(1));
+            Assert.That(harness.Drops, Has.Count.EqualTo(1));
+            Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(2).AddHours(12)));
+        });
+    }
+
+    [Test]
+    public void Dragging_sideways_moves_the_appointment_to_another_day()
+    {
+        var appointment = TestAppointment.At(Monday.AddDays(2), "10:00", 1);
+        var harness = new SchedulerHarness(Monday, [appointment]);
+
+        var from = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+        harness.LongPressDrag(from.X, from.Y, from.X + SchedulerHarness.DayWidth, from.Y);
+
+        Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(3).AddHours(10)));
+    }
+
+    [Test]
+    public void Moving_without_holding_is_a_scroll_and_never_starts_a_drag()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+
+        var from = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+        harness.PressAndMove(from.X, from.Y, from.X, from.Y + 100);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.DragStarts, Is.Empty);
+            Assert.That(harness.Drops, Is.Empty);
+            Assert.That(harness.AppointmentTaps, Is.Empty, "a gesture that moved is not a tap");
+        });
+    }
+
+    [Test]
+    public void A_refused_drag_never_reports_a_drop()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        harness.Scheduler.AppointmentDragStarting += (_, e) => e.Cancel = true;
+
+        var from = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+        harness.LongPressDrag(from.X, from.Y, from.X, from.Y + 100);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.DragStarts, Has.Count.EqualTo(1));
+            Assert.That(harness.Drops, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void Drag_and_drop_can_be_switched_off()
+    {
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1)]);
+        harness.Scheduler.AllowDragAndDrop = false;
+
+        var from = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+        harness.LongPressDrag(from.X, from.Y, from.X, from.Y + 100);
+
+        Assert.That(harness.DragStarts, Is.Empty);
+    }
+
+    [Test]
+    public void Swiping_forward_advances_the_week_and_asks_for_new_data()
+    {
+        var harness = new SchedulerHarness(Monday, ThreeAppointments());
+        var reportsBefore = harness.VisibleDatesReports.Count;
+
+        harness.SwipeToPage(2);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(Monday.AddDays(7)));
+            Assert.That(harness.VisibleDatesReports, Has.Count.GreaterThan(reportsBefore));
+            Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0], Is.EqualTo(Monday.AddDays(7)));
+        });
+    }
+
+    [Test]
+    public void Swiping_backward_returns_to_the_previous_week()
+    {
+        var harness = new SchedulerHarness(Monday, ThreeAppointments());
+
+        harness.SwipeToPage(0);
+
+        Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(Monday.AddDays(-7)));
+    }
+}

@@ -1,0 +1,66 @@
+# Week view — functional requirements
+
+What the week view does, described as behaviour. No implementation detail: how any of it is achieved
+is in [../DESIGN.md](../DESIGN.md), and the properties and events that expose it are in
+[../API.md](../API.md).
+
+## Purpose
+
+A calendar surface that shows one week at a time as a vertical timeline, so someone can see how their
+week is laid out, find a free slot, and move things around — the shape of interaction people already
+know from Google Calendar and the iOS Calendar week view.
+
+## Documents
+
+| Area | Requirements |
+|---|---|
+| [Navigation and the time axis](navigation.md) | `NAV-*` — which week is shown, moving between weeks, the timeline, today |
+| [Appointments](appointments.md) | `APT-*` — how existing items are placed and drawn |
+| [Selecting a time](time-selection.md) | `SEL-*` — picking an empty slot |
+| [Rescheduling](rescheduling.md) | `DND-*` — moving an appointment by dragging |
+| [Data and state](data-and-state.md) | `DAT-*` — what must be loaded and when, busy and empty states |
+| [Accessibility](accessibility.md) | `ACC-*` — what assistive technology can reach |
+
+## Who does what
+
+The week view **displays and reports**. It does not own the data and never changes it.
+
+- The **host app** supplies appointments, decides what a tap means, performs any change, and reports
+  the result back.
+- The **week view** decides what is visible, where things sit on the grid, and how gestures are
+  interpreted, then tells the host what the person did.
+
+This split matters for reading these requirements: where one says "the view reports", the visible
+outcome depends on the host acting on it.
+
+## Vocabulary
+
+| Term | Meaning |
+|---|---|
+| **Appointment** | One item occupying a span of time on the grid. |
+| **Slot** | A position on the grid a person can select, rounded to the snap interval. |
+| **Snap interval** | The granularity times are rounded to. 15 minutes by default. |
+| **Visible week** | The seven days currently on screen. |
+| **Day window** | The range of hours shown vertically, 08:00–23:00 by default. |
+
+## Where the build does not yet meet these
+
+Requirements state what is intended. These are the known gaps as things stand:
+
+| Requirement | Gap |
+|---|---|
+| NAV-7 — commit on release | Holds on iOS. On Android the week is still decided once movement stops, so a flick is followed by a pause before the week settles. |
+| ACC-9 — respect system text size | Holds for day headers and appointment content. The hour labels down the side are drawn rather than laid out as text and do not scale. |
+| ACC-10 — comfortable touch targets | A short appointment sharing its column with two or three others can end up narrower than the recommended minimum target. |
+| ACC-11 — rescheduling without dragging | No equivalent exists in the view; the host must provide one. |
+
+## Out of scope
+
+Deliberately not provided, and not planned as part of this component:
+
+- Day, month, agenda or multi-week views.
+- All-day appointments, and appointments spanning more than one day.
+- Changing an appointment's duration by dragging its edges.
+- Dragging an appointment into a different week.
+- Creating, editing or deleting appointments — the view reports intent; the host acts.
+- Recurrence, reminders, invitations, availability or free/busy lookup.
