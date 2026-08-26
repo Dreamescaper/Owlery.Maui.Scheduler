@@ -92,6 +92,7 @@ per-frame state — set them once rather than animating them.
 | `SelectedSlot` | `SchedulerTimeSlot?` | `null` | The currently selected empty cell, or `null`. **Two-way**: set by the control when empty space is tapped, and settable by the host to move or clear the affordance. |
 | `SnapMinutes` | `int` | `15` | Granularity for cell selection and for dropped appointments. Selection rounds **down** into the containing cell; a drop rounds to the **nearest** boundary. |
 | `AllowDragAndDrop` | `bool` | `true` | When `false`, appointments cannot be picked up at all and no drag events are raised. |
+| `AllowDragAcrossPeriods` | `bool` | `true` | Whether holding a dragged appointment against the leading or trailing edge pages to the adjacent period — here, the adjacent week — after a short dwell. When `false`, an appointment can only be moved within the period it started in. Has no effect unless `AllowDragAndDrop` is also `true`. Named for the period rather than the week because the behaviour belongs to paging itself. |
 
 Tapping empty space sets `SelectedSlot` **and** raises `CellTapped` on every tap. The control does not
 implement tap-to-arm-then-tap-to-confirm; that is host policy.
@@ -130,6 +131,7 @@ What the control needs to know about an item.
 ```csharp
 public interface ISchedulerAppointment
 {
+    object Key { get; }
     DateTime Start { get; }
     DateTime End { get; }
     string? Subject { get; }
@@ -138,12 +140,19 @@ public interface ISchedulerAppointment
 
 | Member | Description |
 |---|---|
+| `Key` | Stable identity, compared with `Equals`. Any stable value will do — an id, a composite string. |
 | `Start` | Wall-clock start in `SchedulerWeekView.TimeZone`. |
 | `End` | Wall-clock end. Items shorter than 15 minutes still get a tappable box. |
 | `Subject` | Short text used to build the accessibility description. May be `null`. |
 
 Implement this on your own type and keep the domain object on it — that instance is the template's
 binding context, so the template can read whatever it needs.
+
+`Key` is what makes the control safe to use with a collection you rebuild. It never assumes it is
+handed the same object twice: views are matched to appointments by key, so an unchanged reload repaints
+nothing and an insert does not disturb its neighbours, and everything reported back to you is looked up
+in your *current* collection first. Two appointments sharing a key within one period is not meaningful;
+give recurring instances distinct keys.
 
 ### `SchedulerTimeSlot`
 
@@ -266,10 +275,24 @@ Regenerate with `dotnet generate-maui-blazor-components` after changing the cont
 returns. An `async` handler must do its validation *before* its first `await`; anything after it is too
 late to veto. Checks that must block a drag therefore belong in `AppointmentDragStarting`.
 
+**Events hand you a live instance.** Dragging across periods pages the calendar, which raises
+`VisibleDatesChanged` and will typically make you load data and rebuild your collection mid-gesture.
+The appointment carried by `AppointmentTapped`, `AppointmentDragStarting` and `AppointmentDropped` is
+resolved against your current `ItemsSource` by `Key` before the event is raised, so acting on what you
+were given acts on something you are still displaying. This is why `Key` is on the interface.
+
 **A successful drop leaves the appointment where it was dropped.** The control does not mutate your
 model and does not wait for you. When your update completes, re-emit `ItemsSource` — that repositions
-the appointment from the model on success, and moves it back on failure.
+the appointment from the model on success, and moves it back on failure. If you never do, the control
+gives up waiting at the next change of period and the appointment returns to where your model says it
+is. Re-emitting matters more than
+it used to: a dragged appointment is lifted out of its week for the duration, and re-emitting is what
+puts it back under one.
+
+**A drag leaves a faded copy behind.** While an appointment is being moved, the place it came from
+keeps showing it at half opacity. Both that copy and the one under the finger come from
+`AppointmentTemplate`, so nothing extra is needed to support it.
 
 **Not supported.** Day, month and agenda views; all-day and multi-day appointments; resizing an
-appointment by its edges; dragging into an adjacent week; theme switching. See
+appointment by its edges; theme switching. See
 [DESIGN.md §14](DESIGN.md).

@@ -224,11 +224,16 @@ hidden and re-shown, and because the pool is a stack the views return in reverse
 ends up bound to a *different* appointment than it had. A refresh returning byte-identical data still
 repainted every appointment on screen — visible as a flash across the whole week.
 
-It now reconciles positionally instead. The layout engine orders deterministically (day, then start,
-then duration), so entry *i* of the new layout is the same appointment as entry *i* of the old one
-whenever the data has not changed. Each view is rebound in place, renders identically, and nothing
-visibly happens; only a genuine surplus or shortfall touches the pool. Bounds are written only when
-they actually differ, since an unchanged write still costs a layout pass.
+It now reconciles by identity instead. Each week indexes the views it already has by the `Key` of the
+appointment they are showing, and every appointment in the new layout reclaims its own view. An
+unchanged reload rebinds each view to an equivalent item in the same place — identical output, nothing
+visibly happens — and only a genuine surplus or shortfall touches the pool. Bounds are written only
+when they actually differ, since an unchanged write still costs a layout pass.
+
+An earlier version matched positionally, relying on the layout engine's deterministic order. That is
+correct for an unchanged reload but degrades quietly: two appointments tying on start and duration can
+swap views, and inserting one early shunts every later appointment onto a different view, repainting
+the rest of the week for a one-item change. Keys make reuse mean what it says.
 
 This matters more than it looks, because the host re-emits `ItemsSource` freely — cached results
 followed by fresh ones, one assignment per loaded month — so a single refresh can run this path
@@ -367,6 +372,69 @@ fires on touch-*down*, before any movement. So the grid drawable owns all input:
 - `UIScrollView.DelaysContentTouches` is turned off, because it otherwise withholds touch-down while
   deciding whether the touch is a scroll — exactly the signal the long press depends on.
 
+### Crossing a week boundary
+
+Moving an appointment into another week means the weeks have to rotate while the drag is still in
+progress, which the ring buffer (section 4) and the reconciliation (section 6) would otherwise fight:
+rotation recycles a slot, and reconciliation would return the dragged view to the pool underneath the
+finger.
+
+Instead the appointment **leaves the weeks entirely for the duration of the drag**. On pick-up it is
+excluded from what the slots lay out, and becomes two views that belong to no week:
+
+- a **ghost** — the original view, detached where it stood and faded to half opacity, so the slot
+  being vacated stays visible. It is shifted by one viewport whenever the weeks rotate, so it travels
+  with the week it came from and slides off screen behind the drag.
+- a **lifted view**, rented from the pool, riding the finger.
+
+Because neither is in a slot, rotation and reconciliation cannot touch them, and a mid-drag data load
+is harmless. The drop target is always read from the centre slot, whichever week has been rotated into
+it, so the same code serves same-week and cross-week drags.
+
+Paging itself is a dwell, not a contact: the edges are exactly where someone drags to reach Monday and
+Sunday, so flipping on contact would make those two columns unreachable. The dwell timer repeats, so
+holding walks through consecutive weeks.
+
+**The change of week has to be visible.** Rotating the ring buffer swaps the weeks without moving
+anything, so on its own the calendar simply changes contents — easy to miss, and hard to read as
+"I have moved to another week". So the rotation is followed by the same two-step the snap uses, in
+reverse: jump instantly to wherever the *outgoing* week has landed (slot 0 going forward, slot 2 going
+back), which is pixel-identical to the frame before, then animate across to the centre. The result is
+the same motion a swipe produces.
+
+That slide moves the surface, and the lifted view lives in surface coordinates, so it would ride along
+and leave the finger. `OnPagerScrolled` therefore pushes it back by each scroll delta while a drag is
+armed, keeping it screen-stationary. The same handler stops scheduling snaps while dragging, since the
+pager is being driven by the drag rather than by the user.
+
+Edge paging makes this the sharpest test of the identity rule in section 6. Paging raises
+`VisibleDatesChanged`, a host loads the periods it is moving through, and the collection is rebuilt
+*while the gesture is still running* — so the appointment being dragged is a different object by the
+time it is dropped. Because the exclusion filter and the event payloads both go through `Key`, none of
+that is visible: the drag keeps excluding the right appointment, and the drop reports whichever
+instance the host is showing at that moment rather than the orphan it was picked up as.
+
+That last point is the one worth stating plainly, because it was originally left to the host and cost a
+bug: a handler that captures the dragged item and mutates it would be mutating something nothing
+renders, and the appointment would appear to vanish. `Resolve` exists so the natural handler is the
+correct one.
+
+A collection change is still not *applied* until the drag ends — re-laying-out the calendar under a
+moving finger is churn for data the user cannot see yet — but that is now a comfort measure rather than
+load-bearing; every way a drag can finish ends in another repopulate.
+
+A dropped appointment is held at the position it was released until the host feeds the change back,
+which makes the host's re-emit load-bearing. That obligation is reasonable — telling a data-bound
+control that the data changed is the deal — but forgetting it used to produce something strange rather
+than something dull: the held view stayed pinned to the surface and drifted over whatever week was
+scrolled to next, a phantom appointment following the user around. Changing period is now treated as
+giving up on the wait, so the worst a forgetful host gets is the appointment snapping back to what the
+model says.
+
+The appointment rejoins a week when `ItemsSource` is next re-emitted — which is why that already-
+documented host obligation matters more here than it looks. Until then the lifted view stays exactly
+where it was dropped.
+
 **On a successful drop the view is deliberately left where it was dropped.** The host's update is
 asynchronous; snapping back to the old time only to jump forward a moment later would read as a glitch.
 The host re-emits its collection when the call finishes, which repositions the appointment from the
@@ -416,15 +484,19 @@ Scope is the week view only. The following are absent by design, not by oversigh
 - **All-day / multi-day appointments.** There is no all-day row; an appointment is clipped to its
   starting day.
 - **Resizing an appointment by dragging its edges.**
-- **Dragging past the edge of the visible week** to reschedule into an adjacent week.
 - **Dark theme.** Colours are exposed on the drawables and `GridBackgroundColor` on the control, but no
   `AppThemeBinding` wiring is provided.
 - **Releasing template roots.** Bounded by BlazorBindings, not by this control — see section 6.
 
 ## 15. Verification status
 
+`Owlery.Maui.Scheduler.Tests` covers the platform-independent behaviour headlessly on `net10.0`:
+overlap layout and clipping, appointment placement, view reuse across a refresh, cell and appointment
+taps, long-press-to-drag including refusal and the scroll-not-drag case, and week paging. It runs
+without a simulator, and found two bugs that had already shipped.
+
 Rendering, paging, week rotation, overlap layout, the current-time line and appointment semantics have
-been checked on the iOS simulator through DevFlow.
+also been checked on the iOS simulator through DevFlow.
 
 Drag-and-drop is confirmed working on the iOS simulator by manual testing. It could not be automated:
 DevFlow drives gestures by invoking a MAUI gesture recognizer and reports that "native pan injection
@@ -434,3 +506,7 @@ was replaced — that trace is what identified the race described in section 11.
 
 Android has not been exercised at all; `SetScrollingEnabled` takes a different branch there
 (`RequestDisallowInterceptTouchEvent`) and is the part most likely to need adjustment.
+
+The animated slide when paging mid-drag is asserted in tests only as a sequence of scroll requests —
+the test shim applies them instantly. That it *looks* right, and that a programmatic scroll still runs
+while `UIScrollView.ScrollEnabled` is false, both need a device.

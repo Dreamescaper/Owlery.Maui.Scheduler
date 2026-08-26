@@ -44,6 +44,41 @@ grid stays still under it.
 
 **DND-13** The appointment being dragged is drawn above everything else on the grid.
 
+## Moving to another week
+
+**DND-24** While an appointment is being dragged, a faded copy stays in the place it came from, so
+the slot it is leaving remains visible.
+
+**DND-25** Holding a dragged appointment against the leading or trailing edge of the week moves the
+calendar to the adjacent week.
+
+**DND-26** The move happens after a short pause at the edge, not on contact. The edges are exactly
+where someone drags to reach the first and last day of the week, and paging immediately would make
+those two columns unusable.
+
+**DND-27** Continuing to hold at the edge keeps moving through consecutive weeks.
+
+**DND-34** The calendar slides to the new week rather than changing contents in place, so the change
+is as visible as it is when swiping between weeks by hand.
+
+**DND-35** The appointment being dragged stays under the finger while the weeks slide behind it.
+
+**DND-28** Moving away from the edge stops it, and the calendar stays on the week it reached.
+
+**DND-29** The faded copy belongs to the week it came from: it travels with that week and leaves the
+screen once the drag has moved past it.
+
+**DND-30** Releasing after the week has changed schedules the appointment into the week now on
+screen, at the day and time it was released on.
+
+**DND-31** The change of week is reported as it happens, so a title tracking the visible week and any
+data loading keep up with the drag.
+
+**DND-32** Moving between weeks this way can be switched off independently of rescheduling itself,
+leaving appointments movable only within the week they are already in.
+
+**DND-33** The faded copy disappears as soon as the finger lifts, whatever the outcome.
+
 ## Dropping
 
 **DND-14** Releasing requests the move, reporting the appointment and the new start time to the host.
@@ -63,8 +98,6 @@ does not snap back to the old time and then jump forward again.
 appointment unchanged and requests nothing.
 
 ## What is not supported
-
-**DND-21** Dragging into a week other than the visible one.
 
 **DND-22** Changing duration by dragging an edge.
 

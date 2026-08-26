@@ -20,6 +20,10 @@ public class SchedulerWeekView : ContentView
     private const int LongPressDelayMs = 350;
     private const double DragMovementToleranceDp = 12;
     private const double TapMovementToleranceDp = 8;
+    private const double EdgePagingZoneDp = 32;
+    private const int EdgePagingDwellMs = 600;
+    private const double GhostOpacity = 0.5;
+    private const double LiftedOpacity = 0.85;
 
     // AbsoluteLayout paints by ZIndex first, so the stacking order is stated explicitly rather than
     // being an accident of the order children happen to be added in.
@@ -62,6 +66,14 @@ public class SchedulerWeekView : ContentView
 
     private View? dragView;
     private View? pressedView;
+    private View? floatingView;
+    private View? ghostView;
+    private ISchedulerAppointment? floatingAppointment;
+    private IDispatcherTimer? edgePagingTimer;
+    private int edgePagingDirection;
+    private bool pagingDuringDrag;
+    private double trackedScrollX;
+    private Point lastDragPoint;
     private bool dragArmed;
     private Rect dragOriginalBounds;
     private Point dragGrabOffset;
@@ -240,6 +252,9 @@ public class SchedulerWeekView : ContentView
     public static readonly BindableProperty AllowDragAndDropProperty = BindableProperty.Create(
         nameof(AllowDragAndDrop), typeof(bool), typeof(SchedulerWeekView), true);
 
+    public static readonly BindableProperty AllowDragAcrossPeriodsProperty = BindableProperty.Create(
+        nameof(AllowDragAcrossPeriods), typeof(bool), typeof(SchedulerWeekView), true);
+
     public static readonly BindableProperty IsBusyProperty = BindableProperty.Create(
         nameof(IsBusy), typeof(bool), typeof(SchedulerWeekView), false, propertyChanged: OnIsBusyChanged);
 
@@ -348,6 +363,20 @@ public class SchedulerWeekView : ContentView
     {
         get => (bool)GetValue(AllowDragAndDropProperty);
         set => SetValue(AllowDragAndDropProperty, value);
+    }
+
+    /// <summary>
+    /// Whether holding a dragged appointment against the leading or trailing edge pages to the
+    /// adjacent period, allowing it to be moved out of the one it started in.
+    /// </summary>
+    /// <remarks>
+    /// Named for the period rather than the week because the behaviour belongs to paging itself: a
+    /// day or three-day surface would page the same way.
+    /// </remarks>
+    public bool AllowDragAcrossPeriods
+    {
+        get => (bool)GetValue(AllowDragAcrossPeriodsProperty);
+        set => SetValue(AllowDragAcrossPeriodsProperty, value);
     }
 
     public bool IsBusy
@@ -553,6 +582,10 @@ public class SchedulerWeekView : ContentView
 
     private void RebuildAll(DateOnly centreWeek)
     {
+        // Same reasoning as in SnapAsync: do not carry a waiting drop across a change of period.
+        if (!dragArmed)
+            ReleaseFloatingAppointment();
+
         slots[0].WeekStart = centreWeek.AddDays(-7);
         slots[1].WeekStart = centreWeek;
         slots[2].WeekStart = centreWeek.AddDays(7);
@@ -595,32 +628,81 @@ public class SchedulerWeekView : ContentView
 
         var positions = AppointmentTemplate is null || ItemsSource is null || geometry.ViewportWidth <= 0
             ? []
-            : AppointmentLayoutEngine.Layout(ItemsSource, slot.WeekStart, StartHour, EndHour);
+            : AppointmentLayoutEngine.Layout(LayoutItems(), slot.WeekStart, StartHour, EndHour);
 
-        var reuseCount = Math.Min(slot.Views.Count, positions.Count);
+        // Index what this week already has by the identity of what it is showing.
+        var available = new Dictionary<object, View>(slot.Views.Count);
 
-        for (var i = 0; i < reuseCount; i++)
-            BindAppointmentView(slot.Views[i], positions[i], slot, slotIndex);
-
-        for (var i = reuseCount; i < positions.Count; i++)
+        foreach (var view in slot.Views)
         {
-            var view = pool.Rent();
-            if (view is null)
-                break;
-
-            slot.Views.Add(view);
-            BindAppointmentView(view, positions[i], slot, slotIndex);
+            if (appointmentsByView.TryGetValue(view, out var bound))
+                available[bound.Key] = view;
         }
 
-        for (var i = slot.Views.Count - 1; i >= positions.Count; i--)
-        {
-            var view = slot.Views[i];
-            slot.Views.RemoveAt(i);
+        var arranged = new List<View>(positions.Count);
 
-            appointmentsByView.Remove(view);
-            slotsByView.Remove(view);
-            pool.Return(view);
+        foreach (var position in positions)
+        {
+            if (!available.Remove(position.Appointment.Key, out var view))
+            {
+                view = pool.Rent();
+
+                if (view is null)
+                    break;
+            }
+
+            arranged.Add(view);
+            BindAppointmentView(view, position, slot, slotIndex);
         }
+
+        // Whatever no appointment claimed is genuinely gone from this week.
+        foreach (var surplus in available.Values)
+        {
+            appointmentsByView.Remove(surplus);
+            slotsByView.Remove(surplus);
+            pool.Return(surplus);
+        }
+
+        slot.Views.Clear();
+        slot.Views.AddRange(arranged);
+    }
+
+    /// <summary>
+    /// The appointments the weeks lay out. An appointment being dragged is excluded: it is represented
+    /// by a floating view that belongs to no week, which is what lets the weeks rotate underneath it
+    /// while it stays under the finger.
+    /// </summary>
+    private IEnumerable<ISchedulerAppointment> LayoutItems()
+    {
+        var items = ItemsSource ?? [];
+
+        // Matched by key, not by instance: the collection may have been rebuilt since the drag began.
+        return floatingAppointment is null
+            ? items
+            : items.Where(item => !Equals(item.Key, floatingAppointment.Key));
+    }
+
+    /// <summary>
+    /// Exchanges an appointment for whichever instance currently represents it.
+    /// </summary>
+    /// <remarks>
+    /// Everything the control hands back to the host goes through here, so a handler that acts on
+    /// what it was given is acting on something the host is still displaying. Without it, an
+    /// appointment picked up before a reload would be reported afterwards as an orphan, and mutating
+    /// it would silently do nothing.
+    /// </remarks>
+    private ISchedulerAppointment Resolve(ISchedulerAppointment appointment)
+    {
+        if (ItemsSource is null)
+            return appointment;
+
+        foreach (var item in ItemsSource)
+        {
+            if (Equals(item.Key, appointment.Key))
+                return item;
+        }
+
+        return appointment;
     }
 
     private void BindAppointmentView(View view, PositionedAppointment position, WeekSlot slot, int slotIndex)
@@ -726,7 +808,20 @@ public class SchedulerWeekView : ContentView
         // later rebuild happened to reset it.
         headerSurface.TranslationX = -e.ScrollX;
 
-        if (recentring)
+        var scrollDelta = e.ScrollX - trackedScrollX;
+        trackedScrollX = e.ScrollX;
+
+        // While an appointment is being dragged across weeks the surface slides behind it. The lifted
+        // view is positioned in surface coordinates, so it has to be pushed the opposite way by the
+        // same amount to stay under a finger that has not moved.
+        if (dragArmed && dragView is not null)
+        {
+            dragView.TranslationX += scrollDelta;
+            dragTimeLabel.TranslationX += scrollDelta;
+        }
+
+        // A drag drives the pager itself, so nothing here should be mistaken for a swipe.
+        if (recentring || dragArmed)
             return;
 
         lastScrollX = e.ScrollX;
@@ -752,6 +847,13 @@ public class SchedulerWeekView : ContentView
     {
         if (snapping || recentring || geometry.ViewportWidth <= 0)
             return;
+
+        // An accepted drop waits for the host to feed the change back before rejoining a week. If that
+        // never comes, its view would stay pinned to the surface and drift over whatever week is
+        // scrolled to next. Changing period is a safe moment to give up waiting and go back to what
+        // the model says.
+        if (floatingAppointment is not null)
+            RepopulateAllSlots();
 
         var page = (int)Math.Round(lastScrollX / geometry.ViewportWidth);
         page = Math.Clamp(page, 0, SchedulerGeometry.SlotCount - 1);
@@ -906,6 +1008,16 @@ public class SchedulerWeekView : ContentView
     {
         if (!initialised)
             return;
+
+        // Never re-lay-out under a drag in progress: the calendar would churn beneath the finger for
+        // data the user cannot see yet. Whatever arrived is picked up when the drag ends, because
+        // every way a drag can finish ends in another pass through here.
+        if (dragArmed)
+            return;
+
+        // An accepted drop leaves the appointment floating where the user put it until the host feeds
+        // the change back. This is that moment.
+        ReleaseFloatingAppointment();
 
         for (var i = 0; i < slots.Length; i++)
             PopulateSlot(slots[i], i);
@@ -1097,7 +1209,7 @@ public class SchedulerWeekView : ContentView
         if (candidate is not null)
         {
             if (appointmentsByView.TryGetValue(candidate, out var appointment))
-                AppointmentTapped?.Invoke(this, new SchedulerAppointmentTappedEventArgs(appointment));
+                AppointmentTapped?.Invoke(this, new SchedulerAppointmentTappedEventArgs(Resolve(appointment)));
 
             return;
         }
@@ -1190,7 +1302,7 @@ public class SchedulerWeekView : ContentView
         if (dragView is null || !appointmentsByView.TryGetValue(dragView, out var appointment))
             return;
 
-        var args = new SchedulerAppointmentDragStartingEventArgs(appointment);
+        var args = new SchedulerAppointmentDragStartingEventArgs(Resolve(appointment));
         AppointmentDragStarting?.Invoke(this, args);
 
         if (args.Cancel)
@@ -1199,16 +1311,47 @@ public class SchedulerWeekView : ContentView
             return;
         }
 
-        dragArmed = true;
-        SetScrollingEnabled(false);
+        // The appointment leaves its week and becomes two views: the original stays put as a faded
+        // ghost so the slot it came from stays visible, and a second one is lifted onto the finger.
+        // Neither belongs to a week any more, which is what lets the weeks rotate underneath them.
+        floatingAppointment = appointment;
 
-        dragView.ZIndex = DraggedAppointmentZIndex;
-        dragView.Opacity = 0.85;
+        ghostView = dragView;
+        DetachFromSlot(ghostView);
+        ghostView.Opacity = GhostOpacity;
+
+        var lifted = pool.Rent();
+
+        if (lifted is null)
+        {
+            ghostView.Opacity = 1;
+            ghostView = null;
+            floatingAppointment = null;
+            CancelDragCandidate();
+            return;
+        }
+
+        lifted.BindingContext = appointment;
+        SetAppointmentSemantics(lifted, appointment);
+        appointmentsByView[lifted] = appointment;
+
+        AbsoluteLayout.SetLayoutFlags(lifted, AbsoluteLayoutFlags.None);
+        AbsoluteLayout.SetLayoutBounds(lifted, dragOriginalBounds);
+        lifted.TranslationX = ghostView.TranslationX;
+        lifted.TranslationY = ghostView.TranslationY;
+        lifted.ZIndex = DraggedAppointmentZIndex;
+        lifted.Opacity = LiftedOpacity;
+
+        floatingView = lifted;
+        dragView = lifted;
+        dragArmed = true;
+
+        SetScrollingEnabled(false);
         dragTimeLabel.IsVisible = true;
 
         UpdateDragPosition(new Point(
-            dragOriginalBounds.X + dragView.TranslationX + dragGrabOffset.X,
-            dragOriginalBounds.Y + dragView.TranslationY + dragGrabOffset.Y));
+            dragOriginalBounds.X + lifted.TranslationX + dragGrabOffset.X,
+            dragOriginalBounds.Y + lifted.TranslationY + dragGrabOffset.Y));
     }
 
     private void CancelDragCandidate()
@@ -1216,17 +1359,53 @@ public class SchedulerWeekView : ContentView
         longPressTimer?.Stop();
         longPressTimer = null;
 
-        if (dragArmed)
-        {
-            SetScrollingEnabled(true);
-            dragTimeLabel.IsVisible = false;
-
-            if (dragView is not null)
-                ResetDragView(dragView);
-        }
+        var wasArmed = dragArmed;
 
         dragArmed = false;
         dragView = null;
+
+        if (!wasArmed)
+            return;
+
+        StopEdgePaging();
+        SetScrollingEnabled(true);
+        dragTimeLabel.IsVisible = false;
+        RepopulateAllSlots();
+    }
+
+    /// <summary>Takes a view out of its week so rotation and reconciliation leave it alone.</summary>
+    private void DetachFromSlot(View view)
+    {
+        if (slotsByView.TryGetValue(view, out var slot))
+            slot.Views.Remove(view);
+
+        slotsByView.Remove(view);
+    }
+
+    /// <summary>Hands the drag's views back to the pool so the appointment is laid out normally again.</summary>
+    private void ReleaseFloatingAppointment()
+    {
+        ReleaseGhost();
+
+        if (floatingView is not null)
+        {
+            appointmentsByView.Remove(floatingView);
+            pool.Return(floatingView);
+        }
+
+        floatingView = null;
+        floatingAppointment = null;
+    }
+
+    /// <summary>Removes the faded original. Done as soon as the finger lifts, whatever the outcome.</summary>
+    private void ReleaseGhost()
+    {
+        if (ghostView is null)
+            return;
+
+        appointmentsByView.Remove(ghostView);
+        pool.Return(ghostView);
+        ghostView = null;
     }
 
     /// <summary>
@@ -1282,12 +1461,15 @@ public class SchedulerWeekView : ContentView
 
     private void UpdateDragPosition(Point point)
     {
-        if (dragView is null || !slotsByView.TryGetValue(dragView, out var slot))
+        if (dragView is null)
             return;
 
-        var slotIndex = Array.IndexOf(slots, slot);
-        if (slotIndex < 0)
-            return;
+        lastDragPoint = point;
+
+        // Scrolling is frozen for the duration of a drag and the pager always rests on the centre
+        // slot, so that is the week being dropped into — whichever week has since been rotated into
+        // it by edge paging.
+        const int slotIndex = 1;
 
         var slotOffset = slotIndex * geometry.ViewportWidth;
         var height = dragOriginalBounds.Height;
@@ -1312,17 +1494,125 @@ public class SchedulerWeekView : ContentView
         dragView.TranslationX = slotOffset + (snappedX - dragOriginalBounds.X);
         dragView.TranslationY = snappedY - dragOriginalBounds.Y;
 
-        dragDropStart = slot.WeekStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
+        dragDropStart = slots[slotIndex].WeekStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
 
         dragTimeLabel.Text = dragDropStart.ToString(TimeFormat, CultureInfo.CurrentUICulture);
         AbsoluteLayout.SetLayoutBounds(dragTimeLabel, new Rect(snappedX, Math.Max(0, snappedY - 20), 64, 20));
         dragTimeLabel.TranslationX = slotOffset;
+
+        UpdateEdgePaging(point);
+    }
+
+    /// <summary>
+    /// Holding a dragged appointment against the leading or trailing edge pages to the adjacent week,
+    /// which is how an appointment is moved out of the week it started in.
+    /// </summary>
+    /// <remarks>
+    /// A dwell rather than an immediate flip: the edges are exactly where someone drags to reach the
+    /// first and last day of the week, so paging on contact would make those two columns unusable.
+    /// The timer repeats, so continuing to hold keeps walking through the weeks.
+    /// </remarks>
+    private void UpdateEdgePaging(Point point)
+    {
+        if (!AllowDragAcrossPeriods || !dragArmed)
+        {
+            StopEdgePaging();
+            return;
+        }
+
+        var xInPage = point.X - geometry.ViewportWidth;
+        var direction = xInPage <= EdgePagingZoneDp
+            ? -1
+            : xInPage >= geometry.ViewportWidth - EdgePagingZoneDp
+                ? 1
+                : 0;
+
+        if (direction == 0)
+        {
+            StopEdgePaging();
+            return;
+        }
+
+        // Already counting down towards this edge — let it run rather than restarting the dwell.
+        if (direction == edgePagingDirection)
+            return;
+
+        StopEdgePaging();
+        edgePagingDirection = direction;
+
+        edgePagingTimer = Dispatcher.CreateTimer();
+        edgePagingTimer.Interval = TimeSpan.FromMilliseconds(EdgePagingDwellMs);
+        edgePagingTimer.IsRepeating = true;
+        edgePagingTimer.Tick += (_, _) => _ = PageDuringDragAsync();
+        edgePagingTimer.Start();
+    }
+
+    private void StopEdgePaging()
+    {
+        edgePagingTimer?.Stop();
+        edgePagingTimer = null;
+        edgePagingDirection = 0;
+    }
+
+    private async Task PageDuringDragAsync()
+    {
+        if (!dragArmed || edgePagingDirection == 0)
+        {
+            StopEdgePaging();
+            return;
+        }
+
+        // The dwell repeats, and the slide takes a moment; do not start a second one over the top.
+        if (pagingDuringDrag)
+            return;
+
+        pagingDuringDrag = true;
+
+        try
+        {
+            var forward = edgePagingDirection > 0;
+
+            if (forward)
+                Advance();
+            else
+                Retreat();
+
+            // The ghost marks a slot in the week the drag started from, so it travels with that week
+            // and slides off screen once the drag has moved on.
+            if (ghostView is not null)
+                ghostView.TranslationX += forward ? -geometry.ViewportWidth : geometry.ViewportWidth;
+
+            SyncSlotWeeks();
+            UpdateSelectionView();
+            SyncDisplayDate();
+            RaiseVisibleDatesChanged();
+
+            // Rotating swaps the weeks without moving anything, so on its own the calendar simply
+            // changes contents and it is hard to see that anything happened. Instead, jump to where
+            // the outgoing week has landed — visually identical to the frame before — and then slide
+            // across to the centre, so the change reads as the same motion as a swipe.
+            var outgoing = forward ? 0 : geometry.SurfaceWidth - geometry.ViewportWidth;
+
+            await pagerScroll.ScrollToAsync(outgoing, 0, false);
+            await pagerScroll.ScrollToAsync(geometry.ViewportWidth, 0, true);
+
+            lastScrollX = geometry.ViewportWidth;
+
+            // The finger has not moved but the week beneath it has, so the drop target and its label
+            // are now for a different date.
+            UpdateDragPosition(lastDragPoint);
+        }
+        finally
+        {
+            pagingDuringDrag = false;
+        }
     }
 
     private void CompleteDrag(bool committed)
     {
         longPressTimer?.Stop();
         longPressTimer = null;
+        StopEdgePaging();
 
         var view = dragView;
         var wasArmed = dragArmed;
@@ -1336,34 +1626,24 @@ public class SchedulerWeekView : ContentView
 
         SetScrollingEnabled(true);
         dragTimeLabel.IsVisible = false;
+        ReleaseGhost();
         view.ZIndex = AppointmentZIndex;
         view.Opacity = 1;
 
         if (!committed || !appointmentsByView.TryGetValue(view, out var appointment))
         {
-            ResetDragView(view);
+            RepopulateAllSlots();
             return;
         }
 
-        var args = new SchedulerAppointmentDroppedEventArgs(appointment, dragDropStart);
+        var args = new SchedulerAppointmentDroppedEventArgs(Resolve(appointment), dragDropStart);
         AppointmentDropped?.Invoke(this, args);
 
-        // On success the view is deliberately left at the dropped position: the host's update is
-        // asynchronous, and snapping back only to jump forward again would read as a glitch.
+        // On success the view is deliberately left floating at the dropped position: the host's
+        // update is asynchronous, and snapping back only to jump forward again would read as a
+        // glitch. It rejoins its week when the host feeds the change back through ItemsSource.
         if (args.Cancel)
-            ResetDragView(view);
-    }
-
-    private void ResetDragView(View view)
-    {
-        if (!slotsByView.TryGetValue(view, out var slot))
-            return;
-
-        var slotIndex = Array.IndexOf(slots, slot);
-        view.TranslationX = slotIndex < 0 ? 0 : slotIndex * geometry.ViewportWidth;
-        view.TranslationY = 0;
-        view.ZIndex = AppointmentZIndex;
-        view.Opacity = 1;
+            RepopulateAllSlots();
     }
 
     #endregion

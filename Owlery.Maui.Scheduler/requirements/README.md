@@ -61,6 +61,5 @@ Deliberately not provided, and not planned as part of this component:
 - Day, month, agenda or multi-week views.
 - All-day appointments, and appointments spanning more than one day.
 - Changing an appointment's duration by dragging its edges.
-- Dragging an appointment into a different week.
 - Creating, editing or deleting appointments — the view reports intent; the host acts.
 - Recurrence, reminders, invitations, availability or free/busy lookup.

@@ -61,6 +61,9 @@ cited `DESIGN.md` section first.
   long-press-to-drag impossible.
 - **Platform-specific code is confined** to `ConfigurePlatformScrolling` and `SetScrollingEnabled`.
   If you need more of it, say so in `DESIGN.md` and explain why MAUI could not do the job.
+- **Identity is `ISchedulerAppointment.Key`, never the instance** (§6, §11). A host may rebuild its
+  collection at any moment, including mid-gesture. Match on the key, and resolve anything handed back
+  to the host against the current `ItemsSource` first.
 - **Every `DateTime` crossing the public API is wall-clock in `TimeZone`** (§9). The control performs
   no time-zone conversion. Do not add any.
 - **Cancellable events are read synchronously.** `Cancel` is checked the moment the handler returns,
@@ -97,6 +100,24 @@ dotnet build Owlery.Maui.Scheduler/Owlery.Maui.Scheduler.csproj -f net10.0-andro
   `maui-android` installed and publishes `Owlery.Mobile`, which references this project — restore
   walks all of its declared target frameworks. `Owlery.Mobile.csproj` carries the same guard for the
   same reason.
-- `net10.0` contains no platform code, so the layout and geometry logic can be referenced from a plain
-  `net10.0` test project. There is no such project yet; behaviour is currently verified by running the
-  host app (see the DevFlow skills).
+- `net10.0` contains no platform code, which is what lets the tests below run without a device.
+
+## Tests
+
+`Owlery.Maui.Scheduler.Tests` runs headlessly on `net10.0` — no simulator, no platform.
+
+```sh
+dotnet test --project Owlery.Maui.Scheduler.Tests/Owlery.Maui.Scheduler.Tests.csproj
+```
+
+- `TestApplication` builds a real MAUI app with a stub handler, so controls behave as they do in an
+  app. `TestDispatcher` hands out timers the test fires by hand — both the long press and the
+  scroll-quiet snap are dispatcher timers, so a test that cannot fire them cannot reach either.
+- `SchedulerHarness` arranges the control to a known size and drives it through `IGraphicsView`
+  interaction calls and the scroll views, so tests tap, hold, drag and swipe rather than poking at
+  internals. Address positions with `PointAt(slot, day, time)` instead of raw pixels.
+- **Add a test with any behaviour change.** Two bugs that had already shipped were found by writing
+  this suite rather than by running the app: appointments finishing before the day window were drawn
+  at the top of it, and a tap on an appointment was never reported while dragging was enabled.
+- What the suite cannot reach — real gesture arbitration between the scroll views, platform paging,
+  anything behind `#if IOS` — still needs a device. See the DevFlow skills.

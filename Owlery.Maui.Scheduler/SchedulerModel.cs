@@ -10,6 +10,18 @@ namespace Owlery.Maui.Scheduler;
 /// </remarks>
 public interface ISchedulerAppointment
 {
+    /// <summary>
+    /// Stable identity for this appointment, used to recognise it across collection changes.
+    /// </summary>
+    /// <remarks>
+    /// The control never assumes it is handed the same object twice. A host is free to rebuild its
+    /// collection at any moment — and will, because moving an appointment between periods asks it to
+    /// load the periods it passes through — so equality of this value, not of the instance, is what
+    /// ties an appointment to the view showing it and to the drag carrying it.
+    /// Compared with <see cref="object.Equals(object)"/>; any stable value will do.
+    /// </remarks>
+    object Key { get; }
+
     DateTime Start { get; }
 
     DateTime End { get; }

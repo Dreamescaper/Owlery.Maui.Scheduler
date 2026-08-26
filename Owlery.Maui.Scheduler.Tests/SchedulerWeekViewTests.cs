@@ -89,6 +89,27 @@ public class SchedulerWeekViewTests
     }
 
     [Test]
+    public void Inserting_an_appointment_leaves_the_others_on_their_own_views()
+    {
+        // Positional reuse would shunt every later appointment onto a different view, repainting the
+        // rest of the week for an insert at the top of it.
+        var harness = new SchedulerHarness(Monday, ThreeAppointments());
+        var before = harness.VisibleAppointments.ToArray();
+
+        harness.Scheduler.ItemsSource =
+        [
+            TestAppointment.At(Monday, "08:00", 1, "inserted"),
+            .. ThreeAppointments()
+        ];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(4));
+            Assert.That(harness.VisibleAppointments, Is.SupersetOf(before));
+        });
+    }
+
+    [Test]
     public void Surplus_views_are_hidden_and_reused_rather_than_discarded()
     {
         var harness = new SchedulerHarness(Monday, ThreeAppointments());
@@ -107,6 +128,28 @@ public class SchedulerWeekViewTests
         {
             Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(3));
             Assert.That(harness.AllAppointmentViews, Has.Count.EqualTo(3), "the pooled views should have been reused");
+        });
+    }
+
+    [Test]
+    public void A_drop_the_host_never_confirms_is_given_up_on_at_the_next_change_of_week()
+    {
+        // The control holds a dropped appointment at the position it was released, waiting for the
+        // host to feed the change back. A host that never does would otherwise leave that view pinned
+        // to the surface, drifting over whatever week is scrolled to next.
+        var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1, "s")]);
+        var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+
+        harness.LongPressDrag(grab.X, grab.Y, grab.X, grab.Y + 100);
+        harness.SwipeToPage(2);
+
+        var bounds = harness.BoundsOf(harness.VisibleAppointments.Single());
+
+        Assert.Multiple(() =>
+        {
+            // Back where the model says it is: Wednesday of the original week, now the leading page.
+            Assert.That(bounds.X, Is.EqualTo(2 * SchedulerHarness.DayWidth).Within(2));
+            Assert.That(bounds.Y, Is.EqualTo(100).Within(0.01));
         });
     }
 

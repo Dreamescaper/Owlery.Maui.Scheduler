@@ -34,6 +34,9 @@ internal sealed class SchedulerHarness
 
     public List<SchedulerAppointmentDroppedEventArgs> Drops { get; } = [];
 
+    /// <summary>Every scroll the control asked the pager for, in order.</summary>
+    public List<(double ScrollX, bool Animated)> PagerScrolls { get; } = [];
+
     private readonly ScrollView pagerScroll;
     private readonly IGraphicsView surfaceView;
     private readonly Layout surface;
@@ -60,7 +63,7 @@ internal sealed class SchedulerHarness
         application.Windows[0].Page = new ContentPage { Content = Scheduler };
 
         foreach (var scrollView in Descendants(Scheduler).OfType<ScrollView>())
-            ShimScrolling(scrollView);
+            ShimScrolling(scrollView, PagerScrolls);
 
         // Laying the control out is what gives it a viewport width and builds the three weeks.
         ((IView)Scheduler).Measure(ViewWidth, ViewHeight);
@@ -93,6 +96,14 @@ internal sealed class SchedulerHarness
 
     public void Tap(Point point) => Tap(point.X, point.Y);
 
+    /// <summary>The view riding the finger during a drag, identified by being lifted above the rest.</summary>
+    public TestAppointmentView? LiftedAppointment =>
+        VisibleAppointments.FirstOrDefault(view => view.ZIndex == 100);
+
+    /// <summary>The faded original left behind at the start of a drag.</summary>
+    public TestAppointmentView? GhostAppointment =>
+        VisibleAppointments.FirstOrDefault(view => view.ZIndex != 100 && view.Opacity < 1);
+
     public Rect BoundsOf(TestAppointmentView view)
     {
         var bounds = AbsoluteLayout.GetLayoutBounds(view);
@@ -115,6 +126,29 @@ internal sealed class SchedulerHarness
         surfaceView.DragInteraction([new PointF((float)toX, (float)toY)]);
         surfaceView.EndInteraction([new PointF((float)toX, (float)toY)], isInsideBounds: true);
     }
+
+    /// <summary>Presses and holds long enough to pick an appointment up, without releasing.</summary>
+    public void BeginDrag(Point point)
+    {
+        surfaceView.StartInteraction([new PointF((float)point.X, (float)point.Y)]);
+        FireLongPressTimer();
+    }
+
+    /// <summary>Moves an in-progress drag.</summary>
+    public void DragTo(Point point) => surfaceView.DragInteraction([new PointF((float)point.X, (float)point.Y)]);
+
+    /// <summary>Releases an in-progress drag.</summary>
+    public void Release(Point point) =>
+        surfaceView.EndInteraction([new PointF((float)point.X, (float)point.Y)], isInsideBounds: true);
+
+    /// <summary>Elapses the dwell that pages to the next week while dragging against an edge.</summary>
+    public void FireEdgePagingTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(600));
+
+    /// <summary>A point inside the trailing edge zone of the visible week.</summary>
+    public Point TrailingEdge(double y) => new(PageWidth * 2 - 8, y);
+
+    /// <summary>A point inside the leading edge zone of the visible week.</summary>
+    public Point LeadingEdge(double y) => new(PageWidth + 8, y);
 
     /// <summary>Presses and immediately moves, which is how a scroll begins rather than a drag.</summary>
     public void PressAndMove(double fromX, double fromY, double toX, double toY)
@@ -142,10 +176,13 @@ internal sealed class SchedulerHarness
     /// Stands in for the platform scroll view: applies the requested offset and reports the scroll
     /// as finished, so awaited programmatic scrolls complete.
     /// </summary>
-    private static void ShimScrolling(ScrollView scrollView)
+    private static void ShimScrolling(ScrollView scrollView, List<(double ScrollX, bool Animated)> log)
     {
         scrollView.ScrollToRequested += (_, e) =>
         {
+            if (scrollView.Orientation == ScrollOrientation.Horizontal)
+                log.Add((e.ScrollX, e.ShouldAnimate));
+
             scrollView.SetScrolledPosition(e.ScrollX, e.ScrollY);
             scrollView.SendScrollFinished();
         };
