@@ -1444,10 +1444,23 @@ public class SchedulerWeekView : ContentView
             // slide again to settle on a week. The scroll view's frame is exactly one viewport and
             // its content exactly three, so page boundaries already fall on 0 / W / 2W.
             horizontalPlatformScroll.PagingEnabled = true;
+
+            // Bouncing here would pull the outermost of the three rendered weeks away from the edge
+            // and show empty surface behind it. There is no end of the calendar to bounce against —
+            // the weeks are a ring buffer — so the rubber-banding is reporting something untrue.
+            // It also keeps the scroll offset inside 0..2W, which the snap arithmetic and the
+            // hand-mirrored day headers both assume.
+            horizontalPlatformScroll.Bounces = false;
         }
 
         if (verticalScroll.Handler?.PlatformView is UIKit.UIScrollView verticalPlatformScroll)
+        {
             verticalPlatformScroll.DelaysContentTouches = false;
+
+            // Likewise vertically: past the first or last hour there is only blank surface below the
+            // grid, which reads as the calendar coming apart rather than as an affordance.
+            verticalPlatformScroll.Bounces = false;
+        }
 #endif
     }
 

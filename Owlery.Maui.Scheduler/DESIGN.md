@@ -375,6 +375,11 @@ fires on touch-*down*, before any movement. So the grid drawable owns all input:
   `RequestDisallowInterceptTouchEvent`.
 - `UIScrollView.DelaysContentTouches` is turned off, because it otherwise withholds touch-down while
   deciding whether the touch is a scroll — exactly the signal the long press depends on.
+- `UIScrollView.Bounces` is turned off on both axes. Horizontally there is no end of the calendar to
+  bounce against — the weeks are a ring buffer — so rubber-banding pulls the outermost rendered week
+  off the edge and shows empty surface behind it, reporting something untrue. Vertically it exposes
+  blank space beyond the first and last hour. Suppressing it also keeps the scroll offset inside
+  `0..2W`, which the snap arithmetic and the hand-mirrored day headers both assume.
 
 ### Crossing a week boundary
 

@@ -30,6 +30,9 @@ which week they landed on.
 **NAV-9** Weeks that have not been swiped to are still prepared, so moving to an adjacent week does
 not show a blank or partially drawn calendar.
 
+**NAV-27** Neither axis rubber-bands past its content. There is no first or last week to come up
+against, and pulling the grid away from the edge would only expose empty space behind it.
+
 **NAV-10** The view reports the week currently shown, so the host can keep a title or date indicator
 in step with it.
 
