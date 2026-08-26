@@ -67,7 +67,7 @@ internal sealed class PageSlot
     public List<View> Views { get; } = [];
 
     /// <summary>Where each of <see cref="Views"/> sits, kept so they can be re-placed without a re-layout.</summary>
-    public List<PositionedAppointment> Positions { get; } = [];
+    public List<IAppointmentPlacement> Positions { get; } = [];
 
     /// <summary>The day headers for this page, moved as a unit.</summary>
     public required Grid Header { get; init; }

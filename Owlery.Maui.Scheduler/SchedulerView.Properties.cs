@@ -252,7 +252,7 @@ public partial class SchedulerView
         if (view.suppressDisplayDateSync || !view.initialised)
             return;
 
-        var target = view.StartOfPage(DateOnly.FromDateTime((DateTime)newValue));
+        var target = view.pageSurface.StartOfPage(DateOnly.FromDateTime((DateTime)newValue));
         if (target == view.slots[1].PageStart)
             return;
 

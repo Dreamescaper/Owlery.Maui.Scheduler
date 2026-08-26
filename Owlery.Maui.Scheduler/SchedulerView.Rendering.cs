@@ -58,9 +58,9 @@ public partial class SchedulerView
         if (!dragArmed)
             ReleaseFloatingAppointment();
 
-        slots[0].PageStart = centrePage.AddDays(-geometry.VisibleDays);
+        slots[0].PageStart = pageSurface.PreviousPage(centrePage);
         slots[1].PageStart = centrePage;
-        slots[2].PageStart = centrePage.AddDays(geometry.VisibleDays);
+        slots[2].PageStart = pageSurface.NextPage(centrePage);
 
         for (var i = 0; i < slots.Length; i++)
             PopulateSlot(slots[i], i);
@@ -98,9 +98,10 @@ public partial class SchedulerView
     {
         UpdateSlotHeader(slot, slotIndex);
 
-        var positions = AppointmentTemplate is null || ItemsSource is null || geometry.ViewportWidth <= 0
-            ? []
-            : AppointmentLayoutEngine.Layout(LayoutItems(), slot.PageStart, geometry.VisibleDays, StartHour, EndHour);
+        IReadOnlyList<IAppointmentPlacement> positions =
+            AppointmentTemplate is null || ItemsSource is null || geometry.ViewportWidth <= 0
+                ? []
+                : pageSurface.Layout(LayoutItems(), slot.PageStart);
 
         // Index what this week already has by the identity of what it is showing.
         var available = new Dictionary<object, View>(slot.Views.Count);
@@ -180,7 +181,7 @@ public partial class SchedulerView
         return appointment;
     }
 
-    private void BindAppointmentView(View view, PositionedAppointment position, PageSlot slot, int slotIndex)
+    private void BindAppointmentView(View view, IAppointmentPlacement position, PageSlot slot, int slotIndex)
     {
         view.BindingContext = position.Appointment;
         SetAppointmentSemantics(view, position.Appointment);
@@ -236,16 +237,10 @@ public partial class SchedulerView
         slot.Header.TranslationX = slotIndex * geometry.PageSpan + geometry.AnimationOffsetX;
     }
 
-    private void PositionAppointmentView(View view, PositionedAppointment position, int slotIndex)
+    private void PositionAppointmentView(View view, IAppointmentPlacement position, int slotIndex)
     {
-        var dayWidth = geometry.DayWidth;
-        var x = position.DayIndex * dayWidth + position.LeftFraction * dayWidth + AppointmentGap;
-        var width = Math.Max(1, position.WidthFraction * dayWidth - AppointmentGap * 2);
-        var y = geometry.YFromMinutes(position.StartMinutes);
-        var height = Math.Max(MinimumAppointmentHeight, geometry.YFromMinutes(position.EndMinutes) - y);
-
         // Only write bounds that actually changed: an unchanged write still costs a layout pass.
-        var bounds = new Rect(x, y, width, height);
+        var bounds = pageSurface.BoundsFor(position);
 
         if (AbsoluteLayout.GetLayoutBounds(view) != bounds)
         {

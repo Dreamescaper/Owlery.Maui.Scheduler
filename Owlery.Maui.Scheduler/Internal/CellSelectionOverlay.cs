@@ -11,7 +11,11 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// re-placed afterwards. It is anchored to a column like an appointment, which is why it has to be
 /// re-placed whenever the columns move, not only when the selection changes.
 /// </remarks>
-internal sealed class CellSelectionOverlay(AbsoluteLayout host, SchedulerGeometry geometry, int zIndex)
+internal sealed class CellSelectionOverlay(
+    AbsoluteLayout host,
+    SchedulerGeometry geometry,
+    ISchedulerSurface surface,
+    int zIndex)
 {
     private View? view;
 
@@ -28,7 +32,7 @@ internal sealed class CellSelectionOverlay(AbsoluteLayout host, SchedulerGeometr
     }
 
     /// <summary>Places the marker on the given slot, or hides it when nothing is selected or on screen.</summary>
-    public void Update(SchedulerTimeSlot? selected, PageSlot[] pages, double minimumHeight, string timeFormat)
+    public void Update(SchedulerTimeSlot? selected, PageSlot[] pages, string timeFormat)
     {
         if (selected is not { } slot || geometry.ViewportWidth <= 0)
         {
@@ -48,12 +52,8 @@ internal sealed class CellSelectionOverlay(AbsoluteLayout host, SchedulerGeometr
         view.BindingContext = slot;
         view.IsVisible = true;
 
-        var dayIndex = DateOnly.FromDateTime(slot.Start).DayNumber - pages[pageIndex].PageStart.DayNumber;
-        var y = geometry.YFromMinutes(slot.Start.TimeOfDay.TotalMinutes);
-        var height = Math.Max(minimumHeight, geometry.YFromMinutes(slot.End.TimeOfDay.TotalMinutes) - y);
-
         AbsoluteLayout.SetLayoutFlags(view, AbsoluteLayoutFlags.None);
-        AbsoluteLayout.SetLayoutBounds(view, new Rect(dayIndex * geometry.DayWidth, y, geometry.DayWidth, height));
+        AbsoluteLayout.SetLayoutBounds(view, surface.BoundsFor(slot, pages[pageIndex].PageStart));
         view.TranslationX = pageIndex * geometry.PageSpan + geometry.AnimationOffsetX;
 
         var culture = CultureInfo.CurrentUICulture;
@@ -67,9 +67,7 @@ internal sealed class CellSelectionOverlay(AbsoluteLayout host, SchedulerGeometr
     {
         for (var i = 0; i < pages.Length; i++)
         {
-            var offset = date.DayNumber - pages[i].PageStart.DayNumber;
-
-            if (offset >= 0 && offset < geometry.VisibleDays)
+            if (surface.PageContains(pages[i].PageStart, date))
                 return i;
         }
 

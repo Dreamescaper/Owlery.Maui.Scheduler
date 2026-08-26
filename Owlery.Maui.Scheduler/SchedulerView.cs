@@ -15,8 +15,6 @@ namespace Owlery.Maui.Scheduler;
 /// </remarks>
 public partial class SchedulerView : ContentView
 {
-    private const double AppointmentGap = 1;
-    private const double MinimumAppointmentHeight = 18;
     private const int SnapDetectionDelayMs = 90;
     private const int LongPressDelayMs = 350;
     private const double DragMovementToleranceDp = 12;
@@ -37,6 +35,7 @@ public partial class SchedulerView : ContentView
     private const int DraggedAppointmentZIndex = 100;
 
     private readonly SchedulerGeometry geometry = new();
+    private readonly ISchedulerSurface pageSurface;
     private readonly SchedulerGridDrawable gridDrawable;
     private readonly TimeGutterDrawable gutterDrawable;
     private readonly AppointmentViewPool pool;
@@ -91,6 +90,10 @@ public partial class SchedulerView : ContentView
         gridDrawable = new SchedulerGridDrawable(geometry);
         gutterDrawable = new TimeGutterDrawable(geometry);
 
+        // Read through a delegate rather than copied in: SnapMinutes has no property-changed handler,
+        // so a snapshot taken here would go stale the moment the host changed it.
+        pageSurface = new TimelineSurface(geometry, () => SnapMinutes);
+
         gutterView = new GraphicsView { Drawable = gutterDrawable, InputTransparent = true };
 
         gridView = new GraphicsView { Drawable = gridDrawable, ZIndex = GridZIndex };
@@ -106,7 +109,7 @@ public partial class SchedulerView : ContentView
         // Appointments never handle their own input: every touch on the surface is resolved by
         // OnSurfaceStartInteraction, which hit-tests them arithmetically.
         pool = new AppointmentViewPool(surface) { ViewCreated = view => view.InputTransparent = true };
-        cellSelection = new CellSelectionOverlay(surface, geometry, SelectionZIndex);
+        cellSelection = new CellSelectionOverlay(surface, geometry, pageSurface, SelectionZIndex);
 
         pagerScroll = new ScrollView
         {
@@ -396,7 +399,7 @@ public partial class SchedulerView : ContentView
             AbsoluteLayout.SetLayoutBounds(slots[i].Header, new Rect(0, 0, geometry.ViewportWidth, HeaderHeight));
         }
 
-        RebuildAll(StartOfPage(DateOnly.FromDateTime(DisplayDate)));
+        RebuildAll(pageSurface.StartOfPage(DateOnly.FromDateTime(DisplayDate)));
         initialised = true;
     }
 
@@ -407,22 +410,5 @@ public partial class SchedulerView : ContentView
         return offset.Minutes == 0
             ? $"GMT{sign}{Math.Abs(offset.Hours)}"
             : $"GMT{sign}{Math.Abs(offset.Hours)}:{Math.Abs(offset.Minutes):00}";
-    }
-
-    /// <summary>
-    /// The first day of the page containing <paramref name="date"/>.
-    /// </summary>
-    /// <remarks>
-    /// A full week snaps to <see cref="FirstDayOfWeek"/>, because a week that started on an arbitrary
-    /// day would not be one. Shorter pages start on the day asked for, which is what makes "today"
-    /// the leading column in a day or three-day view.
-    /// </remarks>
-    private DateOnly StartOfPage(DateOnly date)
-    {
-        if (geometry.VisibleDays < 7)
-            return date;
-
-        var diff = ((int)date.DayOfWeek - (int)FirstDayOfWeek + 7) % 7;
-        return date.AddDays(-diff);
     }
 }

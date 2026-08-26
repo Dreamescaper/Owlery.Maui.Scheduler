@@ -7,8 +7,7 @@ namespace Owlery.Maui.Scheduler;
 /// <summary>Taps, cell selection, and drag-and-drop.</summary>
 public partial class SchedulerView
 {
-    private void UpdateSelectionView() =>
-        cellSelection.Update(SelectedSlot, slots, MinimumAppointmentHeight, TimeFormat);
+    private void UpdateSelectionView() => cellSelection.Update(SelectedSlot, slots, TimeFormat);
 
     // All input for the scrolling surface is handled here, on the drawing surface, rather than by
     // gesture recognizers attached to each appointment.
@@ -89,7 +88,7 @@ public partial class SchedulerView
             return;
         }
 
-        if (ResolveSlot(new Point(e.Touches[0].X, e.Touches[0].Y)) is not { } slot)
+        if (pageSurface.SlotAt(new Point(e.Touches[0].X, e.Touches[0].Y), slots) is not { } slot)
             return;
 
         SelectedSlot = slot;
@@ -119,26 +118,6 @@ public partial class SchedulerView
         }
 
         return null;
-    }
-
-    private SchedulerTimeSlot? ResolveSlot(Point point)
-    {
-        if (geometry.ViewportWidth <= 0)
-            return null;
-
-        var slotIndex = Math.Clamp((int)(point.X / geometry.ViewportWidth), 0, SchedulerGeometry.SlotCount - 1);
-        var xInSlot = point.X - slotIndex * geometry.ViewportWidth;
-        var dayIndex = Math.Clamp((int)(xInSlot / geometry.DayWidth), 0, geometry.VisibleDays - 1);
-
-        var snap = Math.Max(1, SnapMinutes);
-        var minutes = geometry.MinutesFromY(point.Y);
-        var snapped = Math.Floor(minutes / snap) * snap;
-        snapped = Math.Clamp(snapped, geometry.WindowStartMinutes, geometry.WindowEndMinutes - snap);
-
-        var date = slots[slotIndex].PageStart.AddDays(dayIndex);
-        var start = date.ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
-
-        return new SchedulerTimeSlot(start, TimeSpan.FromMinutes(snap));
     }
 
     private void BeginDragCandidate(View view, Point point)
@@ -388,7 +367,7 @@ public partial class SchedulerView
             dragOriginalBounds.Height,
             SnapMinutes);
 
-        var snappedX = target.XWithinPage(geometry, AppointmentGap);
+        var snappedX = target.XWithinPage(geometry, TimelineSurface.AppointmentGap);
         var snappedY = target.Y(geometry);
 
         // Converted out of surface space into the control's own, which is where the overlay lives.
@@ -655,7 +634,7 @@ public partial class SchedulerView
 
         AbsoluteLayout.SetLayoutFlags(floatingView, AbsoluteLayoutFlags.None);
         AbsoluteLayout.SetLayoutBounds(floatingView, new Rect(
-            dayIndex * geometry.DayWidth + AppointmentGap,
+            dayIndex * geometry.DayWidth + TimelineSurface.AppointmentGap,
             geometry.YFromMinutes(dragDropStart.TimeOfDay.TotalMinutes),
             dragOriginalBounds.Width,
             dragOriginalBounds.Height));

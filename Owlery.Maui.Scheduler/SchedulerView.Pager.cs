@@ -102,7 +102,7 @@ public partial class SchedulerView
         ShiftSlot(slots[0], 0);
         ShiftSlot(slots[1], 1);
 
-        recycled.PageStart = slots[1].PageStart.AddDays(geometry.VisibleDays);
+        recycled.PageStart = pageSurface.NextPage(slots[1].PageStart);
         PopulateSlot(recycled, 2);
     }
 
@@ -116,7 +116,7 @@ public partial class SchedulerView
         ShiftSlot(slots[1], 1);
         ShiftSlot(slots[2], 2);
 
-        recycled.PageStart = slots[1].PageStart.AddDays(-geometry.VisibleDays);
+        recycled.PageStart = pageSurface.PreviousPage(slots[1].PageStart);
         PopulateSlot(recycled, 0);
     }
 
@@ -140,15 +140,20 @@ public partial class SchedulerView
 
     private void RaiseVisibleDatesChanged()
     {
-        var centre = slots[1].PageStart;
-        var visible = Enumerable.Range(0, geometry.VisibleDays)
-            .Select(i => centre.AddDays(i).ToDateTime(TimeOnly.MinValue))
+        var visible = pageSurface.DatesOn(slots[1].PageStart)
+            .Select(date => date.ToDateTime(TimeOnly.MinValue))
             .ToArray();
+
+        // Taken from the rendered dates rather than from the page starts, because a page does not
+        // have to begin on the first date it shows — a month grid opens on the tail of the previous
+        // month, and the host has to be told to fetch that far back.
+        var first = pageSurface.DatesOn(slots[0].PageStart)[0];
+        var last = pageSurface.DatesOn(slots[2].PageStart)[^1];
 
         VisibleDatesChanged?.Invoke(this, new SchedulerVisibleDatesChangedEventArgs(
             visible,
-            slots[0].PageStart.ToDateTime(TimeOnly.MinValue),
-            slots[2].PageStart.AddDays(geometry.VisibleDays - 1).ToDateTime(TimeOnly.MaxValue)));
+            first.ToDateTime(TimeOnly.MinValue),
+            last.ToDateTime(TimeOnly.MaxValue)));
     }
 
     private void SyncDisplayDate()

@@ -4,13 +4,13 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// One appointment resolved to grid-relative coordinates, expressed as fractions of a day column
 /// so the result survives a viewport resize without recomputing overlaps.
 /// </summary>
-internal readonly record struct PositionedAppointment(
+internal sealed record PositionedAppointment(
     ISchedulerAppointment Appointment,
     int DayIndex,
     double StartMinutes,
     double EndMinutes,
     double LeftFraction,
-    double WidthFraction);
+    double WidthFraction) : IAppointmentPlacement;
 
 /// <summary>
 /// Splits a week's appointments into per-day overlap clusters and assigns each one a column,

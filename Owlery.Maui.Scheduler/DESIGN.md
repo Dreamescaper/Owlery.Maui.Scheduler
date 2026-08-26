@@ -613,6 +613,41 @@ platform, and `Commit` applies its first frame immediately — so a transition t
 advances pins the column width at the *old* value, leaving the new day count laid out at the old size.
 Guarding on `IsLoaded` alone was not enough, because the test host does mark the control loaded.
 
+## 17. The page surface seam
+
+Month view needs a different surface, not a different day count (section 14). What that means in
+practice is that roughly half this control does not care which it is drawing.
+
+`ISchedulerSurface` is where the two part company. A surface answers what a page holds and how it is
+measured: where a page starts, how to step to the next and previous one, which dates it shows, how to
+turn appointments into placements, and where a placement or a selected cell sits. `TimelineSurface`
+is the day/three-day/week implementation and simply reads the geometry it is given.
+
+Everything on the other side of the seam is untouched by a change of mode: the three-slot ring buffer
+and its snapping, the view pool, the reconciliation in `PopulateSlot`, identity by `Key`, and every
+public event. Those were the expensive parts to get right and none of them had to be duplicated.
+
+Two things are deliberately *not* on the interface:
+
+- **Dragging.** It belongs to the timeline alone, and putting it here would have reproduced exactly
+  the interface this document already warns against in `AGENTS.md` — a dozen members relocating the
+  coupling rather than reducing it. Every member that survived is arithmetic, which is what makes
+  both implementations testable without the MAUI test host.
+- **Building the visual tree.** A month has no time gutter and does not scroll vertically, so the two
+  modes differ in structure rather than in a value. Structure is settled once, when the mode changes,
+  rather than on every page.
+
+`SchedulerGeometry` was left as the timeline's geometry rather than being split up front. The values
+both modes genuinely share — viewport size, `SlotStarts`, `PageSpan` — are visible in
+`CellSelectionOverlay`, which now reaches for geometry only for those and goes through the surface for
+everything else. Lifting them is worth doing when there is a second implementation to check the guess
+against, not before.
+
+One generalisation was taken while passing. `VisibleDatesChanged` derives its prefetch bounds from
+`DatesOn` rather than from the page starts, because a page need not begin on the first date it shows:
+a month grid opens on the tail of the previous month, and the host has to be told to fetch that far
+back. For a timeline the two are the same value.
+
 ## 15. Verification status
 
 `Owlery.Maui.Scheduler.Tests` covers the platform-independent behaviour headlessly on `net10.0`:
