@@ -138,6 +138,16 @@ internal sealed class SchedulerHarness
             ])
     ];
 
+    /// <summary>The day-number labels in the page headers, which only a timeline has.</summary>
+    public IReadOnlyList<Label> HeaderDayNumbers =>
+    [
+        .. Descendants(Scheduler)
+            .OfType<Grid>()
+            .Where(grid => grid.Parent is AbsoluteLayout && grid.ColumnDefinitions.Count > 0)
+            .SelectMany(grid => Descendants(grid).OfType<Label>())
+            .Where(label => label.FontSize == 16)
+    ];
+
     public double MonthCellWidth => ViewWidth / 7;
 
     public double MonthCellHeight => (ViewHeight - Scheduler.HeaderHeight) / 6;

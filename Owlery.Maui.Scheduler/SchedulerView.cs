@@ -434,7 +434,7 @@ public partial class SchedulerView : ContentView
 
         for (var i = 0; i < slots.Length; i++)
         {
-            if (slots[i].DayNameLabels.Length != HeaderColumns)
+            if (!SlotHeaderMatchesMode(slots[i]))
                 BuildSlotHeader(slots[i]);
 
             AbsoluteLayout.SetLayoutBounds(slots[i].Header, new Rect(0, 0, active.ViewportWidth, HeaderHeight));

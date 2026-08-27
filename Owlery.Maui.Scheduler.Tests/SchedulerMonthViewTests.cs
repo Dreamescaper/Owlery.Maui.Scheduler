@@ -295,6 +295,32 @@ public class SchedulerMonthViewTests
     }
 
     [Test]
+    public void Returning_to_a_full_week_from_a_month_rebuilds_the_headers()
+    {
+        // The reported crash. A month header and a week header are both seven columns wide, so the
+        // week found one that fitted by width, left it alone, and then indexed day-number labels the
+        // month had never made. Reaching it needs a header genuinely built for a month first, which
+        // is why it only happened when the day count had been something other than seven.
+        var harness = new SchedulerHarness(August, visibleDays: 1);
+
+        harness.Scheduler.ViewMode = SchedulerViewMode.Month;
+        harness.Scheduler.VisibleDays = 7;
+
+        Assert.DoesNotThrow(() => harness.Scheduler.ViewMode = SchedulerViewMode.Timeline);
+        Assert.That(harness.HeaderDayNumbers, Is.Not.Empty, "a timeline names its days and numbers them");
+    }
+
+    [Test]
+    public void A_month_header_carries_no_day_numbers_even_arriving_from_a_full_week()
+    {
+        var harness = new SchedulerHarness(August);
+
+        harness.Scheduler.ViewMode = SchedulerViewMode.Month;
+
+        Assert.That(harness.HeaderDayNumbers, Is.Empty);
+    }
+
+    [Test]
     public void Switching_mode_does_not_leave_the_old_views_behind()
     {
         var harness = new SchedulerHarness(August, [TestAppointment.At(Day(15), "10:00", 1)]);

@@ -22,6 +22,20 @@ public partial class SchedulerView
         ViewMode is SchedulerViewMode.Month ? MonthGeometry.Columns : geometry.VisibleDays;
 
     /// <summary>
+    /// Whether a page's header is built for the surface currently showing.
+    /// </summary>
+    /// <remarks>
+    /// The column count alone does not answer this. A week and a month are both seven columns wide,
+    /// but only the week has day numbers — so a header built for one fitted the other by width, was
+    /// left alone, and then the timeline indexed number labels a month header never made. Which way
+    /// it broke depended on the order a host pushed <c>ViewMode</c> and <c>VisibleDays</c>, so it
+    /// crashed only sometimes.
+    /// </remarks>
+    private bool SlotHeaderMatchesMode(PageSlot slot) =>
+        slot.DayNameLabels.Length == HeaderColumns
+        && slot.DayNumberLabels.Length == (ViewMode is SchedulerViewMode.Month ? 0 : HeaderColumns);
+
+    /// <summary>
     /// Builds one page's header.
     /// </summary>
     /// <remarks>
