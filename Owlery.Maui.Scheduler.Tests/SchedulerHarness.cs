@@ -229,6 +229,9 @@ internal sealed class SchedulerHarness
             .OrderBy(label => AbsoluteLayout.GetLayoutBounds(label).Y)
     ];
 
+    /// <summary>What assistive technology would read for a view.</summary>
+    public static string? DescriptionOf(View view) => SemanticProperties.GetDescription(view);
+
     public Rect BoundsOf(View view)
     {
         var bounds = AbsoluteLayout.GetLayoutBounds(view);

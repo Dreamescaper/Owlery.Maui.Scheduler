@@ -10,8 +10,14 @@ public class MonthLayoutEngineTests
 
     private const int LinesPerCell = 5;
 
-    private static MonthPageLayout Layout(params ISchedulerAppointment[] appointments)
-        => MonthLayoutEngine.Layout(appointments, GridStart, LinesPerCell);
+    /// <summary>The engine's result with its placements typed, which is what the assertions want.</summary>
+    private sealed record LaidOut(IReadOnlyList<MonthPlacement> Placements, IReadOnlyList<int> OverflowByCell);
+
+    private static LaidOut Layout(params ISchedulerAppointment[] appointments)
+        => Typed(MonthLayoutEngine.Layout(appointments, GridStart, LinesPerCell));
+
+    private static LaidOut Typed(MonthPageLayout layout)
+        => new([.. layout.Placements.Cast<MonthPlacement>()], layout.OverflowByCell);
 
     private static DateTime Cell(int index) => GridStart.AddDays(index).ToDateTime(TimeOnly.MinValue);
 
@@ -112,14 +118,14 @@ public class MonthLayoutEngineTests
     [Test]
     public void The_earliest_appointments_are_the_ones_kept_when_a_day_overflows()
     {
-        var result = MonthLayoutEngine.Layout(
+        var result = Typed(MonthLayoutEngine.Layout(
             [
                 TestAppointment.At(Cell(5), "17:00", 1, "late"),
                 TestAppointment.At(Cell(5), "09:00", 1, "early"),
                 TestAppointment.At(Cell(5), "13:00", 1, "middle")
             ],
             GridStart,
-            linesPerCell: 2);
+            linesPerCell: 2));
 
         Assert.Multiple(() =>
         {
@@ -131,10 +137,10 @@ public class MonthLayoutEngineTests
     [Test]
     public void A_cell_with_no_room_shows_nothing_and_overflows_everything()
     {
-        var result = MonthLayoutEngine.Layout(
+        var result = Typed(MonthLayoutEngine.Layout(
             [TestAppointment.At(Cell(5), "09:00", 1), TestAppointment.At(Cell(5), "11:00", 1)],
             GridStart,
-            linesPerCell: 0);
+            linesPerCell: 0));
 
         Assert.Multiple(() =>
         {

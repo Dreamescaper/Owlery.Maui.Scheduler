@@ -60,6 +60,9 @@ public partial class SchedulerView : ContentView
     private readonly CellSelectionOverlay cellSelection;
     private readonly PageSlot[] slots = new PageSlot[SchedulerGeometry.SlotCount];
     private readonly Dictionary<View, ISchedulerAppointment> appointmentsByView = [];
+
+    /// <summary>Scratch for <c>PopulateSlot</c>, which would otherwise allocate one per page.</summary>
+    private readonly Dictionary<object, View> reusableByKey = [];
     private readonly Dictionary<View, PageSlot> slotsByView = [];
 
     private readonly Grid root;

@@ -18,15 +18,19 @@ internal sealed record PositionedAppointment(
 /// </summary>
 internal static class AppointmentLayoutEngine
 {
-    public static List<PositionedAppointment> Layout(
+    public static List<IAppointmentPlacement> Layout(
         IEnumerable<ISchedulerAppointment> appointments,
         DateOnly pageStart,
         int dayCount,
         int startHour,
         int endHour)
     {
-        var result = new List<PositionedAppointment>();
+        var result = new List<IAppointmentPlacement>();
         var dayBuckets = new List<ISchedulerAppointment>[dayCount];
+
+        // Shared by every cluster of every day in this call.
+        var columnEnds = new List<double>();
+        var assignedColumn = new List<int>();
 
         var windowStart = startHour * 60.0;
         var windowEnd = endHour * 60.0;
@@ -72,7 +76,7 @@ internal static class AppointmentLayoutEngine
                 .ThenByDescending(s => s.End - s.Start)
                 .ToList();
 
-            LayoutDay(spans, dayIndex, result);
+            LayoutDay(spans, dayIndex, result, columnEnds, assignedColumn);
         }
 
         return result;
@@ -84,7 +88,9 @@ internal static class AppointmentLayoutEngine
     private static void LayoutDay(
         List<(ISchedulerAppointment Appointment, double Start, double End)> spans,
         int dayIndex,
-        List<PositionedAppointment> result)
+        List<IAppointmentPlacement> result,
+        List<double> columnEnds,
+        List<int> assignedColumn)
     {
         var clusterStart = 0;
         var clusterEnd = double.MinValue;
@@ -95,7 +101,7 @@ internal static class AppointmentLayoutEngine
             // anything inside it, so columns can be assigned independently.
             if (i == spans.Count || spans[i].Start >= clusterEnd)
             {
-                FlushCluster(spans, clusterStart, i, dayIndex, result);
+                FlushCluster(spans, clusterStart, i, dayIndex, result, columnEnds, assignedColumn);
                 clusterStart = i;
                 clusterEnd = double.MinValue;
             }
@@ -110,14 +116,17 @@ internal static class AppointmentLayoutEngine
         int from,
         int to,
         int dayIndex,
-        List<PositionedAppointment> result)
+        List<IAppointmentPlacement> result,
+        List<double> columnEnds,
+        List<int> assignedColumn)
     {
         if (to <= from)
             return;
 
-        // columnEnds[c] is the end of the last appointment placed in column c.
-        var columnEnds = new List<double>();
-        var assignedColumn = new int[to - from];
+        // Both are reused across clusters and days. A day where nothing overlaps is one cluster per
+        // appointment, so allocating here meant two allocations per appointment on the common path.
+        columnEnds.Clear();
+        assignedColumn.Clear();
 
         for (var i = from; i < to; i++)
         {
@@ -143,7 +152,7 @@ internal static class AppointmentLayoutEngine
                 columnEnds[column] = span.End;
             }
 
-            assignedColumn[i - from] = column;
+            assignedColumn.Add(column);
         }
 
         var columnCount = columnEnds.Count;

@@ -9,8 +9,10 @@ public class AppointmentLayoutEngineTests
     private const int StartHour = 8;
     private const int EndHour = 23;
 
+    // The engine builds the interface list the control consumes; the tests want the concrete type.
     private static List<PositionedAppointment> Layout(params ISchedulerAppointment[] appointments)
-        => AppointmentLayoutEngine.Layout(appointments, WeekStart, 7, StartHour, EndHour);
+        => [.. AppointmentLayoutEngine.Layout(appointments, WeekStart, 7, StartHour, EndHour)
+            .Cast<PositionedAppointment>()];
 
     private static DateTime Day(int offset) => WeekStart.AddDays(offset).ToDateTime(TimeOnly.MinValue);
 

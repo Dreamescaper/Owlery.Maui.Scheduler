@@ -144,8 +144,10 @@ public partial class SchedulerView
                 ? []
                 : pageSurface.Layout(LayoutItems(), slot.PageStart);
 
-        // Index what this week already has by the identity of what it is showing.
-        var available = new Dictionary<object, View>(slot.Views.Count);
+        // Index what this week already has by the identity of what it is showing. Reused across
+        // calls: this runs three times per rebuild, and again for every page rotation.
+        reusableByKey.Clear();
+        var available = reusableByKey;
 
         foreach (var view in slot.Views)
         {
@@ -178,7 +180,18 @@ public partial class SchedulerView
         }
 
         slot.Positions.Clear();
-        slot.Positions.AddRange(positions.Take(arranged.Count));
+
+        // AddRange over a Take iterator cannot pre-size the list, and in the ordinary case there is
+        // nothing to take — every position found a view.
+        if (arranged.Count == positions.Count)
+        {
+            slot.Positions.AddRange(positions);
+        }
+        else
+        {
+            for (var i = 0; i < arranged.Count; i++)
+                slot.Positions.Add(positions[i]);
+        }
 
         // Whatever no appointment claimed is genuinely gone from this week.
         foreach (var surplus in available.Values)
@@ -228,13 +241,30 @@ public partial class SchedulerView
 
     private void BindAppointmentView(View view, IAppointmentPlacement position, PageSlot slot, int slotIndex)
     {
-        view.BindingContext = position.Appointment;
-        SetAppointmentSemantics(view, position.Appointment);
-        appointmentsByView[view] = position.Appointment;
+        var appointment = position.Appointment;
+
+        appointmentsByView.TryGetValue(view, out var previous);
+
+        view.BindingContext = appointment;
+
+        // Only when the text would actually differ. Three date formats — one of them the long date
+        // pattern — plus a semantic write is the largest per-appointment cost here, and a reload that
+        // changed nothing used to pay it for every appointment on all three pages.
+        if (!DescribesTheSame(previous, appointment))
+            SetAppointmentSemantics(view, appointment);
+
+        appointmentsByView[view] = appointment;
         slotsByView[view] = slot;
 
         PositionAppointmentView(view, position, slotIndex);
     }
+
+    /// <summary>Whether two appointments would produce the same accessibility description.</summary>
+    private static bool DescribesTheSame(ISchedulerAppointment? previous, ISchedulerAppointment current) =>
+        previous is not null
+        && previous.Start == current.Start
+        && previous.End == current.End
+        && previous.Subject == current.Subject;
 
     private void SetAppointmentSemantics(View view, ISchedulerAppointment appointment)
     {

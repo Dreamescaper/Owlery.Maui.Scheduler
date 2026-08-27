@@ -43,7 +43,7 @@ internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snap
     }
 
     public IReadOnlyList<IAppointmentPlacement> Layout(IEnumerable<ISchedulerAppointment> items, DateOnly pageStart) =>
-        [.. AppointmentLayoutEngine.Layout(items, pageStart, geometry.VisibleDays, geometry.StartHour, geometry.EndHour)];
+        AppointmentLayoutEngine.Layout(items, pageStart, geometry.VisibleDays, geometry.StartHour, geometry.EndHour);
 
     public Rect BoundsFor(IAppointmentPlacement placement)
     {

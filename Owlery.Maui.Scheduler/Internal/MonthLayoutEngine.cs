@@ -15,7 +15,7 @@ internal sealed record MonthPlacement(
 /// for, which includes the appointment whose line the marker took.
 /// </param>
 internal sealed record MonthPageLayout(
-    IReadOnlyList<MonthPlacement> Placements,
+    IReadOnlyList<IAppointmentPlacement> Placements,
     IReadOnlyList<int> OverflowByCell);
 
 /// <summary>
@@ -50,7 +50,7 @@ internal static class MonthLayoutEngine
             (buckets[cell] ??= []).Add(appointment);
         }
 
-        var placements = new List<MonthPlacement>();
+        var placements = new List<IAppointmentPlacement>();
         var overflow = new int[MonthGeometry.CellCount];
 
         for (var cell = 0; cell < buckets.Length; cell++)

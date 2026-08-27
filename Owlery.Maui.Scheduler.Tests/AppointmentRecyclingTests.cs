@@ -15,6 +15,41 @@ public class AppointmentRecyclingTests
 {
     private static readonly DateTime Week = new(2026, 8, 24);
 
+    /// <summary>An appointment whose key does not move when its times do.</summary>
+    private sealed record Pinned(object Key, DateTime Start, DateTime End, string? Subject)
+        : ISchedulerAppointment;
+
+    [Test]
+    public void A_bound_view_describes_itself_for_assistive_technology()
+    {
+        var harness = new SchedulerHarness(Week, [TestAppointment.At(Week.AddDays(1), "10:00", 1, "Lesson")]);
+
+        Assert.That(
+            SchedulerHarness.DescriptionOf(harness.CentrePageAppointments[0]),
+            Does.Contain("Lesson"));
+    }
+
+    [Test]
+    public void The_description_follows_a_change_of_time_on_the_same_appointment()
+    {
+        // Rebuilding it is the most expensive part of a bind, so it is skipped when nothing it reads
+        // has changed. This is the case that guard must not swallow: the same key — so the same view
+        // is reused rather than rented afresh — carrying different times.
+        var items = new ObservableCollection<ISchedulerAppointment>
+        {
+            new Pinned("lesson-1", Week.AddDays(1).AddHours(10), Week.AddDays(1).AddHours(11), "Lesson")
+        };
+
+        var harness = new SchedulerHarness(Week, items);
+        var before = SchedulerHarness.DescriptionOf(harness.CentrePageAppointments[0]);
+
+        items[0] = new Pinned("lesson-1", Week.AddDays(1).AddHours(14), Week.AddDays(1).AddHours(15), "Lesson");
+
+        Assert.That(
+            SchedulerHarness.DescriptionOf(harness.CentrePageAppointments[0]),
+            Is.Not.EqualTo(before));
+    }
+
     [Test]
     public void A_duplicate_key_on_one_page_does_not_strand_a_view()
     {
