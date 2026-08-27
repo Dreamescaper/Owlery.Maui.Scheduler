@@ -172,7 +172,7 @@ internal class MauiPagingScrollView : HorizontalScrollView
     private readonly int minimumFlingVelocity;
 
     private bool animating;
-    private bool snappedThisGesture;
+    private bool flungOnRelease;
     private int? deferredOffsetX;
 
     public MauiPagingScrollView(Context context) : base(context)
@@ -260,14 +260,21 @@ internal class MauiPagingScrollView : HorizontalScrollView
         if (!IsScrollEnabled || e is null)
             return false;
 
-        if (e.Action is MotionEventActions.Down)
-            snappedThisGesture = false;
+        var releasing = e.Action is MotionEventActions.Up or MotionEventActions.Cancel;
+
+        // Scoped to this one release rather than to the gesture. A ViewGroup does not intercept
+        // ACTION_DOWN — the drawing surface underneath consumes it, and interception only begins once
+        // a drag is recognised — so anything reset on DOWN here is never reset at all. A flag that
+        // outlived its gesture left every slow release unsnapped after the first fling.
+        if (releasing)
+            flungOnRelease = false;
 
         var handled = base.OnTouchEvent(e);
 
         // A release fast enough to fling has already snapped from Fling, which base.OnTouchEvent
-        // calls on the way through. A slower one never gets there, so it snaps here instead.
-        if (e.Action is MotionEventActions.Up or MotionEventActions.Cancel && !snappedThisGesture)
+        // calls on the way through. A slower one never gets there, so it snaps here instead —
+        // otherwise the pager simply stays wherever the finger left it, between two pages.
+        if (releasing && !flungOnRelease)
             SnapTo(PageNearest(ScrollX));
 
         return handled;
@@ -284,6 +291,9 @@ internal class MauiPagingScrollView : HorizontalScrollView
     {
         if (!IsScrollEnabled || PageWidthPx <= 0)
             return;
+
+        // Only ever reached from inside a release, so this cannot outlive one.
+        flungOnRelease = true;
 
         if (Math.Abs(velocityX) < minimumFlingVelocity)
         {
@@ -326,8 +336,6 @@ internal class MauiPagingScrollView : HorizontalScrollView
     /// </remarks>
     private void SnapTo(int page)
     {
-        snappedThisGesture = true;
-
         var target = Math.Clamp(page * PageWidthPx, 0, Math.Max(0, MaximumScrollX));
 
         animator.ForceFinished(true);

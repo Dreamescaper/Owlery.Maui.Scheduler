@@ -762,7 +762,7 @@ scroller inside `HorizontalScrollView`, which cannot be reached to stop — so t
 follows a settle was overwritten on the scroller's next frame, and one swipe compounded into
 several. Owning it also makes "has it arrived" exact instead of polled for.
 
-### Three things that were only found by running it
+### Four things that were only found by running it
 
 **Plain properties do not reach a handler.** `PageWidth` and `IsScrollEnabled` are not bindable —
 nothing binds to them — so the mapper ran once at connect time, while `PageWidth` was still 0, and
@@ -774,6 +774,15 @@ reports exactly what was asked for — then resets it to zero once the view has 
 calendar opened one page early. Detecting that by reading the offset back therefore cannot work; the
 absence of a frame is what identifies it. Android loses it the same way against a scroll range that
 is still zero. Both handlers hold the request and re-apply it on layout.
+
+**State reset on `ACTION_DOWN` is never reset.** A `ViewGroup` does not intercept the down event —
+the drawing surface underneath consumes it, which is how long-press-to-drag gets its touch-down — and
+interception only begins once a drag is recognised. So a flag cleared on DOWN inside the scroll view's
+`OnTouchEvent` is cleared exactly never. The flag saying "this release already flung" therefore stayed
+set after the first fling, and every slow release stopped snapping: the pager just stayed wherever the
+finger left it, between two pages. Fast flings kept working throughout, because `Fling` snaps without
+consulting it — which is what made the failure look like it depended on velocity. The flag is now
+scoped to a single release rather than to a gesture.
 
 **Android draws scroll content outside the scroll view.** MAUI leaves `ClipChildren` off on its
 Android layout views so shadows can spill, which means the pager is drawn without being clipped to
