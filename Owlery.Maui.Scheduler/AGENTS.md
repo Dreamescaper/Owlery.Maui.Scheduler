@@ -59,8 +59,13 @@ cited `DESIGN.md` section first.
   `InputTransparent`. Do not attach gesture recognizers to them, and do not use
   `PanGestureRecognizer` to detect a press — it only reports after movement has started, which makes
   long-press-to-drag impossible.
-- **Platform-specific code is confined** to `ConfigurePlatformScrolling` and `SetScrollingEnabled`.
-  If you need more of it, say so in `DESIGN.md` and explain why MAUI could not do the job.
+- **Platform-specific code is confined** to `Handlers/`, plus `ConfigurePlatformScrolling` and
+  `SetScrollingEnabled` for the timeline's vertical scroll. If you need more of it, say so in
+  `DESIGN.md` and explain why MAUI could not do the job. `Handlers/` earned its place the hard way —
+  read §19 before changing it, and do not assume a platform scroll view behaves like the other one.
+- **The pager decides which page a swipe lands on** (§3, §19). The control reacts to `PageSettled`;
+  it does not infer the page from the offset going quiet. `OnPageSettled` must stay synchronous — a
+  frame drawn between the rotation and the recentre shows a page the user never swiped to.
 - **Identity is `ISchedulerAppointment.Key`, never the instance** (§6, §11). A host may rebuild its
   collection at any moment, including mid-gesture. Match on the key, and resolve anything handed back
   to the host against the current `ItemsSource` first.
@@ -97,13 +102,21 @@ members wherever they are convenient:
 | `SchedulerView.Rendering.cs` | Laying appointments out, the day-count transition |
 | `SchedulerView.Pager.cs` | Snapping, rotating the ring buffer, recentring |
 | `SchedulerView.Interaction.cs` | Taps, cell selection, drag and drop |
+| `PagingScrollView.cs` | The horizontal pager's cross-platform half (§19). Internal. |
+| `Handlers/` | Its iOS and Android handlers, and their platform views. Internal. |
+| `AppHostBuilderExtensions.cs` | `UseOwleryScheduler()`, the one line a host must call |
 
 State lives in one file on purpose. Fields declared next to the code that uses them is how a partial
 class ends up with two of them meaning the same thing.
 
 Logic that is arithmetic rather than view manipulation belongs in `Internal/` as an ordinary type —
-`DropTargetResolver`, `EdgePagingDetector`, `AppointmentLayoutEngine`, `CellSelectionOverlay`. Those
-are directly unit-testable without the MAUI test host, and that is the point of moving them.
+`DropTargetResolver`, `EdgePagingDetector`, `AppointmentLayoutEngine`, `MonthLayoutEngine`. Those are
+directly unit-testable without the MAUI test host, and that is the point of moving them.
+
+A self-contained *piece of chrome* belongs there too, owning its own views rather than scattering
+them across the partial class — `CellSelectionOverlay` and `TimeGutter`. Each exposes a view to place
+and a method or two to drive it, which is what keeps `SchedulerView.cs` a list of fields rather than a
+list of every label in the control.
 
 Resist extracting the drag machinery wholesale behind an interface. It legitimately touches the
 geometry, the pages, the pool, the scroll views and the events, so the interface would have a dozen
@@ -135,8 +148,12 @@ dotnet test --project Owlery.Maui.Scheduler.Tests/Owlery.Maui.Scheduler.Tests.cs
 ```
 
 - `TestApplication` builds a real MAUI app with a stub handler, so controls behave as they do in an
-  app. `TestDispatcher` hands out timers the test fires by hand — both the long press and the
-  scroll-quiet snap are dispatcher timers, so a test that cannot fire them cannot reach either.
+  app. `TestDispatcher` hands out timers the test fires by hand — the long press is a dispatcher
+  timer, so a test that cannot fire it cannot reach dragging.
+- Paging is driven by `SwipeToPage`, which places the offset and reports the page settled. There is
+  no handler in the test host, so `PagingScrollView` holds whatever it was last told and does not
+  page by itself — which is what makes the suite deterministic, and why nothing about the platform
+  handlers is covered by it.
 - `SchedulerHarness` arranges the control to a known size and drives it through `IGraphicsView`
   interaction calls and the scroll views, so tests tap, hold, drag and swipe rather than poking at
   internals. Address positions with `PointAt(slot, day, time)` instead of raw pixels.
@@ -144,4 +161,6 @@ dotnet test --project Owlery.Maui.Scheduler.Tests/Owlery.Maui.Scheduler.Tests.cs
   this suite rather than by running the app: appointments finishing before the day window were drawn
   at the top of it, and a tap on an appointment was never reported while dragging was enabled.
 - What the suite cannot reach — real gesture arbitration between the scroll views, platform paging,
-  anything behind `#if IOS` — still needs a device. See the DevFlow skills.
+  fling prediction, clipping, anything in `Handlers/` — still needs a device. Three defects in the
+  pager were found only by running it; see DESIGN.md §19. Android is reachable through the DevFlow
+  skills, and `references/android.md` there records the deployment traps.

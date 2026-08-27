@@ -51,8 +51,6 @@ Requirements state what is intended. These are the known gaps as things stand:
 
 | Requirement | Gap |
 |---|---|
-| NAV-7 — commit on release | Holds on iOS. On Android the week is still decided once movement stops, so a flick is followed by a pause before the week settles. |
-| ACC-9 — respect system text size | Holds for day headers and appointment content. The hour labels down the side are drawn rather than laid out as text and do not scale. |
 | ACC-10 — comfortable touch targets | A short appointment sharing its column with two or three others can end up narrower than the recommended minimum target. |
 | ACC-11 — rescheduling without dragging | No equivalent exists in the view; the host must provide one. |
 | MON-17 — switching keeps the day | Holds, but the switch is a hard cut. The two layouts do not grow into one another the way NAV-28 describes for a change of day count. |

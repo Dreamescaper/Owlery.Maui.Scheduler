@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.Globalization;
+using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Layouts;
 using Owlery.Maui.Scheduler.Internal;
 
@@ -15,7 +16,6 @@ namespace Owlery.Maui.Scheduler;
 /// </remarks>
 public partial class SchedulerView : ContentView
 {
-    private const int SnapDetectionDelayMs = 90;
     private const int LongPressDelayMs = 350;
     private const double DragMovementToleranceDp = 12;
     private const double TapMovementToleranceDp = 8;
@@ -29,6 +29,20 @@ public partial class SchedulerView : ContentView
 
     // AbsoluteLayout paints by ZIndex first, so the stacking order is stated explicitly rather than
     // being an accident of the order children happen to be added in.
+    /// <summary>Height of one hour label, and of the drag-time chip that may cover it.</summary>
+    private const double GutterLabelHeight = 15;
+
+    /// <summary>
+    /// Space between an hour label and the grid.
+    /// </summary>
+    /// <remarks>
+    /// Narrow on purpose: a twelve-hour locale renders "10:00 AM" where a twenty-four-hour one needs
+    /// only "10:00", and the default <see cref="TimeGutterWidth"/> has little to spare. A host whose
+    /// users read twelve-hour time may want to widen the gutter.
+    /// </remarks>
+    private const double GutterLabelInset = 4;
+    private const double DragIndicatorHeight = 18;
+
     private const int GridZIndex = 0;
     private const int SelectionZIndex = 1;
     private const int AppointmentZIndex = 2;
@@ -41,7 +55,7 @@ public partial class SchedulerView : ContentView
     private ISchedulerSurface pageSurface;
     private readonly SchedulerGridDrawable gridDrawable;
     private readonly MonthGridDrawable monthDrawable;
-    private readonly TimeGutterDrawable gutterDrawable;
+
     private readonly AppointmentViewPool pool;
     private readonly CellSelectionOverlay cellSelection;
     private readonly PageSlot[] slots = new PageSlot[SchedulerGeometry.SlotCount];
@@ -55,21 +69,18 @@ public partial class SchedulerView : ContentView
     private readonly AbsoluteLayout headerSurface;
     private readonly Label headerCorner;
     private readonly ScrollView verticalScroll;
-    private readonly ScrollView pagerScroll;
+    private readonly PagingScrollView pagerScroll;
     private readonly AbsoluteLayout surface;
     private readonly GraphicsView gridView;
-    private readonly GraphicsView gutterView;
+    private readonly TimeGutter gutter;
     private readonly ActivityIndicator busyIndicator;
     private readonly AbsoluteLayout dragOverlay;
     private View? dragOverlayView;
 
-    private IDispatcherTimer? snapTimer;
     private IDispatcherTimer? longPressTimer;
     private IDispatcherTimer? currentTimeTimer;
 
-    private double lastScrollX;
     private bool recentring;
-    private bool snapping;
     private bool suppressDisplayDateSync;
     private bool initialised;
     private double allocatedWidth;
@@ -95,7 +106,6 @@ public partial class SchedulerView : ContentView
     public SchedulerView()
     {
         gridDrawable = new SchedulerGridDrawable(geometry);
-        gutterDrawable = new TimeGutterDrawable(geometry);
 
         // Read through a delegate rather than copied in: SnapMinutes has no property-changed handler,
         // so a snapshot taken here would go stale the moment the host changed it.
@@ -105,7 +115,7 @@ public partial class SchedulerView : ContentView
 
         monthDrawable = new MonthGridDrawable(monthGeometry, slots);
 
-        gutterView = new GraphicsView { Drawable = gutterDrawable, InputTransparent = true };
+        gutter = new TimeGutter(geometry);
 
         gridView = new GraphicsView { Drawable = gridDrawable, ZIndex = GridZIndex };
         gridView.StartInteraction += OnSurfaceStartInteraction;
@@ -122,23 +132,24 @@ public partial class SchedulerView : ContentView
         pool = new AppointmentViewPool(surface) { ViewCreated = view => view.InputTransparent = true };
         cellSelection = new CellSelectionOverlay(surface, SelectionZIndex);
 
-        pagerScroll = new ScrollView
-        {
-            Orientation = ScrollOrientation.Horizontal,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Never,
-            Content = surface
-        };
+        pagerScroll = new PagingScrollView { Content = surface };
         pagerScroll.Scrolled += OnPagerScrolled;
+        pagerScroll.PageSettled += OnPageSettled;
 
+        // Clipped on purpose. MAUI leaves ClipChildren off on its Android layout views so shadows can
+        // spill, which also means the pager is drawn without being clipped to its own bounds — and the
+        // pager's content is three pages wide with an opaque background, so the page parked to the
+        // left of the viewport painted straight over the hour gutter beside it.
         var bodyGrid = new Grid
         {
+            IsClippedToBounds = true,
             ColumnDefinitions =
             [
                 new ColumnDefinition(GridLength.Auto),
                 new ColumnDefinition(GridLength.Star)
             ]
         };
-        bodyGrid.Add(gutterView, 0);
+        bodyGrid.Add(gutter.View, 0);
         bodyGrid.Add(pagerScroll, 1);
 
         verticalScroll = new ScrollView
@@ -284,8 +295,6 @@ public partial class SchedulerView : ContentView
     {
         currentTimeTimer?.Stop();
         currentTimeTimer = null;
-        snapTimer?.Stop();
-        snapTimer = null;
         longPressTimer?.Stop();
         longPressTimer = null;
     }
@@ -440,13 +449,14 @@ public partial class SchedulerView : ContentView
         if (active.ViewportWidth <= 0)
             return;
 
+        pagerScroll.PageWidth = active.ViewportWidth;
+
         surface.WidthRequest = active.SurfaceWidth;
         surface.HeightRequest = active.ContentHeight;
         AbsoluteLayout.SetLayoutBounds(gridView, new Rect(0, 0, active.SurfaceWidth, active.ContentHeight));
 
         if (ViewMode is SchedulerViewMode.Timeline)
         {
-            gutterView.HeightRequest = geometry.ContentHeight;
             headerSurface.WidthRequest = geometry.SurfaceWidth;
 
             for (var i = 0; i < slots.Length; i++)
@@ -471,11 +481,7 @@ public partial class SchedulerView : ContentView
 
         gridView.Drawable = gridDrawable;
 
-        gutterDrawable.HourFormat = TimeFormat;
-        gutterDrawable.Width = TimeGutterWidth;
-
-        gutterView.IsVisible = true;
-        gutterView.WidthRequest = TimeGutterWidth;
+        gutter.Update(TimeGutterWidth, TimeFormat, GridBackgroundColor);
 
         headerCorner.WidthRequest = TimeGutterWidth;
         headerCorner.Text = TimeZoneAbbreviation();
@@ -498,8 +504,7 @@ public partial class SchedulerView : ContentView
 
         // Collapsed rather than merely blank: both live in Auto-sized cells, so a width of zero is
         // what actually gives the month the full width of the control.
-        gutterView.IsVisible = false;
-        gutterView.WidthRequest = 0;
+        gutter.Hide();
         headerCorner.WidthRequest = 0;
         headerCorner.Text = string.Empty;
 

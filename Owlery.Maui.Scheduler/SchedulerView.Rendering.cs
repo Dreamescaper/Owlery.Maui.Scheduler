@@ -90,7 +90,7 @@ public partial class SchedulerView
         SyncSlotStarts();
         UpdateSelectionView();
         RaiseVisibleDatesChanged();
-        _ = RecentreAsync(animated: false);
+        Recentre();
     }
 
     private void SyncSlotStarts()

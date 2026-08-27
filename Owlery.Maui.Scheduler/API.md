@@ -10,6 +10,7 @@ Namespace: `Owlery.Maui.Scheduler`
 
 ## Contents
 
+- [Setup](#setup)
 - [Quick start](#quick-start)
 - [SchedulerView](#schedulerweekview)
   - [View mode](#view-mode)
@@ -26,6 +27,20 @@ Namespace: `Owlery.Maui.Scheduler`
 - [Behaviour worth knowing](#behaviour-worth-knowing)
 
 ---
+
+## Setup
+
+The control ships one platform handler of its own, and MAUI gives a library no way to register a
+handler on its own behalf. Add this line to `MauiProgram`:
+
+```csharp
+builder
+    .UseMauiApp<App>()
+    .UseOwleryScheduler();
+```
+
+Without it the horizontal pager falls back to the handler for its base type and does not scroll. It
+is the only setup the control requires; everything behind it is internal.
 
 ## Quick start
 

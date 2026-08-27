@@ -236,7 +236,7 @@ public partial class SchedulerView
         StopEdgePaging();
         StopEdgeScrolling();
         SetScrollingEnabled(true);
-        ClearDragIndicator();
+        gutter.ClearIndicator();
         HideDraggedAppointment();
         RepopulateAllSlots();
     }
@@ -274,35 +274,20 @@ public partial class SchedulerView
     }
 
     /// <summary>
-    /// One-time platform setup for the two scroll views.
+    /// One-time platform setup for the timeline's vertical scrolling.
     /// </summary>
     /// <remarks>
+    /// The pager needs none of this any more: paging, bouncing and the touch delay all belong to
+    /// <see cref="PagingScrollView"/> now, which is the point of it existing.
+    /// <para>
     /// A UIScrollView holds back touchesBegan while it decides whether a touch is the start of a
     /// scroll. The long press that picks an appointment up needs to know about the press the moment
     /// the finger lands, so that delay is turned off.
+    /// </para>
     /// </remarks>
     private void ConfigurePlatformScrolling()
     {
 #if IOS || MACCATALYST
-        if (pagerScroll.Handler?.PlatformView is UIKit.UIScrollView horizontalPlatformScroll)
-        {
-            horizontalPlatformScroll.DelaysContentTouches = false;
-
-            // Paging makes the platform commit to a week the moment the finger leaves the screen,
-            // using the release velocity. Without it the decision waits for inertia to run out, which
-            // can take a second or more, and the user sees the content drift to a stop and only then
-            // slide again to settle on a week. The scroll view's frame is exactly one viewport and
-            // its content exactly three, so page boundaries already fall on 0 / W / 2W.
-            horizontalPlatformScroll.PagingEnabled = true;
-
-            // Bouncing here would pull the outermost of the three rendered weeks away from the edge
-            // and show empty surface behind it. There is no end of the calendar to bounce against —
-            // the weeks are a ring buffer — so the rubber-banding is reporting something untrue.
-            // It also keeps the scroll offset inside 0..2W, which the snap arithmetic and the
-            // hand-mirrored day headers both assume.
-            horizontalPlatformScroll.Bounces = false;
-        }
-
         if (verticalScroll.Handler?.PlatformView is UIKit.UIScrollView verticalPlatformScroll)
         {
             verticalPlatformScroll.DelaysContentTouches = false;
@@ -315,19 +300,22 @@ public partial class SchedulerView
     }
 
     /// <summary>
-    /// Stops the two scroll views from competing with an armed drag.
+    /// Stops the scroll views from competing with an armed drag.
     /// </summary>
     /// <remarks>
-    /// This is the one place the control reaches past MAUI. <c>IsEnabled = false</c> is not usable:
-    /// it disables interaction for the whole subtree and cancels the very touch that is driving the
-    /// drag. Both platforms expose a way to stop scrolling while still delivering touches.
+    /// The pager answers for itself. What is left is the timeline's vertical scroll, and it is the
+    /// only place the control still reaches past MAUI. <c>IsEnabled = false</c> is not usable: it
+    /// disables interaction for the whole subtree and cancels the very touch that is driving the
+    /// drag. Neither is <c>ScrollOrientation.Neither</c>, tempting as it looks — it maps to
+    /// <c>ScrollEnabled</c> on iOS but on Android leaves <c>OnInterceptTouchEvent</c> unguarded, so
+    /// the ancestor still steals the gesture and then declines to scroll with it. See DESIGN.md
+    /// section 19.
     /// </remarks>
     private void SetScrollingEnabled(bool enabled)
     {
-#if IOS || MACCATALYST
-        if (pagerScroll.Handler?.PlatformView is UIKit.UIScrollView horizontalPlatformScroll)
-            horizontalPlatformScroll.ScrollEnabled = enabled;
+        pagerScroll.IsScrollEnabled = enabled;
 
+#if IOS || MACCATALYST
         if (verticalScroll.Handler?.PlatformView is UIKit.UIScrollView verticalPlatformScroll)
             verticalPlatformScroll.ScrollEnabled = enabled;
 #elif ANDROID
@@ -388,11 +376,7 @@ public partial class SchedulerView
         // Shown in the time gutter rather than over the grid: anywhere near the appointment is under
         // the finger doing the dragging, which is precisely where it cannot be read.
         if (ShowDragTimeIndicator)
-        {
-            gutterDrawable.HighlightMinutes = target.SnappedMinutes;
-            gutterDrawable.HighlightText = dragDropStart.ToString(TimeFormat, CultureInfo.CurrentUICulture);
-            gutterView.Invalidate();
-        }
+            gutter.ShowIndicator(target.SnappedMinutes, dragDropStart.ToString(TimeFormat, CultureInfo.CurrentUICulture));
 
         UpdateEdgePaging(point);
         UpdateEdgeScrolling(point);
@@ -510,13 +494,6 @@ public partial class SchedulerView
         UpdateDragPosition(lastDragPoint);
     }
 
-    private void ClearDragIndicator()
-    {
-        gutterDrawable.HighlightMinutes = null;
-        gutterDrawable.HighlightText = null;
-        gutterView.Invalidate();
-    }
-
     private void StopEdgePaging()
     {
         edgePagingTimer?.Stop();
@@ -563,10 +540,9 @@ public partial class SchedulerView
             // across to the centre, so the change reads as the same motion as a swipe.
             var outgoing = forward ? 0 : geometry.SurfaceWidth - geometry.ViewportWidth;
 
-            await pagerScroll.ScrollToAsync(outgoing, 0, false);
-            await pagerScroll.ScrollToAsync(geometry.ViewportWidth, 0, true);
+            await pagerScroll.ScrollToAsync(outgoing, false);
+            await pagerScroll.ScrollToAsync(geometry.ViewportWidth, true);
 
-            lastScrollX = geometry.ViewportWidth;
         }
         finally
         {
@@ -598,7 +574,7 @@ public partial class SchedulerView
             return;
 
         SetScrollingEnabled(true);
-        ClearDragIndicator();
+        gutter.ClearIndicator();
         HideDraggedAppointment();
 
         if (!committed)

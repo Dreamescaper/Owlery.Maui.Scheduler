@@ -96,44 +96,33 @@ apart: a flick keeps decelerating for anything up to a second or more after the 
 the week only once motion has died means the user sees the content coast to a halt and *then* slide
 again to settle — two animations, with the one that actually chooses the week arriving last.
 
-MAUI's `ScrollView` exposes neither event. It has no paging or snap support, and `Scrolled` fires for
-programmatic scrolling too, so it cannot even be used to tell dragging from deceleration.
+MAUI's `ScrollView` exposes neither event, and has no paging or snap support. The control used to
+approximate one with a 90 ms timer restarted on every `Scrolled` event: when the offset went quiet,
+the page was inferred from it with `round(scrollX / W)`. On iOS that was tolerable because
+`UIScrollView.PagingEnabled` had already committed to a page on release, so the timer only answered
+"has it arrived yet". On Android nothing had committed to anything, so the timer waited out the
+inertia and a flick was followed by a visible pause — the conformance gap NAV-7 recorded.
 
-**On iOS the platform is asked to do it instead.** `ConfigurePlatformScrolling` sets
-`UIScrollView.PagingEnabled`, which commits to a page on release using the release velocity. The
-scroll view's frame is exactly one viewport and its content exactly three, so UIKit's page boundaries
-already coincide with 0 / W / 2W — no other configuration is needed. This also gives the flick
-behaviour a position-based rule cannot: a fast, short flick carries through instead of snapping back.
-
-The 90 ms quiet timer remains, but its job changes. Where the platform pages natively it only answers
-"has it arrived yet", so the rotation can happen — and since the scroll is guaranteed to land exactly
-on a boundary, `round(scrollX / W)` is exact rather than approximate. Where it does not, the timer is
-still what picks the target, with the inertia delay described above.
-
-On settle, the nearest page is computed as `round(scrollX / W)` and:
+**The pager now decides, and says so.** `PagingScrollView` raises `PageSettled` with the page it has
+come to rest on, because only the platform knows the release velocity and where a fling would land.
+Section 19 covers what that took on each platform. What is left here is the response, and it is
+short:
 
 | Landing page | Action |
 |---|---|
-| 1 | correct a partial drag back to `W`; nothing else changes |
-| 2 | animate to `2W`, then rotate forward and jump to `W` |
-| 0 | animate to `0`, then rotate backward and jump to `W` |
+| 1 | nothing — already centred |
+| 2 | rotate forward, recentre on `W` |
+| 0 | rotate backward, recentre on `W` |
 
-Two separate flags guard this:
+`OnPageSettled` is **synchronous**, and that is the point. Rotating moves the appointment views onto
+their new pages while the scroll offset still points at the old one, so anything drawn between the
+two shows a page the user never swiped to — a flash of the neighbouring week, which is exactly what
+Android was reporting. A method that never yields cannot have a frame composited part-way through it,
+and `PagingScrollView.ScrollTo` is deliberately not awaitable for the same reason.
 
-- `snapping` prevents `SnapAsync` re-entering while its own animated scroll is generating `Scrolled`
-  events.
-- `recentring` suppresses *snap scheduling* around the rotation and the instant jump, so the recentre
-  cannot be mistaken for a new gesture.
-
-Neither flag gates the day-header sync. That is deliberate and was learned the hard way — see section
-8.
-
-**Android still waits for inertia.** There is no `PagingEnabled` equivalent on the platform scroll
-view, so the timer picks the target there and the delay described at the top of this section applies.
-Closing that gap means detecting `ACTION_UP` on the platform view, cancelling the fling, and driving
-the settle manually — or moving the horizontal axis off `ScrollView` altogether (section 15).
-
-**Known risk.** The 90 ms threshold is a starting point, not a measured optimum.
+One flag survives: `recentring` suppresses handling around the rotation and the jump, so the recentre
+cannot be mistaken for a new gesture. `snapping` is gone with the timer that needed it. Neither flag
+ever gated the day-header sync — that is deliberate and was learned the hard way, see section 8.
 
 ---
 
@@ -253,15 +242,22 @@ weeks; the drawable simply draws 21 day columns. Week-specific details (weekend 
 highlight, the current-time line) are handled by redrawing on `Invalidate()` when the weeks rotate,
 which is one draw call.
 
+The **hour gutter is not drawn**, though it once was. It is a dozen or so `Label`s, positioned from
+the same `YFromMinutes` the grid lines use so they cannot drift apart. The reasoning above does not
+reach it: fourteen views are not two thousand, and drawing them cost real things — text that would
+not scale with the system font size (the ACC-9 gap), and an obscured-label calculation to keep the
+drag-time chip readable. The chip is opaque and the same height as a label, so it simply covers one.
+
 Tapping empty space does not need cell views either — and in fact **all** input for the surface is
 handled on the `GraphicsView`, including taps on appointments. Appointment views are
 `InputTransparent`, and `HitTestAppointment` resolves a touch point against their known bounds; empty
-space falls through to `ResolveSlot`, which converts the point to a slot, day and snapped time
-arithmetically. Section 11 explains why input is centralised here rather than left to per-appointment
+space falls through to the surface's `SlotAt`, which converts the point to a slot, day and snapped
+time arithmetically. Section 11 explains why input is centralised here rather than left to per-appointment
 gesture recognizers.
 
-`SchedulerGeometry` is a single mutable object shared by the control and both drawables, so the drawn
-background and the positioned views can never disagree about where an hour line sits.
+`SchedulerGeometry` is a single mutable object shared by the control, the drawable and the gutter
+labels, so the drawn background and the positioned views can never disagree about where an hour line
+sits.
 
 ---
 
@@ -362,24 +358,27 @@ fires on touch-*down*, before any movement. So the grid drawable owns all input:
 5. The time the appointment would take is drawn **in the hour gutter**, level with the line it would
    start on. It began as a label floating just above the appointment, which put it under the hand
    doing the dragging — legible in a screenshot, invisible in use. The gutter is the one column
-   guaranteed to be clear of the finger, and drawing it there costs no views: it is one more thing
-   `TimeGutterDrawable` paints, with the hour label it would collide with giving way.
+   guaranteed to be clear of the finger. It is a small opaque chip that simply covers whichever hour
+   label it lands on; being the same height as one, hiding what is underneath made no visible
+   difference and only added arithmetic to get wrong.
 6. `EndInteraction` raises `AppointmentDropped`, or — if the drag never armed and the finger did not
    travel — is what raises the tap events instead.
 
-**This is the one place the control reaches past MAUI**, in `SetScrollingEnabled` and
-`ConfigurePlatformScrolling`:
+**Outside `Handlers/`, this is the only place the control reaches past MAUI** — in
+`SetScrollingEnabled` and `ConfigurePlatformScrolling`, and only for the timeline's *vertical* scroll.
+The pager answers for itself now (section 19), so the settings that used to be listed here for it —
+paging, bouncing, the touch delay — belong to `PagingScrollView` and are described there.
 
 - Freezing scroll cannot use `IsEnabled = false`: that disables interaction for the whole subtree and
-  cancels the very touch driving the drag. iOS uses `UIScrollView.ScrollEnabled`; Android uses
-  `RequestDisallowInterceptTouchEvent`.
+  cancels the very touch driving the drag. Nor can `ScrollOrientation.Neither`, tempting as it looks:
+  it maps to `ScrollEnabled` on iOS, but on Android only `OnTouchEvent` is guarded and
+  `OnInterceptTouchEvent` is not — so the ancestor still steals the gesture and then declines to
+  scroll with it, cancelling the drag and doing nothing in its place. iOS uses
+  `UIScrollView.ScrollEnabled`; Android uses `RequestDisallowInterceptTouchEvent`.
 - `UIScrollView.DelaysContentTouches` is turned off, because it otherwise withholds touch-down while
   deciding whether the touch is a scroll — exactly the signal the long press depends on.
-- `UIScrollView.Bounces` is turned off on both axes. Horizontally there is no end of the calendar to
-  bounce against — the weeks are a ring buffer — so rubber-banding pulls the outermost rendered week
-  off the edge and shows empty surface behind it, reporting something untrue. Vertically it exposes
-  blank space beyond the first and last hour. Suppressing it also keeps the scroll offset inside
-  `0..2W`, which the snap arithmetic and the hand-mirrored day headers both assume.
+- `UIScrollView.Bounces` is turned off. It exposes blank space beyond the first and last hour, which
+  reads as the calendar coming apart rather than as an affordance.
 
 ### Crossing a week boundary
 
@@ -727,6 +726,70 @@ starting together keep the order the host supplied. That is load-bearing rather 
 `PopulateSlot` reuses views positionally, so an unchanged reload has to lay out identically or every
 chip on screen repaints.
 
+## 19. The pager is our own scroll view
+
+`PagingScrollView` replaces MAUI's `ScrollView` on the horizontal axis. It exists because MAUI's
+cannot do two things this control needs, and cannot be made to.
+
+**It cannot page.** Paging is a platform setting MAUI does not surface, so a week only ever snapped
+on iOS, where `UIScrollView.PagingEnabled` was reached for through `Handler.PlatformView`. Android
+had nothing, which is what NAV-7 was about.
+
+**Its offset arrives late.** `ScrollToAsync` goes through the handler and lands on a later pass. That
+is the gap a frame was drawn in, between rotating the ring buffer and recentring on it (section 3).
+
+Subclassing was not an option on Android. The platform view there is a
+`MauiScrollView : NestedScrollView` that grows an internal `MauiHorizontalScrollView` child when a
+horizontal orientation is asked for, so paging would have had to be imposed across two nested view
+classes participating in nested scrolling, neither of them ours.
+
+### What each half does
+
+The cross-platform half owns the offset, the request plumbing and `PageSettled`. `ScrollTo` is
+deliberately a method and deliberately not awaitable: the caller needs the offset *changed* on
+return, not merely requested.
+
+On **iOS** the handler is thin — a `UIScrollView` with `PagingEnabled`, `Bounces = false` and
+`DelaysContentTouches = false`, all of which the scheduler used to set on it from the outside.
+
+On **Android** the snap is written by hand, following React Native's `ReactHorizontalScrollView`: a
+fling is never allowed to run its course, a throwaway `OverScroller` predicts where it *would* have
+landed, and that point is rounded to the nearest page. Rounding the predicted landing rather than the
+offset at release is what makes a short flick move a page while a slow drag does not.
+
+The snap is animated by a scroller this control owns, **not** `SmoothScrollTo`. That drives the
+scroller inside `HorizontalScrollView`, which cannot be reached to stop — so the recentre that
+follows a settle was overwritten on the scroller's next frame, and one swipe compounded into
+several. Owning it also makes "has it arrived" exact instead of polled for.
+
+### Three things that were only found by running it
+
+**Plain properties do not reach a handler.** `PageWidth` and `IsScrollEnabled` are not bindable —
+nothing binds to them — so the mapper ran once at connect time, while `PageWidth` was still 0, and
+never again. With no page width, every fling snapped to page 0 and swiping went *backwards*
+regardless of direction. Both setters now call `Handler.UpdateValue`.
+
+**An offset set before the first layout is lost.** UIKit accepts it — reading it straight back
+reports exactly what was asked for — then resets it to zero once the view has a frame, so the
+calendar opened one page early. Detecting that by reading the offset back therefore cannot work; the
+absence of a frame is what identifies it. Android loses it the same way against a scroll range that
+is still zero. Both handlers hold the request and re-apply it on layout.
+
+**Android draws scroll content outside the scroll view.** MAUI leaves `ClipChildren` off on its
+Android layout views so shadows can spill, which means the pager is drawn without being clipped to
+its own bounds — and the pager's content is three pages wide with an opaque background, so the page
+parked left of the viewport painted straight over the hour gutter beside it. Neither asking the
+scroll view to clip nor clipping the grid around it puts that back. The gutter is drawn last with an
+opaque background instead, which is what fixed chrome over scrolling content should have been doing
+anyway.
+
+### Registration
+
+MAUI has no way for a library to register a handler on its own, so a host must call
+`builder.UseOwleryScheduler()`. Without it the pager falls back to the handler for its base type and
+simply does not scroll. That is the one line this control costs a host, and the reason it is worth
+knowing about: everything else here is internal.
+
 ## 15. Verification status
 
 `Owlery.Maui.Scheduler.Tests` covers the platform-independent behaviour headlessly on `net10.0`:
@@ -752,9 +815,21 @@ is not available on iOS", and input is deliberately handled through `GraphicsVie
 than a recognizer. The *failure* of the previous implementation was captured through DevFlow before it
 was replaced — that trace is what identified the race described in section 11.
 
-Android has not been exercised at all; `SetScrollingEnabled` takes a different branch there
-(`RequestDisallowInterceptTouchEvent`) and is the part most likely to need adjustment.
+Android has now been exercised, on a `Medium_Phone` emulator through DevFlow: the week and month
+surfaces render, the gutter labels correctly, and paging moves exactly one page per fling in both
+directions and stays exact over repeated swipes. Three defects were found doing it, all recorded in
+section 19; none of them was reachable from the headless suite, and two of them looked like correct
+code until the platform disagreed.
+
+Still unverified there: drag-and-drop, which is where `SetScrollingEnabled` takes its
+`RequestDisallowInterceptTouchEvent` branch and remains the part most likely to need adjustment, and
+whether the neighbouring-page flash is gone — the window it happened in is closed by construction,
+but nobody has watched for it.
 
 The animated slide when paging mid-drag is asserted in tests only as a sequence of scroll requests —
 the test shim applies them instantly. That it *looks* right, and that a programmatic scroll still runs
 while `UIScrollView.ScrollEnabled` is false, both need a device.
+
+Nothing about the platform handlers is covered headlessly: with no handler registered, `PagingScrollView`
+holds whatever offset it was last told and raises `PageSettled` when a test says so, which is exactly
+what the suite wants and exactly what cannot catch a fling prediction or a clipping quirk.

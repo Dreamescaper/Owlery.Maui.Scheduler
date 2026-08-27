@@ -38,12 +38,12 @@ internal sealed class SchedulerHarness
     /// <summary>Every scroll the control asked the pager for, in order.</summary>
     public List<(double ScrollX, bool Animated)> PagerScrolls { get; } = [];
 
-    private readonly ScrollView pagerScroll;
+    private readonly PagingScrollView pagerScroll;
     private readonly ScrollView timelineScroll;
     private readonly List<Action> pendingScrollCompletions = [];
     private readonly IGraphicsView surfaceView;
-    private readonly TimeGutterDrawable gutterDrawable;
     private readonly Layout surface;
+    private readonly Border dragIndicator;
 
     private readonly int visibleDays;
     private readonly SchedulerViewMode viewMode;
@@ -82,24 +82,23 @@ internal sealed class SchedulerHarness
         foreach (var scrollView in Descendants(Scheduler).OfType<ScrollView>())
             ShimScrolling(scrollView);
 
+        foreach (var pager in Descendants(Scheduler).OfType<PagingScrollView>())
+            ShimPaging(pager);
+
         // Laying the control out is what gives it a viewport width and builds the three weeks.
         ((IView)Scheduler).Measure(ViewWidth, ViewHeight);
         ((IView)Scheduler).Arrange(new Rect(0, 0, ViewWidth, ViewHeight));
 
-        // The horizontal pager is the inner of the two scroll views; the grid is the only
-        // GraphicsView inside it.
-        pagerScroll = Descendants(Scheduler).OfType<ScrollView>()
-            .First(scrollView => scrollView.Orientation == ScrollOrientation.Horizontal);
+        // The grid is the only GraphicsView inside the pager.
+        pagerScroll = Descendants(Scheduler).OfType<PagingScrollView>().First();
         timelineScroll = Descendants(Scheduler).OfType<ScrollView>()
             .First(scrollView => scrollView.Orientation == ScrollOrientation.Vertical);
         surface = (Layout)pagerScroll.Content;
         surfaceView = Descendants(surface).OfType<GraphicsView>().First();
 
-        gutterDrawable = Descendants(Scheduler)
-            .OfType<GraphicsView>()
-            .Select(view => view.Drawable)
-            .OfType<TimeGutterDrawable>()
-            .First();
+        dragIndicator = Descendants(Scheduler)
+            .OfType<Border>()
+            .First(border => border.AutomationId == TimeGutter.IndicatorAutomationId);
     }
 
     /// <summary>The appointment views currently showing, in the order the surface holds them.</summary>
@@ -174,11 +173,36 @@ internal sealed class SchedulerHarness
     public Rect DraggedAppointmentBounds =>
         DraggedAppointment is null ? Rect.Zero : AbsoluteLayout.GetLayoutBounds(DraggedAppointment);
 
-    /// <summary>The time shown in the gutter while an appointment is being dragged.</summary>
-    public string? DragTimeIndicator => gutterDrawable.HighlightText;
+    /// <summary>The drag-time chip itself, for tests that care where it sits rather than what it says.</summary>
+    public View DragIndicatorView => dragIndicator;
 
-    /// <summary>Minute of day the gutter indicator points at.</summary>
-    public double? DragTimeIndicatorMinutes => gutterDrawable.HighlightMinutes;
+    /// <summary>The time shown in the gutter while an appointment is being dragged.</summary>
+    public string? DragTimeIndicator =>
+        dragIndicator.IsVisible ? ((Label)dragIndicator.Content!).Text : null;
+
+    /// <summary>Minute of day the gutter indicator points at, read back from where it was placed.</summary>
+    public double? DragTimeIndicatorMinutes
+    {
+        get
+        {
+            if (!dragIndicator.IsVisible)
+                return null;
+
+            var bounds = AbsoluteLayout.GetLayoutBounds(dragIndicator);
+            var centre = bounds.Y + bounds.Height / 2;
+
+            return centre / Scheduler.HourHeight * 60 + Scheduler.StartHour * 60;
+        }
+    }
+
+    /// <summary>The hour labels down the gutter, top to bottom.</summary>
+    public IReadOnlyList<Label> HourLabels =>
+    [
+        .. Descendants(Scheduler)
+            .OfType<Label>()
+            .Where(label => label.HorizontalTextAlignment == TextAlignment.End && label.Parent is AbsoluteLayout)
+            .OrderBy(label => AbsoluteLayout.GetLayoutBounds(label).Y)
+    ];
 
     public Rect BoundsOf(View view)
     {
@@ -249,12 +273,19 @@ internal sealed class SchedulerHarness
         surfaceView.EndInteraction([new PointF((float)toX, (float)toY)], isInsideBounds: true);
     }
 
-    /// <summary>Scrolls the pager to a page and lets the snap settle, as a completed swipe would.</summary>
+    /// <summary>Scrolls the pager to a page and reports it settled, as a completed swipe would.</summary>
+    /// <remarks>
+    /// The platform picks the page and says so; there is no longer a timer inferring it from the
+    /// offset going quiet, so a test says which page the swipe landed on rather than eliding it.
+    /// </remarks>
     public void SwipeToPage(int page)
     {
-        pagerScroll.SetScrolledPosition(page * PageStride, 0);
-        FireSnapTimer();
+        pagerScroll.SetScrolledPosition(page * PageStride);
+        pagerScroll.SendPageSettled();
     }
+
+    /// <summary>Reports the pager settled wherever it currently sits.</summary>
+    public void SettlePager() => pagerScroll.SendPageSettled();
 
     /// <summary>Simulates an ancestor scroll view claiming the gesture part-way through.</summary>
     public void CancelInteraction() => surfaceView.CancelInteraction();
@@ -273,9 +304,7 @@ internal sealed class SchedulerHarness
     }
 
     /// <summary>Moves the pager, as a frame of the slide edge paging performs would.</summary>
-    public void ScrollPagerTo(double x) => pagerScroll.SetScrolledPosition(x, 0);
-
-    public void FireSnapTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(90));
+    public void ScrollPagerTo(double x) => pagerScroll.SetScrolledPosition(x);
 
     public void FireLongPressTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(350));
 
@@ -285,21 +314,31 @@ internal sealed class SchedulerHarness
     /// </summary>
     private void ShimScrolling(ScrollView scrollView)
     {
-        var horizontal = scrollView.Orientation == ScrollOrientation.Horizontal;
-
         scrollView.ScrollToRequested += (_, e) =>
         {
-            if (horizontal)
-                PagerScrolls.Add((e.ScrollX, e.ShouldAnimate));
-
             scrollView.SetScrolledPosition(e.ScrollX, e.ScrollY);
+            scrollView.SendScrollFinished();
+        };
+    }
+
+    /// <summary>
+    /// Stands in for the pager's platform handler: applies the requested offset and reports the
+    /// scroll as finished, so awaited scrolls complete.
+    /// </summary>
+    private void ShimPaging(PagingScrollView pager)
+    {
+        pager.ScrollToRequested += (_, e) =>
+        {
+            PagerScrolls.Add((e.ScrollX, e.Animated));
+
+            pager.SetScrolledPosition(e.ScrollX);
 
             // Deferring the completion leaves the awaited scroll in flight, which is the only way to
             // observe the control mid-slide: the shim is otherwise instantaneous.
-            if (horizontal && DeferPagerScrolls)
-                pendingScrollCompletions.Add(scrollView.SendScrollFinished);
+            if (DeferPagerScrolls)
+                pendingScrollCompletions.Add(pager.SendScrollFinished);
             else
-                scrollView.SendScrollFinished();
+                pager.SendScrollFinished();
         };
     }
 

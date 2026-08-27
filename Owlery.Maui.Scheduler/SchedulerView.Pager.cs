@@ -5,7 +5,7 @@ namespace Owlery.Maui.Scheduler;
 /// <summary>Infinite horizontal paging: snapping, rotating the ring buffer, recentring.</summary>
 public partial class SchedulerView
 {
-    private void OnPagerScrolled(object? sender, ScrolledEventArgs e)
+    private void OnPagerScrolled(object? sender, PagingScrolledEventArgs e)
     {
         // The header sits outside the pager, so it is the one thing here that does not move by itself
         // and has to be mirrored by hand. This runs unconditionally, including while recentring:
@@ -13,33 +13,27 @@ public partial class SchedulerView
         // the strip stranded at a stale offset — off-screen, reading as a missing header — until some
         // later rebuild happened to reset it.
         headerSurface.TranslationX = -e.ScrollX;
-
-        // A drag drives the pager itself, so nothing here should be mistaken for a swipe.
-        if (recentring || dragArmed)
-            return;
-
-        lastScrollX = e.ScrollX;
-
-        // Where the platform pages natively this only asks "has it arrived yet", because the target
-        // was already chosen on finger release. Elsewhere it is also what picks the target, which is
-        // worse: inertia has to run out first. Every new Scrolled event restarts the timer.
-        snapTimer?.Stop();
-        snapTimer ??= CreateSnapTimer();
-        snapTimer.Start();
     }
 
-    private IDispatcherTimer CreateSnapTimer()
+    /// <summary>
+    /// Rotates the ring buffer onto the page the pager has landed on, and recentres on it.
+    /// </summary>
+    /// <remarks>
+    /// The pager decides which page that is, because only the platform knows the release velocity.
+    /// What used to be here instead — a timer that waited for the offset to go quiet and then inferred
+    /// the page from it — could not do better than wait out the inertia, which is why a flick on
+    /// Android was followed by a visible pause before the week settled.
+    /// <para>
+    /// The rotation and the recentre have to reach the screen together. They are two writes to two
+    /// different things: rotating moves the appointment views onto their new pages, while the offset
+    /// still points at the old one, so anything drawn in between shows a page the user never swiped
+    /// to. That is why the recentre is <see cref="PagingScrollView.ScrollTo"/> rather than an awaited
+    /// request — this method never yields, so no frame can be composited part-way through it.
+    /// </para>
+    /// </remarks>
+    private void OnPageSettled(object? sender, PagingPageSettledEventArgs e)
     {
-        var timer = Dispatcher.CreateTimer();
-        timer.Interval = TimeSpan.FromMilliseconds(SnapDetectionDelayMs);
-        timer.IsRepeating = false;
-        timer.Tick += (_, _) => _ = SnapAsync();
-        return timer;
-    }
-
-    private async Task SnapAsync()
-    {
-        if (snapping || recentring || ActiveGeometry.ViewportWidth <= 0)
+        if (recentring || dragArmed || ActiveGeometry.ViewportWidth <= 0)
             return;
 
         // An accepted drop waits for the host to feed the change back before rejoining a week. If that
@@ -49,41 +43,25 @@ public partial class SchedulerView
         if (floatingAppointment is not null)
             RepopulateAllSlots();
 
-        var page = (int)Math.Round(lastScrollX / ActiveGeometry.ViewportWidth);
-        page = Math.Clamp(page, 0, SchedulerGeometry.SlotCount - 1);
+        var page = Math.Clamp(e.Page, 0, SchedulerGeometry.SlotCount - 1);
 
         if (page == 1)
-        {
-            // Already centred; only correct a partial drag that did not change week.
-            if (Math.Abs(lastScrollX - ActiveGeometry.ViewportWidth) > 0.5)
-                await pagerScroll.ScrollToAsync(ActiveGeometry.ViewportWidth, 0, true);
             return;
-        }
 
-        snapping = true;
+        recentring = true;
         try
         {
-            // Let the page the user chose settle under the finger first. This one is animated and
-            // visible, so Scrolled must keep running to drag the day headers along with it.
-            await pagerScroll.ScrollToAsync(page * ActiveGeometry.ViewportWidth, 0, true);
-
-            // Now rotate and jump back to the middle. Scroll handling is suppressed for this part so
-            // nothing repaints the header between the rotation and the instant recentre.
-            recentring = true;
-
             if (page == SchedulerGeometry.SlotCount - 1)
                 Advance();
             else
                 Retreat();
 
             headerSurface.TranslationX = -ActiveGeometry.ViewportWidth;
-            await pagerScroll.ScrollToAsync(ActiveGeometry.ViewportWidth, 0, false);
-            lastScrollX = ActiveGeometry.ViewportWidth;
+            pagerScroll.ScrollTo(ActiveGeometry.ViewportWidth);
         }
         finally
         {
             recentring = false;
-            snapping = false;
         }
 
         SyncSlotStarts();
@@ -120,7 +98,8 @@ public partial class SchedulerView
         PopulateSlot(recycled, 0);
     }
 
-    private async Task RecentreAsync(bool animated)
+    /// <summary>Puts the pager back on the centre page without anything being drawn in between.</summary>
+    private void Recentre()
     {
         if (ActiveGeometry.ViewportWidth <= 0)
             return;
@@ -129,8 +108,7 @@ public partial class SchedulerView
         try
         {
             headerSurface.TranslationX = -ActiveGeometry.ViewportWidth;
-            await pagerScroll.ScrollToAsync(ActiveGeometry.ViewportWidth, 0, animated);
-            lastScrollX = ActiveGeometry.ViewportWidth;
+            pagerScroll.ScrollTo(ActiveGeometry.ViewportWidth);
         }
         finally
         {
