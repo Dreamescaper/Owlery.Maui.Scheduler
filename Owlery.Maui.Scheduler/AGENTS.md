@@ -139,6 +139,24 @@ dotnet build Owlery.Maui.Scheduler/Owlery.Maui.Scheduler.csproj -f net10.0-andro
   same reason.
 - `net10.0` contains no platform code, which is what lets the tests below run without a device.
 
+## Sample App
+
+`Owlery.Maui.Scheduler.Sample` is a bare MAUI app — no Blazor, no XAML — that hosts nothing but this
+control, a generator, and a drawer of knobs bound to the public properties. It is the shortest route to
+a device for anything the headless suite cannot reach: gesture arbitration, platform paging, drag-and-
+drop, and how a change reads at a real phone size.
+
+```sh
+dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f net10.0-ios -t:Run
+dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f net10.0-android -t:Run
+```
+
+- Reach for it before `Owlery.Mobile`. It builds in a fraction of the time, needs no signing identity,
+  no Firebase configuration and no API, and its appointment count knob goes to five thousand.
+- It consumes the same public surface a host does, so it also catches a property that became awkward to
+  set from outside. Add a knob when you add a property.
+- Its templates are the reference for the pooling rule — see its `README.md`.
+
 ## Tests
 
 `Owlery.Maui.Scheduler.Tests` runs headlessly on `net10.0` — no simulator, no platform.

@@ -1,0 +1,55 @@
+# Scheduler Playground
+
+A bare .NET MAUI app for exercising [`Owlery.Maui.Scheduler`](../Owlery.Maui.Scheduler/API.md) on iOS
+and Android without going anywhere near the real app.
+
+No Blazor, no XAML, no `Owlery.*` references beyond the control itself. The whole app is the control,
+some generated data, and a drawer of knobs — which makes it the fastest way to see what a property
+actually does, and the only place drag-and-drop can be tried against a few thousand appointments.
+
+## Running it
+
+```sh
+dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f net10.0-ios -t:Run
+```
+
+```sh
+dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f net10.0-android -t:Run
+```
+
+## What is on screen
+
+| Chrome | Does |
+|---|---|
+| `‹` `Today` `›` | Writes `DisplayDate` — by `VisibleDays`, or by a month in `Month` mode. |
+| `−` *count* `+` | Steps the number of generated appointments through 0, 10, 25, 50, 100, 250, 500, 1 000, 2 500, 5 000. |
+| **Knobs** | Opens the drawer. Every row writes straight to the property it is named after. |
+| The bottom strip | The last three events the control raised, with what it reported. |
+
+The drawer also carries the two knobs that are not control properties — *Cancel drags of locked items*
+and *Cancel every drop*. Those are host policy, answered in `AppointmentDragStarting` and
+`AppointmentDropped`, and they are there because the cancellable events are the part of the API that is
+hardest to picture from the documentation.
+
+## The data
+
+`SampleDataGenerator` spreads the chosen number of appointments over 84 days centred on today, at
+teaching hours, so overlaps happen on their own. It is deterministic: the same count gives the same
+calendar until **Regenerate** picks a new seed.
+
+Every tenth appointment is marked locked and drawn with a padlock, which is what *Cancel drags of
+locked items* refuses to pick up.
+
+Swiping outside the 84-day window shows empty pages. That is the generator's edge, not the control's —
+a real host loads what `VisibleDatesChanged` asks for.
+
+## Worth reading if you are writing a template
+
+`AppointmentBox` and `AppointmentChip` are written the way the control requires: the whole subtree is
+built in the constructor, and `OnBindingContextChanged` reads whatever appointment is bound now. Views
+made from `AppointmentTemplate` are pooled and rebound, never rebuilt, so a template that captures its
+appointment keeps drawing the first one it ever saw.
+
+`AppointmentBox` also shows the other half of that rule — it subscribes to `SizeChanged` **once**, in
+the constructor, to drop the time line and shrink the title in a box only twelve units tall. Subscribing
+per binding would leave one live handler per appointment the view had ever shown.

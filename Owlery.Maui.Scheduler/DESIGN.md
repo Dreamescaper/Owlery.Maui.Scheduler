@@ -842,8 +842,10 @@ control, chip placement, month paging across a year boundary, the 42-day visible
 day cell selection, that a held chip is not picked up, and that switching modes leaves nothing of the
 old one behind.
 
-Nothing month-shaped has been seen on a device. The colours, the chip and row proportions, and how the
-grid reads at a real phone size are all unverified, and the host does not yet offer the mode.
+The month surface has now been seen on an Android emulator through `Owlery.Maui.Scheduler.Sample`: the
+six-row grid, the chips, the muted leading and trailing days and the day-cell selection all read
+correctly at phone size, and switching modes and back leaves nothing behind. It has not been seen on
+iOS, and the host does not yet offer the mode.
 
 Rendering, paging, week rotation, overlap layout, the current-time line and appointment semantics have
 also been checked on the iOS simulator through DevFlow.
@@ -860,10 +862,15 @@ directions and stays exact over repeated swipes. Three defects were found doing 
 section 19; none of them was reachable from the headless suite, and two of them looked like correct
 code until the platform disagreed.
 
-Still unverified there: drag-and-drop, which is where `SetScrollingEnabled` takes its
-`RequestDisallowInterceptTouchEvent` branch and remains the part most likely to need adjustment, and
-whether the neighbouring-page flash is gone — the window it happened in is closed by construction,
-but nobody has watched for it.
+Drag-and-drop is confirmed on Android too, on the same emulator through the sample app, by injecting a
+press, a dwell and a sequence of moves: the long press lifts the appointment, the faded copy stays
+behind, the gutter shows the time under the finger, and the drop is reported at the snapped start and
+settles where the host re-emitted it. A locked appointment is refused, so the cancel path is exercised
+as well. This is where `SetScrollingEnabled` takes its `RequestDisallowInterceptTouchEvent` branch.
+
+Still unverified there: paging mid-drag against a leading or trailing edge, and whether the
+neighbouring-page flash is gone — the window it happened in is closed by construction, but nobody has
+watched for it.
 
 The animated slide when paging mid-drag is asserted in tests only as a sequence of scroll requests —
 the test shim applies them instantly. That it *looks* right, and that a programmatic scroll still runs
