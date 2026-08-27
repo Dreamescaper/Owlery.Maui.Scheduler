@@ -123,6 +123,21 @@ internal sealed class SchedulerHarness
         })
     ];
 
+    /// <summary>The column labels of each rendered page's header, left to right.</summary>
+    public IReadOnlyList<IReadOnlyList<Label>> PageHeaders =>
+    [
+        .. Descendants(Scheduler)
+            .OfType<Grid>()
+            .Where(grid => grid.Parent is AbsoluteLayout && grid.ColumnDefinitions.Count > 0)
+            .OrderBy(grid => grid.TranslationX)
+            .Select(grid => (IReadOnlyList<Label>)
+            [
+                .. Descendants(grid)
+                    .OfType<Label>()
+                    .Where(label => label.FontSize == 11)
+            ])
+    ];
+
     public double MonthCellWidth => ViewWidth / 7;
 
     public double MonthCellHeight => (ViewHeight - Scheduler.HeaderHeight) / 6;

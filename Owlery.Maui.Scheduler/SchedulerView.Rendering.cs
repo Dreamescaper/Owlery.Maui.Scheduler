@@ -17,17 +17,32 @@ public partial class SchedulerView
     }
 
     /// <summary>Rebuilds a page's day headers, which is what a change of day count needs.</summary>
+    /// <summary>How many columns a page's header has, which is not the same question in each mode.</summary>
+    private int HeaderColumns =>
+        ViewMode is SchedulerViewMode.Month ? MonthGeometry.Columns : geometry.VisibleDays;
+
+    /// <summary>
+    /// Builds one page's header.
+    /// </summary>
+    /// <remarks>
+    /// A month gets one of these per page too, rather than a single fixed row. The columns do mean
+    /// the same thing on every month — every page starts on <see cref="FirstDayOfWeek"/> — but a row
+    /// that stays put while the pages slide under it reads as though the calendar has come apart from
+    /// its own heading. Moving with the page costs three more label rows and looks like one object.
+    /// </remarks>
     private void BuildSlotHeader(PageSlot slot)
     {
+        var columns = HeaderColumns;
+
         slot.Header.Clear();
         slot.Header.ColumnDefinitions =
-            [.. Enumerable.Range(0, geometry.VisibleDays).Select(_ => new ColumnDefinition(GridLength.Star))];
+            [.. Enumerable.Range(0, columns).Select(_ => new ColumnDefinition(GridLength.Star))];
 
         var header = slot.Header;
-        var nameLabels = new Label[geometry.VisibleDays];
-        var numberLabels = new Label[geometry.VisibleDays];
+        var nameLabels = new Label[columns];
+        var numberLabels = ViewMode is SchedulerViewMode.Month ? [] : new Label[columns];
 
-        for (var day = 0; day < geometry.VisibleDays; day++)
+        for (var day = 0; day < columns; day++)
         {
             var stack = new VerticalStackLayout { Spacing = 2, Padding = new Thickness(0, 6) };
 
@@ -37,41 +52,27 @@ public partial class SchedulerView
                 HorizontalTextAlignment = TextAlignment.Center,
                 TextColor = Color.FromArgb("#6E6E6E")
             };
-            numberLabels[day] = new Label
-            {
-                FontSize = 16,
-                HorizontalTextAlignment = TextAlignment.Center
-            };
 
             stack.Add(nameLabels[day]);
-            stack.Add(numberLabels[day]);
+
+            // A month names its columns and stops there; the day numbers belong in the cells, where
+            // they are painted with the grid.
+            if (numberLabels.Length > 0)
+            {
+                numberLabels[day] = new Label
+                {
+                    FontSize = 16,
+                    HorizontalTextAlignment = TextAlignment.Center
+                };
+
+                stack.Add(numberLabels[day]);
+            }
+
             header.Add(stack, day);
         }
 
         slot.DayNameLabels = nameLabels;
         slot.DayNumberLabels = numberLabels;
-    }
-
-    /// <summary>
-    /// Writes the seven weekday names above a month.
-    /// </summary>
-    /// <remarks>
-    /// Unlike the timeline's day headers there is one row rather than one per page, and it never
-    /// moves: every month page starts on <see cref="FirstDayOfWeek"/>, so the columns mean the same
-    /// thing whichever month is on screen.
-    /// </remarks>
-    private void UpdateMonthHeader()
-    {
-        var culture = CultureInfo.CurrentUICulture;
-
-        for (var column = 0; column < monthHeaderLabels.Length; column++)
-        {
-            var day = (DayOfWeek)(((int)FirstDayOfWeek + column) % 7);
-
-            monthHeaderLabels[column].Text = culture.DateTimeFormat
-                .GetAbbreviatedDayName(day)
-                .ToUpper(culture);
-        }
     }
 
     private void RebuildAll(DateOnly centrePage)
@@ -239,6 +240,22 @@ public partial class SchedulerView
     private void UpdateSlotHeader(PageSlot slot, int slotIndex)
     {
         var culture = CultureInfo.CurrentUICulture;
+
+        if (ViewMode is SchedulerViewMode.Month)
+        {
+            for (var column = 0; column < slot.DayNameLabels.Length; column++)
+            {
+                var day = (DayOfWeek)(((int)FirstDayOfWeek + column) % 7);
+
+                slot.DayNameLabels[column].Text = culture.DateTimeFormat
+                    .GetAbbreviatedDayName(day)
+                    .ToUpper(culture);
+            }
+
+            slot.Header.TranslationX = slotIndex * ActiveGeometry.PageSpan + ActiveGeometry.AnimationOffsetX;
+            return;
+        }
+
         var today = DateOnly.FromDateTime(geometry.Now);
 
         for (var day = 0; day < slot.DayNameLabels.Length; day++)

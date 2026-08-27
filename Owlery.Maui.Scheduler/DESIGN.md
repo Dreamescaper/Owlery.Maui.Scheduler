@@ -433,13 +433,18 @@ makes the conversion self-correcting: a given finger position resolves to the sa
 wherever the pager happens to be mid-slide, so a finger that *does* move during the animation is still
 tracked correctly.
 
-One thing the overlay does not solve is *when* the drop target may be resolved. The positioning maths
-assumes the pager is at rest on the centre slot, and a touch point arrives in surface coordinates that
-include the scroll offset — so resolving a column while the slide is in flight picks a column out of a
-week that is only half on screen, and the appointment jumps a whole page sideways. The target is
-therefore held for the duration of the slide and recomputed from the last touch point once the pager
-settles. The recompute has to happen *after* the in-flight flag is cleared, or the guard swallows the
-very update that applies the new week.
+One thing the overlay does not solve is *when* the drop **target** may be resolved. Resolving a column
+assumes the pager is at rest on the centre slot, so doing it while the slide is in flight picks a
+column out of a week that is only half on screen, and the appointment jumps a whole page sideways. The
+target is therefore held for the duration of the slide and recomputed from the last touch point once
+the pager settles. The recompute has to happen *after* the in-flight flag is cleared, or the guard
+swallows the very update that applies the new week.
+
+The **follower** is not held with it, though it was to begin with. It has no such dependency — the
+finger's position on screen is the touch point less the live scroll offsets, which holds whatever the
+pager is doing — and freezing it meant the appointment sat still for the length of the slide while the
+calendar moved underneath, which looks like the drag has been dropped. So the two are separated: the
+view keeps tracking the finger throughout, and only the target and its gutter label wait.
 
 Because only one appointment can be dragged at a time, the overlay keeps a single view built from
 `AppointmentTemplate` and rebinds it, rather than renting from the pool — the pool's views all belong
@@ -693,9 +698,13 @@ row takes its place, and `gridView.Drawable` swaps. Reparenting the pager betwee
 the alternative and it buys nothing — a month's content is exactly the viewport height, so the
 vertical `ScrollView` it already sits in simply has nothing to scroll.
 
-The weekday row is one row rather than one per page, and never moves. Every month page starts on
-`FirstDayOfWeek`, so the columns mean the same thing whichever month is showing — which also means
-none of the header-mirroring machinery of section 8 applies here.
+The weekday row is built per page, through the same three-slot header strip the timeline uses. The
+columns *do* mean the same thing on every month — every page starts on `FirstDayOfWeek` — so a single
+fixed row would have been correct and cheaper. It also looked wrong: a heading that stays put while
+the pages slide under it reads as though the calendar has come apart from it. Three label rows is a
+small price, and it means the header-mirroring of section 8 applies unchanged in both modes.
+
+The cells carry the day numbers, so a month header names its columns and stops there.
 
 Day numbers are painted, not labelled. There are 42 to a page and three pages rendered at all times,
 so labels would mean 126 views that do nothing but show a number. Chips stay as views because they
@@ -762,7 +771,7 @@ scroller inside `HorizontalScrollView`, which cannot be reached to stop — so t
 follows a settle was overwritten on the scroller's next frame, and one swipe compounded into
 several. Owning it also makes "has it arrived" exact instead of polled for.
 
-### Four things that were only found by running it
+### Five things that were only found by running it
 
 **Plain properties do not reach a handler.** `PageWidth` and `IsScrollEnabled` are not bindable —
 nothing binds to them — so the mapper ran once at connect time, while `PageWidth` was still 0, and
@@ -783,6 +792,13 @@ set after the first fling, and every slow release stopped snapping: the pager ju
 finger left it, between two pages. Fast flings kept working throughout, because `Fling` snaps without
 consulting it — which is what made the failure look like it depended on velocity. The flag is now
 scoped to a single release rather than to a gesture.
+
+**An animated scroll on Android completes nothing by itself.** iOS reports a programmatic animation
+finishing through `scrollViewDidEndScrollingAnimation`; Android has no counterpart, so an awaited
+`ScrollToAsync(..., animated: true)` never returned. Edge-paging mid-drag clears its "a slide is in
+flight" flag only once that await comes back, so the flag stayed set and the drop target was never
+resolved again — the appointment followed the finger and refused to snap, for the rest of the drag.
+The handler now completes any pending request when its own animator stops.
 
 **Android draws scroll content outside the scroll view.** MAUI leaves `ClipChildren` off on its
 Android layout views so shadows can spill, which means the pager is drawn without being clipped to

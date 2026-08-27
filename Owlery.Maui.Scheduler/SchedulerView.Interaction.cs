@@ -7,8 +7,20 @@ namespace Owlery.Maui.Scheduler;
 /// <summary>Taps, cell selection, and drag-and-drop.</summary>
 public partial class SchedulerView
 {
-    private void UpdateSelectionView() =>
-        cellSelection.Update(SelectedSlot, slots, ActiveGeometry, pageSurface, TimeFormat);
+    /// <summary>
+    /// Places the marker on the selected cell, where there is one to mark.
+    /// </summary>
+    /// <remarks>
+    /// A month does not show it. The affordance means "tap again to create something here", and a
+    /// month cell has no time to create anything at — tapping one opens that day instead. Selection
+    /// itself still happens, so <see cref="SelectedSlot"/> and <c>CellTapped</c> report as usual.
+    /// </remarks>
+    private void UpdateSelectionView() => cellSelection.Update(
+        ViewMode is SchedulerViewMode.Month ? null : SelectedSlot,
+        slots,
+        ActiveGeometry,
+        pageSurface,
+        TimeFormat);
 
     // All input for the scrolling surface is handled here, on the drawing surface, rather than by
     // gesture recognizers attached to each appointment.
@@ -332,13 +344,18 @@ public partial class SchedulerView
 
         lastDragPoint = point;
 
-        // While a period change is sliding, the pager is between pages. Touch points arrive in
-        // surface coordinates that include a scroll offset which is still moving, and the maths below
-        // assumes the pager is at rest on the centre slot — so a column resolved now belongs to a week
-        // that is only half on screen, and the appointment jumps a whole page sideways. Hold the
-        // target instead; PageDuringDragAsync recomputes from lastDragPoint once the slide settles.
+        // While a period change is sliding, the pager is between pages, so the drop target cannot be
+        // resolved: the maths below assumes the pager is at rest on the centre slot, and a column
+        // resolved now belongs to a page that is only half on screen. The *follower* has no such
+        // problem — the finger's position on screen is the touch point less the live scroll offsets,
+        // whatever the pager is doing — so it keeps tracking. Freezing it too made the appointment sit
+        // still for the length of the slide while the calendar moved under it.
+        // PageDuringDragAsync recomputes the target from lastDragPoint once the slide settles.
         if (pagingDuringDrag)
+        {
+            MoveDragOverlayToFinger(point);
             return;
+        }
 
         // Scrolling is frozen for the duration of a drag and the pager always rests on the centre
         // slot, so that is the period being dropped into — whichever one has since been rotated into
@@ -380,6 +397,38 @@ public partial class SchedulerView
 
         UpdateEdgePaging(point);
         UpdateEdgeScrolling(point);
+    }
+
+    /// <summary>
+    /// Keeps the follower under the finger, without resolving where it would land.
+    /// </summary>
+    /// <remarks>
+    /// Kept inside the visible grid. With no drop target to bound it — that is the whole point of
+    /// this path — the appointment would otherwise be carried out over the gutter or the header by a
+    /// finger held past the edge, which is precisely where it is: the edge is what started the paging.
+    /// </remarks>
+    private void MoveDragOverlayToFinger(Point point)
+    {
+        if (dragOverlayView is null)
+            return;
+
+        var width = dragOriginalBounds.Width;
+        var height = dragOriginalBounds.Height;
+
+        var left = TimeGutterWidth;
+        var top = HeaderHeight;
+
+        AbsoluteLayout.SetLayoutBounds(dragOverlayView, new Rect(
+            Math.Clamp(
+                left + point.X - pagerScroll.ScrollX - dragGrabOffset.X,
+                left,
+                Math.Max(left, left + ActiveGeometry.ViewportWidth - width)),
+            Math.Clamp(
+                top + point.Y - verticalScroll.ScrollY - dragGrabOffset.Y,
+                top,
+                Math.Max(top, top + ActiveGeometry.ViewportHeight - height)),
+            width,
+            height));
     }
 
     /// <summary>

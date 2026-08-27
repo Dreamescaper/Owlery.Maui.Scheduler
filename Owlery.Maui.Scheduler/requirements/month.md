@@ -12,7 +12,9 @@ this document wins for a month.
 on screen at once. It does not scroll.
 
 **MON-3** The columns are headed by abbreviated weekday names in the person's language, beginning on
-the configured first day of the week. The heading does not change from month to month.
+the configured first day of the week. The heading does not change from month to month, but each page
+carries its own and moves with it — a heading that stayed put while the months slid under it would
+read as though the calendar had come apart from it.
 
 **MON-4** The grid opens on the first day of the week falling on or before the 1st, so the leading
 cells hold the closing days of the previous month and the trailing cells the opening days of the next.
@@ -63,7 +65,9 @@ at, rather than moving them to the start of the period.
 **MON-18** Tapping empty space in a day selects that whole day and reports it. A month has no finer
 target to offer, and the reported length says so.
 
-**MON-19** The selected day is marked across the whole of its cell.
+**MON-19** No selection affordance is drawn on a month. The **+** offered on the timeline means "tap
+again to create something here", and a month cell has no time to create anything at — tapping one
+opens that day instead. The day is still reported as selected.
 
 **MON-20** Tapping an appointment reports it, as on the timeline.
 

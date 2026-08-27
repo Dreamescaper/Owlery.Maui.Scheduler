@@ -80,7 +80,20 @@ internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, M
     private void OnScrollOffsetChanged(object? sender, EventArgs e) =>
         VirtualView?.SetScrolledPosition(PlatformView.ScrollX / Density);
 
-    private void OnPlatformPageSettled(object? sender, EventArgs e) => VirtualView?.SendPageSettled();
+    /// <summary>
+    /// The animation has stopped, whatever started it.
+    /// </summary>
+    /// <remarks>
+    /// Android has no counterpart to <c>scrollViewDidEndScrollingAnimation</c>, so an animated
+    /// request is completed here too. Without that, whoever awaited one waited for ever — which is
+    /// how edge-paging mid-drag ended up never resolving a drop target again, since the flag saying
+    /// "a slide is in flight" was only cleared once that await returned.
+    /// </remarks>
+    private void OnPlatformPageSettled(object? sender, EventArgs e)
+    {
+        VirtualView?.SendScrollFinished();
+        VirtualView?.SendPageSettled();
+    }
 
     private void OnScrollToRequested(object? sender, PagingScrollRequestedEventArgs e)
     {

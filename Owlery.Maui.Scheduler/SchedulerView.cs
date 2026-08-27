@@ -63,8 +63,6 @@ public partial class SchedulerView : ContentView
     private readonly Dictionary<View, PageSlot> slotsByView = [];
 
     private readonly Grid root;
-    private readonly Grid monthHeader;
-    private readonly Label[] monthHeaderLabels = new Label[MonthGeometry.Columns];
     private readonly Grid headerClip;
     private readonly AbsoluteLayout headerSurface;
     private readonly Label headerCorner;
@@ -176,28 +174,6 @@ public partial class SchedulerView : ContentView
         headerClip = new Grid { IsClippedToBounds = true };
         headerClip.Add(headerSurface);
 
-        // A month's weekday row is the same on every page, so unlike the timeline's day headers it
-        // neither scrolls nor needs one strip per slot. The two share a cell; only one is ever shown.
-        monthHeader = new Grid
-        {
-            IsVisible = false,
-            ColumnDefinitions =
-                [.. Enumerable.Range(0, MonthGeometry.Columns).Select(_ => new ColumnDefinition(GridLength.Star))]
-        };
-
-        for (var column = 0; column < MonthGeometry.Columns; column++)
-        {
-            monthHeaderLabels[column] = new Label
-            {
-                FontSize = 11,
-                HorizontalTextAlignment = TextAlignment.Center,
-                VerticalTextAlignment = TextAlignment.Center,
-                TextColor = Color.FromArgb("#6E6E6E")
-            };
-
-            monthHeader.Add(monthHeaderLabels[column], column);
-        }
-
         var headerGrid = new Grid
         {
             ColumnDefinitions =
@@ -208,7 +184,6 @@ public partial class SchedulerView : ContentView
         };
         headerGrid.Add(headerCorner, 0);
         headerGrid.Add(headerClip, 1);
-        headerGrid.Add(monthHeader, 1);
 
         for (var i = 0; i < slots.Length; i++)
             slots[i] = CreateSlot();
@@ -455,17 +430,14 @@ public partial class SchedulerView : ContentView
         surface.HeightRequest = active.ContentHeight;
         AbsoluteLayout.SetLayoutBounds(gridView, new Rect(0, 0, active.SurfaceWidth, active.ContentHeight));
 
-        if (ViewMode is SchedulerViewMode.Timeline)
+        headerSurface.WidthRequest = active.SurfaceWidth;
+
+        for (var i = 0; i < slots.Length; i++)
         {
-            headerSurface.WidthRequest = geometry.SurfaceWidth;
+            if (slots[i].DayNameLabels.Length != HeaderColumns)
+                BuildSlotHeader(slots[i]);
 
-            for (var i = 0; i < slots.Length; i++)
-            {
-                if (slots[i].DayNameLabels.Length != geometry.VisibleDays)
-                    BuildSlotHeader(slots[i]);
-
-                AbsoluteLayout.SetLayoutBounds(slots[i].Header, new Rect(0, 0, geometry.ViewportWidth, HeaderHeight));
-            }
+            AbsoluteLayout.SetLayoutBounds(slots[i].Header, new Rect(0, 0, active.ViewportWidth, HeaderHeight));
         }
 
         RebuildAll(pageSurface.StartOfPage(DateOnly.FromDateTime(DisplayDate)));
@@ -486,14 +458,8 @@ public partial class SchedulerView : ContentView
         headerCorner.WidthRequest = TimeGutterWidth;
         headerCorner.Text = TimeZoneAbbreviation();
 
-        headerClip.IsVisible = true;
         headerClip.HeightRequest = HeaderHeight;
         headerSurface.HeightRequest = HeaderHeight;
-
-        monthHeader.IsVisible = false;
-
-        foreach (var slot in slots)
-            slot.Header.IsVisible = true;
     }
 
     private void ApplyMonthChrome()
@@ -508,16 +474,8 @@ public partial class SchedulerView : ContentView
         headerCorner.WidthRequest = 0;
         headerCorner.Text = string.Empty;
 
-        headerClip.IsVisible = false;
-        monthHeader.IsVisible = true;
-        monthHeader.HeightRequest = HeaderHeight;
-
-        // The timeline's per-page day headers mean nothing here, and they would otherwise show
-        // through beside the weekday row.
-        foreach (var slot in slots)
-            slot.Header.IsVisible = false;
-
-        UpdateMonthHeader();
+        headerClip.HeightRequest = HeaderHeight;
+        headerSurface.HeightRequest = HeaderHeight;
     }
 
     /// <summary>

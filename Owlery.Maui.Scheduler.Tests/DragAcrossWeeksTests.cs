@@ -165,7 +165,31 @@ public class DragAcrossWeeksTests
     }
 
     [Test]
-    public void Cells_are_not_snapped_to_while_a_period_change_is_still_sliding()
+    public void The_appointment_stays_inside_the_grid_while_a_period_change_is_sliding()
+    {
+        // The finger is at the edge — that is what started the paging — so without a bound the
+        // follower would be carried out over the gutter and the header.
+        var (harness, grab) = DragInProgress();
+        var edge = harness.TrailingEdge(grab.Y);
+        harness.DragTo(edge);
+
+        harness.DeferPagerScrolls = true;
+        harness.FireEdgePagingTimer();
+        harness.DragTo(new Point(edge.X + 400, edge.Y + 900));
+
+        var bounds = harness.DraggedAppointmentBounds;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(bounds.X, Is.GreaterThanOrEqualTo(SchedulerHarness.GutterWidth - 0.01));
+            Assert.That(bounds.Right, Is.LessThanOrEqualTo(SchedulerHarness.ViewWidth + 0.01));
+            Assert.That(bounds.Y, Is.GreaterThanOrEqualTo(harness.Scheduler.HeaderHeight - 0.01));
+            Assert.That(bounds.Bottom, Is.LessThanOrEqualTo(SchedulerHarness.ViewHeight + 0.01));
+        });
+    }
+
+    [Test]
+    public void The_appointment_follows_the_finger_while_a_period_change_is_still_sliding()
     {
         var (harness, grab) = DragInProgress();
         var edge = harness.TrailingEdge(grab.Y);
@@ -179,14 +203,15 @@ public class DragAcrossWeeksTests
         harness.DragTo(new Point(edge.X, edge.Y + 50));
 
         Assert.That(
-            harness.DraggedAppointmentBounds.X,
-            Is.EqualTo(beforeSlide.X).Within(0.01),
-            "a column resolved mid-slide belongs to a week that is only half on screen, so the "
-            + "appointment jumps into a cell that is not where the finger is");
+            harness.DraggedAppointmentBounds.Y,
+            Is.EqualTo(beforeSlide.Y + 50).Within(0.01),
+            "the finger's position on screen is the touch point less the live scroll offsets, which "
+            + "holds whatever the pager is doing — freezing it left the appointment sitting still "
+            + "while the calendar moved under it");
 
         harness.CompletePendingScrolls();
 
-        Assert.That(harness.DragTimeIndicator, Is.Not.Null, "and it catches up once the slide settles");
+        Assert.That(harness.DragTimeIndicator, Is.Not.Null, "and the drop target catches up once the slide settles");
     }
 
     [Test]

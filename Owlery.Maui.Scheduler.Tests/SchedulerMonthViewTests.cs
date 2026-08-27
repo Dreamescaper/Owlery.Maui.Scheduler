@@ -90,6 +90,34 @@ public class SchedulerMonthViewTests
     }
 
     [Test]
+    public void Every_page_carries_its_own_weekday_row()
+    {
+        // A single fixed row would stay put while the pages slide under it, which reads as the
+        // calendar coming apart from its own heading.
+        var harness = Month();
+
+        var headers = harness.PageHeaders;
+
+        Assert.That(headers, Has.Count.EqualTo(3));
+        Assert.That(
+            headers.Select(header => header.Count),
+            Is.All.EqualTo(MonthGeometry.Columns),
+            "seven columns on each of the three rendered pages");
+    }
+
+    [Test]
+    public void The_weekday_row_names_the_columns_and_carries_no_day_numbers()
+    {
+        // The day numbers belong in the cells, where they are painted with the grid.
+        var harness = new SchedulerHarness(new DateTime(2026, 8, 15), viewMode: SchedulerViewMode.Month);
+
+        Assert.That(harness.PageHeaders[1].Select(label => label.Text), Is.EqualTo(new[]
+        {
+            "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
+        }));
+    }
+
+    [Test]
     public void Swiping_forward_moves_on_by_one_month()
     {
         var harness = Month();
@@ -176,20 +204,26 @@ public class SchedulerMonthViewTests
     }
 
     [Test]
-    public void The_selected_cell_is_marked_across_its_whole_cell()
+    public void No_selection_affordance_is_shown_on_a_month()
     {
+        // The "+" means "tap again to create something here", and a month cell has no time to create
+        // anything at — tapping one opens that day instead.
         var harness = Month();
 
         harness.Tap(harness.MonthCellAt(1, FirstOfAugust));
 
-        var affordance = harness.CellSelectionAffordance;
+        Assert.That(harness.CellSelectionAffordance, Is.Null);
+    }
 
-        Assert.That(affordance, Is.Not.Null);
-        Assert.Multiple(() =>
-        {
-            Assert.That(harness.BoundsOf(affordance!).Width, Is.EqualTo(harness.MonthCellWidth).Within(0.001));
-            Assert.That(harness.BoundsOf(affordance!).Height, Is.EqualTo(harness.MonthCellHeight).Within(0.001));
-        });
+    [Test]
+    public void A_tapped_day_is_still_reported_as_selected()
+    {
+        // Only the affordance is withheld; the selection itself is part of the contract.
+        var harness = Month();
+
+        harness.Tap(harness.MonthCellAt(1, FirstOfAugust));
+
+        Assert.That(harness.Scheduler.SelectedSlot?.Start, Is.EqualTo(new DateTime(2026, 8, 1)));
     }
 
     [Test]
