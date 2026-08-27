@@ -351,6 +351,12 @@ public partial class SchedulerView
     {
         var view = (SchedulerView)bindable;
 
+        // A drag in flight has taken its view out of every page, so none of the cleanup below would
+        // reach it: it is in no slot, not in the pool's spares, and RepopulateAllSlots declines to
+        // run while a drag is armed. Left alone it survives the template change and is later handed
+        // back into a pool that no longer matches it. ChangeViewMode has always done this first.
+        view.CancelDragCandidate();
+
         foreach (var slot in view.slots)
             view.ReleaseSlot(slot);
 

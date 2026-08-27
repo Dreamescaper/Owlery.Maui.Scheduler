@@ -228,6 +228,19 @@ This matters more than it looks, because the host re-emits `ItemsSource` freely 
 followed by fresh ones, one assignment per loaded month — so a single refresh can run this path
 several times.
 
+Two guards keep the pool honest, both of them cases where a view ends up owned by no page and
+therefore never handed back — left visible, drifting over whatever scrolls past:
+
+- **Duplicate keys within one page.** Indexing views by key means a second view claiming a key
+  displaces the first, which then reaches neither the new layout nor the surplus sweep. Section 9
+  tells hosts not to do this, but the punishment should not be a permanent ghost, so the displaced
+  view is returned there and then.
+- **Changing the template while a drag is in flight.** A dragged view has been taken out of every
+  page, so none of the template handler's cleanup reaches it: not in a slot, not among the spares,
+  and `RepopulateAllSlots` declines to run while a drag is armed. Left alone it survives the change
+  and is later handed into a pool that no longer matches it, to be rented out as though it did. The
+  drag is therefore cancelled first, which is what the view-mode switch had always done.
+
 ---
 
 ## 7. The grid is drawn, not built from cell views
@@ -731,9 +744,10 @@ simply listed in the order they start. No visible-hours window either: the timel
 matching the timeline (section 14) — an appointment is placed on the day it starts.
 
 Ordering is `OrderBy(Start).ThenByDescending(duration)`, and LINQ's sort is stable, so appointments
-starting together keep the order the host supplied. That is load-bearing rather than cosmetic:
-`PopulateSlot` reuses views positionally, so an unchanged reload has to lay out identically or every
-chip on screen repaints.
+starting together keep the order the host supplied. That is load-bearing rather than cosmetic, though
+not for the reason it first appears: reuse is by key (section 6), so an unstable sort would not cause
+a repaint — it would make two appointments that start together *swap places* in the cell between one
+reload and the next, because a chip's line within a day is its index in that order.
 
 ## 19. The pager is our own scroll view
 

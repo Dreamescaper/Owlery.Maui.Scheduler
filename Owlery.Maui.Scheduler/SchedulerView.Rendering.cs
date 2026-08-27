@@ -124,11 +124,15 @@ public partial class SchedulerView
     /// bound to a *different* appointment than before. A refresh that returned identical data would
     /// still repaint every appointment on screen, which reads as a flash.
     /// <para>
-    /// Views are therefore reused positionally. The layout engine orders deterministically (by day,
-    /// then start, then duration), so entry <c>i</c> of the new layout is the same appointment as
-    /// entry <c>i</c> of the old one whenever nothing has changed: each view is rebound to an
-    /// equivalent item in the same place, renders identically, and nothing visibly happens. Only a
-    /// genuine surplus or shortfall touches the pool.
+    /// Views are therefore matched to appointments by <see cref="ISchedulerAppointment.Key"/>: a view
+    /// already showing an appointment keeps showing it, is rebound to an equivalent item, renders
+    /// identically, and nothing visibly happens. Only a genuine surplus or shortfall touches the pool.
+    /// </para>
+    /// <para>
+    /// Reusing them positionally instead would be cheaper and is what this used to do, but it only
+    /// holds while the page's contents are unchanged. Insert one appointment in the morning and every
+    /// view after it is rebound to a different item — a repaint of the whole page for one arrival,
+    /// which is the case the reconciliation exists to avoid.
     /// </para>
     /// </remarks>
     private void PopulateSlot(PageSlot slot, int slotIndex)
@@ -145,8 +149,16 @@ public partial class SchedulerView
 
         foreach (var view in slot.Views)
         {
-            if (appointmentsByView.TryGetValue(view, out var bound))
-                available[bound.Key] = view;
+            if (!appointmentsByView.TryGetValue(view, out var bound))
+                continue;
+
+            // Two views on one page showing the same key is out of contract (section 9), but the
+            // dictionary would quietly drop whichever came first — leaving it visible, owned by no
+            // page, and drifting over whatever scrolled past. Hand it straight back instead.
+            if (available.TryGetValue(bound.Key, out var displaced))
+                Discard(displaced);
+
+            available[bound.Key] = view;
         }
 
         var arranged = new List<View>(positions.Count);
@@ -170,11 +182,7 @@ public partial class SchedulerView
 
         // Whatever no appointment claimed is genuinely gone from this week.
         foreach (var surplus in available.Values)
-        {
-            appointmentsByView.Remove(surplus);
-            slotsByView.Remove(surplus);
-            pool.Return(surplus);
-        }
+            Discard(surplus);
 
         slot.Views.Clear();
         slot.Views.AddRange(arranged);
@@ -239,14 +247,18 @@ public partial class SchedulerView
             : $"{appointment.Subject}, {day}, {range}");
     }
 
+    /// <summary>Forgets a view and hands it back to the pool.</summary>
+    private void Discard(View view)
+    {
+        appointmentsByView.Remove(view);
+        slotsByView.Remove(view);
+        pool.Return(view);
+    }
+
     private void ReleaseSlot(PageSlot slot)
     {
         foreach (var view in slot.Views)
-        {
-            appointmentsByView.Remove(view);
-            slotsByView.Remove(view);
-            pool.Return(view);
-        }
+            Discard(view);
 
         slot.Views.Clear();
     }
