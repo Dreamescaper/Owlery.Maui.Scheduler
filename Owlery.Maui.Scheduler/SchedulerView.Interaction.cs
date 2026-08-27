@@ -351,7 +351,7 @@ public partial class SchedulerView
         // whatever the pager is doing — so it keeps tracking. Freezing it too made the appointment sit
         // still for the length of the slide while the calendar moved under it.
         // PageDuringDragAsync recomputes the target from lastDragPoint once the slide settles.
-        if (pagingDuringDrag)
+        if (pagingDuringDrag || !PagerAtRest)
         {
             MoveDragOverlayToFinger(point);
             return;
@@ -398,6 +398,18 @@ public partial class SchedulerView
         UpdateEdgePaging(point);
         UpdateEdgeScrolling(point);
     }
+
+    /// <summary>
+    /// Whether the pager is sitting on the centre page, which is what the drop-target maths assumes.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the offset rather than inferred from <c>pagingDuringDrag</c>. That flag is cleared
+    /// when an awaited scroll returns, so anything completing the wait early — a stale finish from
+    /// the platform, or a second request abandoning the pending one — let a column be resolved while
+    /// the pages were still moving, and the appointment jumped. Rare, and not something tightening
+    /// the plumbing can rule out; the position cannot lie.
+    /// </remarks>
+    private bool PagerAtRest => Math.Abs(pagerScroll.ScrollX - ActiveGeometry.ViewportWidth) < 1;
 
     /// <summary>
     /// Keeps the follower under the finger, without resolving where it would land.

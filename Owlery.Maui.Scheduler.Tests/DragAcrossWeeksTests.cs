@@ -165,6 +165,27 @@ public class DragAcrossWeeksTests
     }
 
     [Test]
+    public void No_cell_is_resolved_while_the_pager_is_off_centre()
+    {
+        // The in-flight flag is cleared when an awaited scroll returns, so anything completing that
+        // wait early — a stale finish, a second request abandoning the pending one — used to let a
+        // column be resolved while the pages were still moving. The offset is asked directly now, so
+        // an off-centre pager holds the target back on its own.
+        var (harness, grab) = DragInProgress();
+
+        var before = harness.DragTimeIndicator;
+        Assert.That(before, Is.Not.Null, "a settled pager resolves a target");
+
+        harness.ScrollPagerTo(SchedulerHarness.PageWidth * 1.5);
+        harness.DragTo(new Point(grab.X, grab.Y + 60));
+
+        Assert.That(
+            harness.DragTimeIndicator,
+            Is.EqualTo(before),
+            "an hour later under the finger, but the pages are half on screen so nothing is resolved");
+    }
+
+    [Test]
     public void The_appointment_stays_inside_the_grid_while_a_period_change_is_sliding()
     {
         // The finger is at the edge — that is what started the paging — so without a bound the
