@@ -135,13 +135,20 @@ internal sealed class TimeGutter
     /// </remarks>
     public void ShowIndicator(double minutes, string text)
     {
-        indicatorLabel.Text = text;
+        if (indicatorLabel.Text != text)
+            indicatorLabel.Text = text;
 
-        Place(indicator, new Rect(
+        // Only written when it actually moves. This runs on every touch event of a drag, and a write
+        // invalidates the gutter, which then measures and arranges all of its labels — for a chip
+        // that only moves once per snap interval, not once per pixel.
+        var bounds = new Rect(
             2,
             geometry.YFromMinutes(minutes) - IndicatorHeight / 2,
             Math.Max(0, View.WidthRequest - 4),
-            IndicatorHeight));
+            IndicatorHeight);
+
+        if (AbsoluteLayout.GetLayoutBounds(indicator) != bounds)
+            Place(indicator, bounds);
 
         indicator.IsVisible = true;
     }

@@ -5,14 +5,14 @@ namespace Owlery.Maui.Scheduler;
 /// <summary>Infinite horizontal paging: snapping, rotating the ring buffer, recentring.</summary>
 public partial class SchedulerView
 {
-    private void OnPagerScrolled(object? sender, PagingScrolledEventArgs e)
+    private void OnPagerScrolled(object? sender, EventArgs e)
     {
         // The header sits outside the pager, so it is the one thing here that does not move by itself
         // and has to be mirrored by hand. This runs unconditionally, including while recentring:
         // gating it meant that any programmatic scroll which did not settle exactly as expected left
         // the strip stranded at a stale offset — off-screen, reading as a missing header — until some
         // later rebuild happened to reset it.
-        headerSurface.TranslationX = -e.ScrollX;
+        headerSurface.TranslationX = -pagerScroll.ScrollX;
     }
 
     /// <summary>

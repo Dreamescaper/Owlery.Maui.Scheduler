@@ -1,10 +1,5 @@
 namespace Owlery.Maui.Scheduler;
 
-internal sealed class PagingScrolledEventArgs(double scrollX) : EventArgs
-{
-    public double ScrollX { get; } = scrollX;
-}
-
 /// <summary>The page scrolling has come to rest on.</summary>
 internal sealed class PagingPageSettledEventArgs(int page) : EventArgs
 {
@@ -100,8 +95,15 @@ internal class PagingScrollView : ContentView
         }
     }
 
-    /// <summary>Raised whenever the offset changes, from any cause.</summary>
-    public event EventHandler<PagingScrolledEventArgs>? Scrolled;
+    /// <summary>
+    /// Raised whenever the offset changes, from any cause. Read <see cref="ScrollX"/> for the value.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately carries no arguments. This fires once per frame for the whole of every scroll,
+    /// and an event-args object per frame is a few hundred short-lived allocations a second during a
+    /// fling — for a value the receiver can read off the sender.
+    /// </remarks>
+    public event EventHandler? Scrolled;
 
     /// <summary>
     /// Raised once scrolling has come to rest on a page.
@@ -157,7 +159,7 @@ internal class PagingScrollView : ContentView
     public void SetScrolledPosition(double x)
     {
         ScrollX = x;
-        Scrolled?.Invoke(this, new PagingScrolledEventArgs(x));
+        Scrolled?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Completes whatever <see cref="ScrollToAsync"/> is waiting on.</summary>

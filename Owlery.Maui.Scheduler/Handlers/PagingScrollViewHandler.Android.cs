@@ -75,7 +75,17 @@ internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, M
         base.DisconnectHandler(platformView);
     }
 
-    private double Density => Context?.Resources?.DisplayMetrics?.Density ?? 1;
+    private double? cachedDensity;
+
+    /// <summary>
+    /// The display density, fetched once.
+    /// </summary>
+    /// <remarks>
+    /// Read on every scroll frame, and each read used to cross into Java twice — for <c>Resources</c>
+    /// and then <c>DisplayMetrics</c> — before dividing. Density cannot change without a
+    /// configuration change, which builds a new handler.
+    /// </remarks>
+    private double Density => cachedDensity ??= Context?.Resources?.DisplayMetrics?.Density ?? 1;
 
     private void OnScrollOffsetChanged(object? sender, EventArgs e) =>
         VirtualView?.SetScrolledPosition(PlatformView.ScrollX / Density);
@@ -131,9 +141,12 @@ internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, M
 /// <summary>Lays the content out through the cross-platform view, at whatever width it asks for.</summary>
 internal class MauiPagingContentViewGroup(Context context) : ViewGroup(context)
 {
+    private double? cachedDensity;
+
     public IContentView? CrossPlatformLayout { get; set; }
 
-    private double Density => Context?.Resources?.DisplayMetrics?.Density ?? 1;
+    /// <summary>Fetched once; see the note on the handler's copy.</summary>
+    private double Density => cachedDensity ??= Context?.Resources?.DisplayMetrics?.Density ?? 1;
 
     protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
     {
