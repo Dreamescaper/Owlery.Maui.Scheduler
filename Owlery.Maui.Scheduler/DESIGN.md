@@ -17,6 +17,15 @@ else — no BlazorBindings, no app types, no `Owlery.*` contracts.
 **Why.** Keeping the control free of the app's rendering stack makes it reusable and keeps its public
 surface ordinary MAUI: bindable properties, CLR events, and a `DataTemplate` for the appointment box.
 
+This is not only tidiness. The control is a public library and is intended to move to a repository of
+its own, so every dependency on this solution is something that would have to be unpicked later.
+`Owlery.Maui.Scheduler.Sample` exists to keep that honest: it is a bare MAUI app with no Blazor in it,
+and if the control ever stops working there, it has grown a dependency on the host it should not
+have.
+
+The Blazor wrapper below is therefore a fact about *this app*, not about the control. A plain MAUI
+host is the baseline consumer; a Blazor one is a host that happens to generate its own wrapper.
+
 The Blazor app consumes it through `BlazorBindings.Maui.ComponentGenerator`. The wrapper is declared in
 `Owlery.Mobile/Properties/Elements.cs` and generated into
 `Owlery.Mobile/Elements/Owlery.Scheduler/SchedulerView.generated.cs`:
@@ -283,10 +292,28 @@ back and cannot be deferred.
 
 With those in place the remaining cost is concentrated in one spot: **binding a view to an appointment
 it has never shown**. Measured at roughly 6ms against 0.25ms for a rebind of the same instance — the
-difference between building a template's component tree and skipping the write entirely. A page
-rotation does that for every appointment on the incoming page, so a swipe onto a busy week is a single
-frame of tens of milliseconds. The pool is what keeps that from being worse, and beyond it the cost
-belongs to the host's template rather than to anything this control arranges.
+difference between building a template's subtree and skipping the write entirely. A page rotation does
+that for every appointment on the incoming page, so a swipe onto a busy week is a single frame of tens
+of milliseconds. The pool is what keeps that from being worse.
+
+Beyond the pool the cost belongs to the host's template, and **how the template is written matters
+more than it looks**. The same appointment box, built once from MAUI primitives and once as a Blazor
+component through generated bindings, was measured over identical page rotations:
+
+| Fresh binds | Blazor component | MAUI primitives |
+|---|---|---|
+| 10 | 66.94ms | 45.21ms |
+| 13 | 51.82ms | 33.58ms |
+| 11 | 41.97ms | 27.70ms |
+
+That is 4.73ms against 3.13ms per bind — **about a third off** — for a template rendering the same
+thing. Worth knowing, and worth keeping in proportion: the remaining 3.13ms is MAUI constructing a
+`Border`, a `Grid`, a `Label` and an `Image` and laying them out for the first time, so a Blazor
+templating layer is a third of the cost rather than the bulk of it. Only the fresh-bind path moves;
+rebinding a reused view never touches template construction and stays at ~0.25ms either way.
+
+(Debug build on an emulator. A release build would likely widen the gap, the managed work being the
+side that AOT and the JIT treat differently.)
 
 ---
 

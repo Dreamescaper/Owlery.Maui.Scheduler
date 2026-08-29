@@ -9,9 +9,19 @@
 
 ## What This Project Is
 
-- A reusable .NET MAUI week-view scheduler control, built from plain MAUI primitives.
+- A reusable .NET MAUI scheduler control — week, day and month surfaces — built from plain MAUI
+  primitives.
+- **It is a public library, and it will move to a repository of its own.** Treat it as though that
+  has already happened: it cannot reach for anything in this solution, its documentation is written
+  for readers who have never seen this app, and its public surface is a contract with strangers
+  rather than with `Owlery.Mobile`.
 - It has exactly one package reference: `Microsoft.Maui.Controls`. Do not add BlazorBindings,
   Syncfusion, CommunityToolkit, or any `Owlery.*` project reference.
+- **It is not BlazorBindings-specific.** This app happens to consume it through generated Blazor
+  wrappers, and that is a fact about the host, not about the control. A plain MAUI host is a
+  first-class consumer — `Owlery.Maui.Scheduler.Sample` is one, and is the reference for what using
+  it looks like without Blazor. Nothing in the control may assume a Blazor host, and no example in
+  its documentation should require one.
 - It owns no data and fetches nothing. It renders what the host supplies and reports what the user
   did. Do not add HTTP, storage, or domain types.
 

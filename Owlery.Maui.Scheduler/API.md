@@ -28,6 +28,11 @@ Namespace: `Owlery.Maui.Scheduler`
 
 ---
 
+`Owlery.Maui.Scheduler` is a plain .NET MAUI control library. Its only package reference is
+`Microsoft.Maui.Controls`, and any MAUI host can use it — templates are ordinary `DataTemplate`s, the
+public surface is bindable properties and CLR events. `Owlery.Maui.Scheduler.Sample` is a bare MAUI
+app showing exactly that, with no Blazor involved.
+
 ## Setup
 
 The control ships one platform handler of its own, and MAUI gives a library no way to register a
@@ -117,6 +122,11 @@ they hold appointments and can be tapped.
 > chunk. Conversely an appointment that *has* changed must be a **new** instance: mutating one in
 > place changes nothing the control can see, and it will keep showing — and describing — the old
 > values. Treat them as immutable snapshots.
+
+> A template built from MAUI primitives binds roughly a third faster than the equivalent written as a
+> Blazor component through generated bindings — measured per *fresh* bind, which is what a page
+> rotation pays for. Rebinding a reused view is unaffected. See `DESIGN.md` section 6 if that matters
+> to you; either kind of template works.
 
 > Assigning `ItemsSource` repeatedly is fine. Several assignments arriving together are collapsed into
 > a single rebuild on the next tick, so loading in chunks costs one rebuild rather than one per chunk.
