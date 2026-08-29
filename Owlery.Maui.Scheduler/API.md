@@ -116,6 +116,26 @@ they hold appointments and can be tapped.
 > therefore tolerate its binding context changing — build the whole subtree up front and toggle it,
 > rather than assuming one instance per appointment.
 
+> **A `DataTemplateSelector` is not accepted** and throws where it is assigned. Every view comes from
+> one template so that any view can be reused for any appointment. Vary the content *inside* a single
+> template instead: build each variant once and show the one that applies.
+>
+> ```csharp
+> protected override void OnBindingContextChanged()
+> {
+>     base.OnBindingContextChanged();
+>
+>     if (BindingContext is not MyAppointment appointment)
+>         return;
+>
+>     logo.IsVisible = appointment.IsExternal;      // built in the constructor,
+>     subject.IsVisible = !appointment.IsExternal;  // shown or hidden here
+> }
+> ```
+>
+> This is faster as well as simpler. Switching between variants inside a live view constructs nothing,
+> so it costs a rebind (~0.25ms) rather than a fresh build (~3ms) — see `DESIGN.md` section 6.
+
 > **Hand back the same instance for an appointment that has not changed.** Binding contexts are
 > compared by reference, so an unchanged appointment that arrives as a new object re-renders its
 > template for nothing, and a host that reloads in chunks pays that for everything on screen on every

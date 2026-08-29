@@ -61,6 +61,11 @@ cited `DESIGN.md` section first.
 - **Appointment views are pooled and rebound, never rebuilt** (§5, §6). Anything attached to a view
   must be attached once, at creation, and must read the currently bound appointment rather than
   capture one. The pool is deliberately unbounded; do not add a cap.
+- **Every view comes from one template** (§6). A `DataTemplateSelector` is refused where it is
+  assigned, because a single template is what lets any view be reused for any appointment. Hosts vary
+  content *inside* a template instead, which is both the recommended pattern and the faster one — a
+  variant switch costs a rebind rather than a fresh build. Supporting selectors means a pool per
+  template and a second clause in `PopulateSlot`; read §6 before deciding it is worth that.
 - **Only one week is rebuilt per swipe** (§4). The other two move by translation. Do not introduce
   work that touches all three slots on rotation.
 - **The day-header sync is never gated by a flag** (§8). It runs on every scroll event. Gating it

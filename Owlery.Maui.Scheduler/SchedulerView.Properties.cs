@@ -371,12 +371,41 @@ public partial class SchedulerView
             PopulateSlot(slots[i], i);
     }
 
+    /// <summary>
+    /// Refuses a <see cref="DataTemplateSelector"/>, which this control cannot use.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="DataTemplateSelector"/> derives from <see cref="DataTemplate"/>, so one can be
+    /// assigned here and would fail much later, deep inside the pool, with nothing to say for itself:
+    /// a selector carries no <c>LoadTemplate</c> for <c>CreateContent</c> to call. Failing at the
+    /// assignment, with the alternative named, is worth the few lines.
+    /// <para>
+    /// Supporting selectors would mean a pool per resolved template, and the reuse this control gets
+    /// most of its speed from is why that is not obviously a win — see DESIGN.md section 6. A single
+    /// template that varies its own content recycles better than several that do not.
+    /// </para>
+    /// </remarks>
+    private static void RejectTemplateSelector(object? template)
+    {
+        if (template is DataTemplateSelector)
+        {
+            throw new NotSupportedException(
+                "A DataTemplateSelector cannot be used as an appointment template. Views are pooled and "
+                + "rebound rather than rebuilt, so they are all made from one template. Use a single "
+                + "template that varies its own content — build every variant once and show the one "
+                + "that applies — which also rebinds far more cheaply than swapping templates would. "
+                + "See API.md.");
+        }
+    }
+
     private static void OnViewModeChanged(BindableObject bindable, object oldValue, object newValue)
         => ((SchedulerView)bindable).ChangeViewMode((SchedulerViewMode)newValue);
 
     private static void OnAppointmentTemplateChanged(BindableObject bindable, object oldValue, object newValue)
     {
         var view = (SchedulerView)bindable;
+
+        RejectTemplateSelector(newValue);
 
         // A drag in flight has taken its view out of every page, so none of the cleanup below would
         // reach it: it is in no slot, not in the pool's spares, and RepopulateAllSlots declines to

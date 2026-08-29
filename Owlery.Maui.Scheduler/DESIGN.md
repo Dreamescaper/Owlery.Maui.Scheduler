@@ -315,6 +315,28 @@ rebinding a reused view never touches template construction and stays at ~0.25ms
 (Debug build on an emulator. A release build would likely widen the gap, the managed work being the
 side that AOT and the JIT treat differently.)
 
+### One template, not a selector
+
+Every view comes from a single `DataTemplate`, which is what makes any view reusable for any
+appointment. A `DataTemplateSelector` is refused where it is assigned rather than accepted and failed
+on later — it derives from `DataTemplate`, so one *can* be set, and would otherwise surface deep in
+the pool as a selector having no `LoadTemplate` for `CreateContent` to call.
+
+Supporting selectors is possible and was considered. It means a pool per resolved template, plus a
+second clause in the reconciliation: a view matched by key is only reusable if it came from the same
+template, so an appointment that changes kind has to give its view up and rent from another pool.
+Two things argue against doing it before something needs it.
+
+The pool is unbounded by design (above), so *N* kinds means *N* unbounded pools whose peaks do not
+coincide — twenty external and twenty ordinary appointments never on screen together would retain
+forty views where one pool retains twenty. And the extra clause lands in `PopulateSlot`, which has
+produced every stranded-view defect this control has had.
+
+Against that, the thing selectors would buy is already available more cheaply. A template that builds
+each variant once and toggles which is visible switches kind for the price of a rebind, ~0.25ms,
+because nothing is constructed; swapping templates costs a fresh build at ~3ms. The recommended
+pattern is therefore also the faster one, which is why the refusal names it.
+
 ---
 
 ## 7. The grid is drawn, not built from cell views

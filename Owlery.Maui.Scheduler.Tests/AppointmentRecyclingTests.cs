@@ -19,6 +19,35 @@ public class AppointmentRecyclingTests
     private sealed record Pinned(object Key, DateTime Start, DateTime End, string? Subject)
         : ISchedulerAppointment;
 
+    /// <summary>A selector that would never be asked to select anything.</summary>
+    private sealed class StubTemplateSelector : DataTemplateSelector
+    {
+        protected override DataTemplate OnSelectTemplate(object item, BindableObject container)
+            => new(() => new TestAppointmentView());
+    }
+
+    [Test]
+    public void A_template_selector_is_refused_where_it_is_set()
+    {
+        // DataTemplateSelector derives from DataTemplate, so one can be assigned and would otherwise
+        // fail much later inside the pool, where a selector has no LoadTemplate to call.
+        var harness = new SchedulerHarness(Week);
+
+        var refused = Assert.Throws<NotSupportedException>(
+            () => harness.Scheduler.AppointmentTemplate = new StubTemplateSelector());
+
+        Assert.That(refused!.Message, Does.Contain("varies its own content"), "and it says what to do instead");
+    }
+
+    [Test]
+    public void The_month_template_refuses_a_selector_too()
+    {
+        var harness = new SchedulerHarness(Week);
+
+        Assert.Throws<NotSupportedException>(
+            () => harness.Scheduler.MonthAppointmentTemplate = new StubTemplateSelector());
+    }
+
     [Test]
     public void A_bound_view_describes_itself_for_assistive_technology()
     {
