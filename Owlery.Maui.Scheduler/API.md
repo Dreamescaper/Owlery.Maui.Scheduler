@@ -111,6 +111,16 @@ they hold appointments and can be tapped.
 > therefore tolerate its binding context changing — build the whole subtree up front and toggle it,
 > rather than assuming one instance per appointment.
 
+> **Hand back the same instance for an appointment that has not changed.** Binding contexts are
+> compared by reference, so an unchanged appointment that arrives as a new object re-renders its
+> template for nothing, and a host that reloads in chunks pays that for everything on screen on every
+> chunk. Conversely an appointment that *has* changed must be a **new** instance: mutating one in
+> place changes nothing the control can see, and it will keep showing — and describing — the old
+> values. Treat them as immutable snapshots.
+
+> Assigning `ItemsSource` repeatedly is fine. Several assignments arriving together are collapsed into
+> a single rebuild on the next tick, so loading in chunks costs one rebuild rather than one per chunk.
+
 ### Time window and layout
 
 | Property | Type | Default | Description |

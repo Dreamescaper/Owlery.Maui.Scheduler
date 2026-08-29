@@ -51,6 +51,43 @@ public class AppointmentRecyclingTests
     }
 
     [Test]
+    public void A_burst_of_collection_changes_rebuilds_once()
+    {
+        // A host that loads in chunks announces its collection once per chunk. Each announcement used
+        // to rebuild all three pages on the spot; a single change of view was measured doing it eight
+        // times over.
+        var items = new ObservableCollection<ISchedulerAppointment>();
+        var harness = new SchedulerHarness(Week, items);
+
+        harness.Dispatcher.DeferDispatch = true;
+
+        for (var day = 1; day <= 4; day++)
+            items.Add(TestAppointment.At(Week.AddDays(day), "10:00", 1));
+
+        Assert.That(harness.Dispatcher.PendingDispatches, Has.Count.EqualTo(1), "four changes, one rebuild");
+
+        harness.Dispatcher.RunPendingDispatches();
+
+        Assert.That(harness.CentrePageAppointments, Has.Count.EqualTo(4), "and it reads the final state");
+    }
+
+    [Test]
+    public void A_later_change_queues_a_fresh_rebuild()
+    {
+        var items = new ObservableCollection<ISchedulerAppointment>();
+        var harness = new SchedulerHarness(Week, items);
+
+        harness.Dispatcher.DeferDispatch = true;
+
+        items.Add(TestAppointment.At(Week.AddDays(1), "10:00", 1));
+        harness.Dispatcher.RunPendingDispatches();
+
+        items.Add(TestAppointment.At(Week.AddDays(2), "10:00", 1));
+
+        Assert.That(harness.Dispatcher.PendingDispatches, Has.Count.EqualTo(1), "the gate reopens once it has run");
+    }
+
+    [Test]
     public void A_duplicate_key_on_one_page_does_not_strand_a_view()
     {
         // Two appointments sharing a key within a period is out of contract, but the reconciliation

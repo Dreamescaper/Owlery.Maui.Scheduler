@@ -84,6 +84,7 @@ public partial class SchedulerView : ContentView
     private bool recentring;
     private bool suppressDisplayDateSync;
     private bool initialised;
+    private bool repopulateQueued;
     private double allocatedWidth;
     private double allocatedHeight;
 

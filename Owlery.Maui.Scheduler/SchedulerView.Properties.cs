@@ -320,10 +320,37 @@ public partial class SchedulerView
         if (newValue is INotifyCollectionChanged newCollection)
             newCollection.CollectionChanged += view.OnItemsCollectionChanged;
 
-        view.RepopulateAllSlots();
+        view.QueueRepopulate();
     }
 
-    private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => RepopulateAllSlots();
+    private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => QueueRepopulate();
+
+    /// <summary>
+    /// Asks for a repopulate on the next tick, collapsing a burst of them into one.
+    /// </summary>
+    /// <remarks>
+    /// A host that loads in chunks hands over its collection once per chunk — cached results, then
+    /// fresh ones, per period — and every one of those used to rebuild all three pages immediately.
+    /// A single change of view was measured doing it eight times. Nothing is lost by waiting for the
+    /// tick: the data is read when the rebuild runs, not when it was announced.
+    /// <para>
+    /// Only the data paths come through here. Everything a drag does still repopulates synchronously,
+    /// because those calls are how a gesture puts the pages back and cannot be left until later.
+    /// </para>
+    /// </remarks>
+    private void QueueRepopulate()
+    {
+        if (repopulateQueued)
+            return;
+
+        repopulateQueued = true;
+
+        Dispatcher.Dispatch(() =>
+        {
+            repopulateQueued = false;
+            RepopulateAllSlots();
+        });
+    }
 
     private void RepopulateAllSlots()
     {

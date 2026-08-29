@@ -122,6 +122,45 @@ Resist extracting the drag machinery wholesale behind an interface. It legitimat
 geometry, the pages, the pool, the scroll views and the events, so the interface would have a dozen
 members and would relocate the coupling rather than reduce it.
 
+## Performance
+
+Everything here was learned by measuring this control, usually after guessing wrong first.
+
+- **Measure before changing anything.** The .NET side has repeatedly turned out to be the cheap part:
+  a per-frame animation callback measured 0.05–0.54ms while the frames around it took 17ms. Instrument
+  with a `Stopwatch` and `Debug.WriteLine`, read it back with `adb logcat`, and use
+  `adb shell dumpsys gfxinfo <pkg>` for what the frame actually cost — `Invalidate()` only queues the
+  draw, so a stopwatch cannot see it.
+- **Identity, not equality, drives binding** (§6). Hand back the same appointment instance when nothing
+  changed; build a new one when something did. This is a contract with the host, and it is in `API.md`
+  for that reason.
+- **Do not write a layout bound that has not changed.** An unchanged write still costs a layout pass,
+  and on Android an arrange is a JNI call per child. `PositionAppointmentView` and
+  `TimeGutter.ShowIndicator` both guard; anything running per frame or per touch should too.
+- **Coalesce data-driven rebuilds, never gesture-driven ones.** `QueueRepopulate` collapses a burst of
+  `ItemsSource` changes into one rebuild on the next tick. The repopulate calls a drag makes are how
+  the gesture puts the pages back and must stay synchronous.
+- **Watch for work that scales with the host's data rather than the screen.** Each `PopulateSlot` runs
+  the layout over the whole `ItemsSource`, and `Resolve` scans it per interaction. Fine today; the
+  thing to check when a range widens, as it did when month view took prefetch from three weeks to four
+  months.
+- **Cache anything that crosses into Java.** `Context.Resources.DisplayMetrics.Density` was being read
+  on every scroll frame.
+
+### Testing a performance change
+
+A performance fix usually has no observable behaviour, which makes it very easy to write a test that
+passes whether or not the fix is present. **Mutation-check every one**: undo the change, confirm the
+test fails, put it back. Three tests in this control's history passed with and without the fix they
+were written for, and each looked convincing:
+
+- Counting views could not tell "the drag was cancelled" from "no views were built at all" — both
+  leave exactly one. It needed a second view type to identify which template the survivor came from.
+- Asserting on geometry to prove a guard was engaged actually measured the clamp beside it. Asserting
+  on the drop target's own text was the honest question.
+- A guard that *skips* work cannot be caught by removing the skip — the result is identical. Test the
+  direction that can break: that the work still happens when its inputs change.
+
 ## Build
 
 ```sh

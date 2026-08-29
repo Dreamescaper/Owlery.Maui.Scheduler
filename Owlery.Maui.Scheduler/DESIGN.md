@@ -241,6 +241,53 @@ therefore never handed back — left visible, drifting over whatever scrolls pas
   and is later handed into a pool that no longer matches it, to be rented out as though it did. The
   drag is therefore cancelled first, which is what the view-mode switch had always done.
 
+### Identity is the change signal
+
+MAUI compares one property by reference and everything else by value, and it happens to be the one
+that matters here:
+
+```csharp
+bool sameValue = ReferenceEquals(context.Property, BindingContextProperty)
+  ? ReferenceEquals(value, original)
+  : Equals(value, original);
+```
+
+So handing a view the *same* appointment object it already holds costs nothing — no property change,
+no re-render. Handing it an equal-but-new one costs a full render of the template. Value equality
+never enters into it, which is why making an appointment a record buys nothing.
+
+That fixes the contract for hosts: **an appointment that has not changed should be the same instance,
+and one that has changed must be a new instance.** Immutable snapshots, with identity standing in for
+"something happened". It also rules out the other shape — a mutable, observable appointment that the
+host updates in place. Nothing here subscribes to property changes; a template is a Blazor component
+that reads its parameter, so an in-place mutation would update nothing at all and the view would go
+quietly stale.
+
+Note what this means for a move: a rescheduled appointment cannot be edited where it lies. It has to
+be replaced, or the view stays bound to something that no longer describes it — including its
+accessibility text, which is skipped precisely when the appointment appears unchanged.
+
+### Coalescing a burst
+
+A host that loads in chunks assigns `ItemsSource` once per chunk — cached results, then fresh ones,
+per period — and each assignment used to rebuild all three pages immediately. One change of view was
+measured doing that eight times over, at roughly 60ms each.
+
+The data paths therefore post a single rebuild to the next tick rather than running one on the spot;
+the same measurement afterwards shows three, one per switch. Nothing is lost by waiting: the data is
+read when the rebuild runs, not when it was announced. Only the data paths go through it — everything
+a drag does still repopulates synchronously, because those calls are how a gesture puts the pages
+back and cannot be deferred.
+
+### What is left, and where it is
+
+With those in place the remaining cost is concentrated in one spot: **binding a view to an appointment
+it has never shown**. Measured at roughly 6ms against 0.25ms for a rebind of the same instance — the
+difference between building a template's component tree and skipping the write entirely. A page
+rotation does that for every appointment on the incoming page, so a swipe onto a busy week is a single
+frame of tens of milliseconds. The pool is what keeps that from being worse, and beyond it the cost
+belongs to the host's template rather than to anything this control arranges.
+
 ---
 
 ## 7. The grid is drawn, not built from cell views

@@ -86,10 +86,30 @@ internal sealed class TestDispatcher : MauiDispatching.IDispatcher
         return timer;
     }
 
+    /// <summary>When set, dispatched work is held until <see cref="RunPendingDispatches"/>.</summary>
+    public bool DeferDispatch { get; set; }
+
+    public List<Action> PendingDispatches { get; } = [];
+
     public bool Dispatch(Action action)
     {
+        if (DeferDispatch)
+        {
+            PendingDispatches.Add(action);
+            return true;
+        }
+
         action();
         return true;
+    }
+
+    public void RunPendingDispatches()
+    {
+        var pending = PendingDispatches.ToArray();
+        PendingDispatches.Clear();
+
+        foreach (var action in pending)
+            action();
     }
 
     public bool DispatchDelayed(TimeSpan delay, Action action)
