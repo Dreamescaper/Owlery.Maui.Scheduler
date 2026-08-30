@@ -735,8 +735,6 @@ The following are absent by design, not by oversight:
 - **All-day / multi-day appointments.** There is no all-day row; an appointment is clipped to its
   starting day.
 - **Resizing an appointment by dragging its edges.**
-- **Dark theme.** Colours are exposed on the drawables and `GridBackgroundColor` on the control, but no
-  `AppThemeBinding` wiring is provided.
 - **Releasing template roots.** Bounded by BlazorBindings, not by this control — see section 6.
 
 ## 16. Showing fewer than seven days
@@ -1036,6 +1034,53 @@ MAUI has no way for a library to register a handler on its own, so a host must c
 `builder.UseOwleryScheduler()`. Without it the pager falls back to the handler for its base type and
 simply does not scroll. That is the one line this control costs a host, and the reason it is worth
 knowing about: everything else here is internal.
+
+## 20. Appearance is semantic, bindable state
+
+The control exposes the states a scheduler understands — current day, non-working day and
+non-working hours — separately from the colours used to paint them. A callback returning a colour
+for an arbitrary day or hour was rejected: it mixes calendar policy with presentation, leaves its
+invocation granularity and precedence undefined, is awkward in XAML, and gives the control no signal
+when data captured by the callback changes.
+
+Working time is deliberately the small recurring case: a collection of working weekdays and one
+same-day `TimeOnly` interval. It covers the visual distinction the control owns without turning the
+control into a holiday calendar or availability engine. Date exceptions and overnight intervals can
+be added when a concrete host needs their semantics rather than guessed here.
+
+A `TimeOnly` property cannot be set from XAML on its own. MAUI's XAML loader does not consult the
+converter the framework registers for the type, and fails the load with "mismatching type between
+value and property" — so `WorkingHoursStart` and `WorkingHoursEnd` carry a `TypeConverterAttribute`
+pointing at a converter of our own. It parses with the invariant culture: markup is not user input,
+and a page that read differently on a device with another locale would be a trap. `WorkingDays` needs
+nothing, because `x:Array` produces a `DayOfWeek[]`, which is already an `IReadOnlyCollection<DayOfWeek>`.
+
+MAUI's own `TimeSpanTypeConverter` does not help, and not merely because it is unregistered for our
+properties: it *always* returns a `TimeSpan`. It parses `TimeOnly`-shaped text, then hands back
+`timeOnly.ToTimeSpan()`, because it exists to feed `TimeSpan` properties such as `TimePicker.Time`.
+Something that cannot produce a `TimeOnly` can never satisfy a `TimeOnly` property, whatever the
+lookup does — and it is `internal`, so a library outside MAUI could not name it anyway.
+
+So the exit condition is narrow: delete ours when MAUI gains a public converter that yields a
+`TimeOnly`, and reaches it from a `TimeOnly` property without an attribute. No shipped version does —
+not 10.0.20, not 10.0.90, not 11.0 preview. An explicit attribute wins over any later built-in
+lookup, so this stays correct in the meantime; it only stops being necessary.
+
+**Open for discussion:** whether an in-place change to `WorkingDays` should be observed, the way
+`ItemsSource` honours `INotifyCollectionChanged`. Only replacement is honoured today. That is not a
+settled decision — it stands until someone weighs it properly, and the API may change if observation
+turns out to read better.
+
+Colours are individual bindable properties rather than a nested palette. That lets ordinary MAUI
+styles and `AppThemeBinding` provide themes, keeps each value discoverable, and avoids subscribing to
+changes inside another mutable object. `GridBackgroundColor` stays separate from the inherited
+`BackgroundColor` because it is not decoration: the drawing surface and the gutter must stay opaque
+to receive input, so it defaults to white rather than to the container's colour.
+
+All of these properties take a paint-only path: update the two drawables and the handful of native
+labels or borders, then invalidate the canvas. They never repopulate a page or rebind an appointment.
+The draw order is explicit. A current-day fill wins over a non-working-day fill, while out-of-hours
+bands on a working day are painted over the current-day fill so both meanings remain visible.
 
 ## 15. Verification status
 

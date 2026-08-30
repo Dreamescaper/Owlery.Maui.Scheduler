@@ -83,8 +83,9 @@ view opens at the start of it.
 
 ## Today and the current time
 
-**NAV-19** Today's column is visually distinguished from the rest of the week whenever it is on
-screen, and its day number is emphasised in the header.
+**NAV-19** When current-day highlighting is enabled, today's column is visually distinguished from
+the rest of the week whenever it is on screen, and its day number is emphasised in the header. When
+disabled, neither treatment is applied.
 
 **NAV-20** A line across today's column marks the current time.
 
@@ -93,11 +94,18 @@ calendar.
 
 **NAV-22** The current-time line is not drawn when the current time falls outside the day window.
 
-**NAV-23** When the date changes while the calendar is open, both the highlighted column and the
-emphasised day number move to the new day.
+**NAV-23** When the date changes while the calendar is open and current-day highlighting is enabled,
+both the highlighted column and the emphasised day number move to the new day.
 
-**NAV-24** Saturday and Sunday are shaded differently from weekdays, so the shape of the week is
-readable at a glance.
+**NAV-24** When non-working-day shading is enabled, days outside the configured recurring working
+week are shaded differently. Monday through Friday are working by default.
+
+**NAV-24a** When non-working-hour shading is enabled, time before and after the configured same-day
+working interval is shaded on working days. It is disabled by default, and an empty or reversed
+interval draws no hour shading.
+
+**NAV-24b** Changing shading, working-time or colour settings redraws the visible chrome without
+rebuilding appointment content.
 
 ## Time zone
 

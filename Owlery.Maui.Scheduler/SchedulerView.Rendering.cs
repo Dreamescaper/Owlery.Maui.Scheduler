@@ -64,7 +64,7 @@ public partial class SchedulerView
             {
                 FontSize = 11,
                 HorizontalTextAlignment = TextAlignment.Center,
-                TextColor = Color.FromArgb("#6E6E6E")
+                TextColor = SecondaryTextColor
             };
 
             stack.Add(nameLabels[day]);
@@ -306,6 +306,7 @@ public partial class SchedulerView
                 slot.DayNameLabels[column].Text = culture.DateTimeFormat
                     .GetAbbreviatedDayName(day)
                     .ToUpper(culture);
+                slot.DayNameLabels[column].TextColor = SecondaryTextColor;
             }
 
             slot.Header.TranslationX = slotIndex * ActiveGeometry.PageSpan + ActiveGeometry.AnimationOffsetX;
@@ -317,16 +318,17 @@ public partial class SchedulerView
         for (var day = 0; day < slot.DayNameLabels.Length; day++)
         {
             var date = slot.PageStart.AddDays(day);
-            var isToday = date == today;
+            var isToday = ShowCurrentDayHighlight && date == today;
 
             slot.DayNameLabels[day].Text = culture.DateTimeFormat
                 .GetAbbreviatedDayName(date.DayOfWeek)
                 .ToUpper(culture);
+            slot.DayNameLabels[day].TextColor = SecondaryTextColor;
 
             var number = slot.DayNumberLabels[day];
             number.Text = date.Day.ToString(culture);
             number.FontAttributes = isToday ? FontAttributes.Bold : FontAttributes.None;
-            number.TextColor = isToday ? Color.FromArgb("#4458C8") : Color.FromArgb("#212121");
+            number.TextColor = isToday ? CurrentDayTextColor : PrimaryTextColor;
         }
 
         slot.Header.TranslationX = slotIndex * geometry.PageSpan + geometry.AnimationOffsetX;

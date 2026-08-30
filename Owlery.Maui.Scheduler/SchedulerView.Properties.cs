@@ -28,7 +28,7 @@ public partial class SchedulerView
 
     public static readonly BindableProperty MonthOverflowFormatProperty = BindableProperty.Create(
         nameof(MonthOverflowFormat), typeof(string), typeof(SchedulerView), "+{0} more",
-        propertyChanged: OnGeometryChanged);
+        propertyChanged: OnAppearanceChanged);
 
     public static readonly BindableProperty CellSelectionTemplateProperty = BindableProperty.Create(
         nameof(CellSelectionTemplate), typeof(DataTemplate), typeof(SchedulerView), null,
@@ -85,7 +85,86 @@ public partial class SchedulerView
 
     public static readonly BindableProperty GridBackgroundColorProperty = BindableProperty.Create(
         nameof(GridBackgroundColor), typeof(Color), typeof(SchedulerView), Colors.White,
-        propertyChanged: OnGeometryChanged);
+        propertyChanged: OnAppearanceChanged);
+
+    public static readonly BindableProperty ShowNonWorkingDaysShadingProperty = BindableProperty.Create(
+        nameof(ShowNonWorkingDaysShading), typeof(bool), typeof(SchedulerView), true,
+        propertyChanged: OnAppearanceChanged);
+
+    public static readonly BindableProperty ShowCurrentDayHighlightProperty = BindableProperty.Create(
+        nameof(ShowCurrentDayHighlight), typeof(bool), typeof(SchedulerView), true,
+        propertyChanged: OnAppearanceChanged);
+
+    public static readonly BindableProperty ShowNonWorkingHoursShadingProperty = BindableProperty.Create(
+        nameof(ShowNonWorkingHoursShading), typeof(bool), typeof(SchedulerView), false,
+        propertyChanged: OnAppearanceChanged);
+
+    public static readonly BindableProperty WorkingDaysProperty = BindableProperty.Create(
+        nameof(WorkingDays), typeof(IReadOnlyCollection<DayOfWeek>), typeof(SchedulerView), DefaultWorkingDays,
+        propertyChanged: OnAppearanceChanged,
+        // A null would only surface later, as an exception thrown inside a draw pass rather than on
+        // the caller's stack. A host that clears working days passes an empty collection instead.
+        coerceValue: static (_, value) => value ?? DefaultWorkingDays);
+
+    public static readonly BindableProperty WorkingHoursStartProperty = BindableProperty.Create(
+        nameof(WorkingHoursStart), typeof(TimeOnly), typeof(SchedulerView), new TimeOnly(9, 0),
+        propertyChanged: OnAppearanceChanged);
+
+    public static readonly BindableProperty WorkingHoursEndProperty = BindableProperty.Create(
+        nameof(WorkingHoursEnd), typeof(TimeOnly), typeof(SchedulerView), new TimeOnly(17, 0),
+        propertyChanged: OnAppearanceChanged);
+
+    public static readonly BindableProperty GridLineColorProperty = AppearanceColor(
+        nameof(GridLineColor), "#E0E0E0");
+
+    public static readonly BindableProperty MinorGridLineColorProperty = AppearanceColor(
+        nameof(MinorGridLineColor), "#F0F0F0");
+
+    public static readonly BindableProperty PrimaryTextColorProperty = AppearanceColor(
+        nameof(PrimaryTextColor), "#212121");
+
+    public static readonly BindableProperty SecondaryTextColorProperty = AppearanceColor(
+        nameof(SecondaryTextColor), "#6E6E6E");
+
+    public static readonly BindableProperty NonWorkingDaysBackgroundColorProperty = AppearanceColor(
+        nameof(NonWorkingDaysBackgroundColor), "#FAFAFA");
+
+    public static readonly BindableProperty NonWorkingHoursBackgroundColorProperty = AppearanceColor(
+        nameof(NonWorkingHoursBackgroundColor), "#FAFAFA");
+
+    public static readonly BindableProperty CurrentDayBackgroundColorProperty = AppearanceColor(
+        nameof(CurrentDayBackgroundColor), "#F3E8FC");
+
+    public static readonly BindableProperty CurrentDayTextColorProperty = AppearanceColor(
+        nameof(CurrentDayTextColor), "#4458C8");
+
+    public static readonly BindableProperty CurrentTimeIndicatorColorProperty = AppearanceColor(
+        nameof(CurrentTimeIndicatorColor), "#FD4225");
+
+    public static readonly BindableProperty AdjacentMonthBackgroundColorProperty = AppearanceColor(
+        nameof(AdjacentMonthBackgroundColor), "#F5F5F5");
+
+    public static readonly BindableProperty AdjacentMonthTextColorProperty = AppearanceColor(
+        nameof(AdjacentMonthTextColor), "#B0B0B0");
+
+    public static readonly BindableProperty CellSelectionBackgroundColorProperty = AppearanceColor(
+        nameof(CellSelectionBackgroundColor), "#F3E8FC");
+
+    public static readonly BindableProperty CellSelectionBorderColorProperty = AppearanceColor(
+        nameof(CellSelectionBorderColor), "#DAB8F4");
+
+    public static readonly BindableProperty CellSelectionTextColorProperty = AppearanceColor(
+        nameof(CellSelectionTextColor), "#6B3FA0");
+
+    public static readonly BindableProperty DragTimeIndicatorBackgroundColorProperty = AppearanceColor(
+        nameof(DragTimeIndicatorBackgroundColor), "#212121");
+
+    public static readonly BindableProperty DragTimeIndicatorTextColorProperty = AppearanceColor(
+        nameof(DragTimeIndicatorTextColor), "#FFFFFF");
+
+    public static readonly BindableProperty BusyIndicatorColorProperty = BindableProperty.Create(
+        nameof(BusyIndicatorColor), typeof(Color), typeof(SchedulerView), null,
+        propertyChanged: OnAppearanceChanged);
 
     /// <summary>Any date inside the week to display. Updated by the control after each swipe.</summary>
     public DateTime DisplayDate
@@ -272,13 +351,170 @@ public partial class SchedulerView
     }
 
     /// <summary>
-    /// Fill behind the grid. It is an opaque colour rather than transparent so the drawing surface
-    /// reliably receives the taps that select an empty cell.
+    /// Fill behind the grid and the time gutter. It is an opaque colour rather than transparent so the
+    /// drawing surface reliably receives the taps that select an empty cell.
     /// </summary>
     public Color GridBackgroundColor
     {
         get => (Color)GetValue(GridBackgroundColorProperty);
         set => SetValue(GridBackgroundColorProperty, value);
+    }
+
+    /// <summary>Whether days outside <see cref="WorkingDays"/> receive a distinct background.</summary>
+    public bool ShowNonWorkingDaysShading
+    {
+        get => (bool)GetValue(ShowNonWorkingDaysShadingProperty);
+        set => SetValue(ShowNonWorkingDaysShadingProperty, value);
+    }
+
+    /// <summary>Whether today's background and day number are emphasised.</summary>
+    /// <remarks>The current-time indicator is independent and remains visible.</remarks>
+    public bool ShowCurrentDayHighlight
+    {
+        get => (bool)GetValue(ShowCurrentDayHighlightProperty);
+        set => SetValue(ShowCurrentDayHighlightProperty, value);
+    }
+
+    /// <summary>Whether time outside the working interval is shaded on working days.</summary>
+    /// <remarks>Only applies to the timeline; a month has no hours.</remarks>
+    public bool ShowNonWorkingHoursShading
+    {
+        get => (bool)GetValue(ShowNonWorkingHoursShadingProperty);
+        set => SetValue(ShowNonWorkingHoursShadingProperty, value);
+    }
+
+    /// <summary>The recurring days regarded as working days.</summary>
+    /// <remarks>
+    /// Replace the collection to report a change; in-place mutations are not observed. An empty
+    /// collection makes every day non-working; <see langword="null"/> restores the default week.
+    /// </remarks>
+    public IReadOnlyCollection<DayOfWeek> WorkingDays
+    {
+        get => (IReadOnlyCollection<DayOfWeek>)GetValue(WorkingDaysProperty);
+        set => SetValue(WorkingDaysProperty, value);
+    }
+
+    /// <summary>Beginning of the same-day working interval.</summary>
+    [System.ComponentModel.TypeConverter(typeof(TimeOnlyTypeConverter))]
+    public TimeOnly WorkingHoursStart
+    {
+        get => (TimeOnly)GetValue(WorkingHoursStartProperty);
+        set => SetValue(WorkingHoursStartProperty, value);
+    }
+
+    /// <summary>End of the same-day working interval.</summary>
+    /// <remarks>Equal or earlier than <see cref="WorkingHoursStart"/> suppresses hour shading.</remarks>
+    [System.ComponentModel.TypeConverter(typeof(TimeOnlyTypeConverter))]
+    public TimeOnly WorkingHoursEnd
+    {
+        get => (TimeOnly)GetValue(WorkingHoursEndProperty);
+        set => SetValue(WorkingHoursEndProperty, value);
+    }
+
+    public Color GridLineColor
+    {
+        get => (Color)GetValue(GridLineColorProperty);
+        set => SetValue(GridLineColorProperty, value);
+    }
+
+    public Color MinorGridLineColor
+    {
+        get => (Color)GetValue(MinorGridLineColorProperty);
+        set => SetValue(MinorGridLineColorProperty, value);
+    }
+
+    public Color PrimaryTextColor
+    {
+        get => (Color)GetValue(PrimaryTextColorProperty);
+        set => SetValue(PrimaryTextColorProperty, value);
+    }
+
+    public Color SecondaryTextColor
+    {
+        get => (Color)GetValue(SecondaryTextColorProperty);
+        set => SetValue(SecondaryTextColorProperty, value);
+    }
+
+    public Color NonWorkingDaysBackgroundColor
+    {
+        get => (Color)GetValue(NonWorkingDaysBackgroundColorProperty);
+        set => SetValue(NonWorkingDaysBackgroundColorProperty, value);
+    }
+
+    public Color NonWorkingHoursBackgroundColor
+    {
+        get => (Color)GetValue(NonWorkingHoursBackgroundColorProperty);
+        set => SetValue(NonWorkingHoursBackgroundColorProperty, value);
+    }
+
+    public Color CurrentDayBackgroundColor
+    {
+        get => (Color)GetValue(CurrentDayBackgroundColorProperty);
+        set => SetValue(CurrentDayBackgroundColorProperty, value);
+    }
+
+    public Color CurrentDayTextColor
+    {
+        get => (Color)GetValue(CurrentDayTextColorProperty);
+        set => SetValue(CurrentDayTextColorProperty, value);
+    }
+
+    public Color CurrentTimeIndicatorColor
+    {
+        get => (Color)GetValue(CurrentTimeIndicatorColorProperty);
+        set => SetValue(CurrentTimeIndicatorColorProperty, value);
+    }
+
+    public Color AdjacentMonthBackgroundColor
+    {
+        get => (Color)GetValue(AdjacentMonthBackgroundColorProperty);
+        set => SetValue(AdjacentMonthBackgroundColorProperty, value);
+    }
+
+    public Color AdjacentMonthTextColor
+    {
+        get => (Color)GetValue(AdjacentMonthTextColorProperty);
+        set => SetValue(AdjacentMonthTextColorProperty, value);
+    }
+
+    /// <summary>Background of the built-in selected-cell affordance. Custom templates ignore it.</summary>
+    public Color CellSelectionBackgroundColor
+    {
+        get => (Color)GetValue(CellSelectionBackgroundColorProperty);
+        set => SetValue(CellSelectionBackgroundColorProperty, value);
+    }
+
+    /// <summary>Border of the built-in selected-cell affordance. Custom templates ignore it.</summary>
+    public Color CellSelectionBorderColor
+    {
+        get => (Color)GetValue(CellSelectionBorderColorProperty);
+        set => SetValue(CellSelectionBorderColorProperty, value);
+    }
+
+    /// <summary>Text of the built-in selected-cell affordance. Custom templates ignore it.</summary>
+    public Color CellSelectionTextColor
+    {
+        get => (Color)GetValue(CellSelectionTextColorProperty);
+        set => SetValue(CellSelectionTextColorProperty, value);
+    }
+
+    public Color DragTimeIndicatorBackgroundColor
+    {
+        get => (Color)GetValue(DragTimeIndicatorBackgroundColorProperty);
+        set => SetValue(DragTimeIndicatorBackgroundColorProperty, value);
+    }
+
+    public Color DragTimeIndicatorTextColor
+    {
+        get => (Color)GetValue(DragTimeIndicatorTextColorProperty);
+        set => SetValue(DragTimeIndicatorTextColorProperty, value);
+    }
+
+    /// <summary><see langword="null"/> preserves the platform activity-indicator colour.</summary>
+    public Color? BusyIndicatorColor
+    {
+        get => (Color?)GetValue(BusyIndicatorColorProperty);
+        set => SetValue(BusyIndicatorColorProperty, value);
     }
 
     /// <summary>Raised when empty grid space is tapped.</summary>
@@ -465,4 +701,10 @@ public partial class SchedulerView
         view.busyIndicator.IsVisible = (bool)newValue;
         view.busyIndicator.IsRunning = (bool)newValue;
     }
+
+    private static BindableProperty AppearanceColor(string name, string value) => BindableProperty.Create(
+        name, typeof(Color), typeof(SchedulerView), Color.FromArgb(value), propertyChanged: OnAppearanceChanged);
+
+    private static void OnAppearanceChanged(BindableObject bindable, object oldValue, object newValue)
+        => ((SchedulerView)bindable).ApplyAppearance();
 }

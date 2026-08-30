@@ -17,22 +17,28 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// </remarks>
 internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots) : IDrawable
 {
-    public Color GridLineColor { get; set; } = Color.FromArgb("#E0E0E0");
+    public Color GridLineColor { get; set; } = null!;
 
-    public Color WeekendBackgroundColor { get; set; } = Color.FromArgb("#FAFAFA");
+    public Color NonWorkingDaysBackgroundColor { get; set; } = null!;
 
     /// <summary>Fill for the leading and trailing days that belong to the neighbouring months.</summary>
-    public Color AdjacentMonthBackgroundColor { get; set; } = Color.FromArgb("#F5F5F5");
+    public Color AdjacentMonthBackgroundColor { get; set; } = null!;
 
-    public Color TodayBackgroundColor { get; set; } = Color.FromArgb("#F3E8FC");
+    public Color CurrentDayBackgroundColor { get; set; } = null!;
 
-    public Color DayNumberColor { get; set; } = Color.FromArgb("#212121");
+    public Color DayNumberColor { get; set; } = null!;
 
-    public Color AdjacentMonthDayNumberColor { get; set; } = Color.FromArgb("#B0B0B0");
+    public Color AdjacentMonthDayNumberColor { get; set; } = null!;
 
-    public Color TodayDayNumberColor { get; set; } = Color.FromArgb("#4458C8");
+    public Color CurrentDayTextColor { get; set; } = null!;
 
-    public Color OverflowTextColor { get; set; } = Color.FromArgb("#6E6E6E");
+    public Color OverflowTextColor { get; set; } = null!;
+
+    public bool ShowNonWorkingDaysShading { get; set; }
+
+    public bool ShowCurrentDayHighlight { get; set; }
+
+    public IReadOnlyCollection<DayOfWeek> WorkingDays { get; set; } = [];
 
     /// <summary>Composed with the number a cell could not show, e.g. <c>"+3 more"</c>.</summary>
     public string OverflowFormat { get; set; } = "+{0} more";
@@ -66,15 +72,15 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
             var x = (float)cell.X + offset;
             var y = (float)cell.Y;
 
-            var isToday = date == today;
+            var isToday = ShowCurrentDayHighlight && date == today;
             var isAdjacent = date.Month != page.Month || date.Year != page.Year;
 
             var fill = isToday
-                ? TodayBackgroundColor
+                ? CurrentDayBackgroundColor
                 : isAdjacent
                     ? AdjacentMonthBackgroundColor
-                    : date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday
-                        ? WeekendBackgroundColor
+                    : ShowNonWorkingDaysShading && !SchedulerWorkingTime.IsWorkingDay(date, WorkingDays)
+                        ? NonWorkingDaysBackgroundColor
                         : null;
 
             if (fill is not null)
@@ -83,7 +89,7 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
                 canvas.FillRectangle(x, y, (float)cell.Width, (float)cell.Height);
             }
 
-            canvas.FontColor = isToday ? TodayDayNumberColor : isAdjacent ? AdjacentMonthDayNumberColor : DayNumberColor;
+            canvas.FontColor = isToday ? CurrentDayTextColor : isAdjacent ? AdjacentMonthDayNumberColor : DayNumberColor;
             canvas.FontSize = 12;
             canvas.Font = isToday ? Microsoft.Maui.Graphics.Font.DefaultBold : Microsoft.Maui.Graphics.Font.Default;
 

@@ -83,6 +83,15 @@ public sealed class KnobsPanel : ContentView
                     height => scheduler.HeaderHeight = Math.Round(height)),
                 new Segmented<string>("TimeFormat", [("HH:mm", "HH:mm"), ("h:mm tt", "h:mm tt"), ("h:mm", "h:mm")],
                     scheduler.TimeFormat, format => scheduler.TimeFormat = format),
+                new Segmented<string>("Working hours",
+                    [("09–17", "09-17"), ("08:30–16:30", "08:30-16:30"), ("Invalid", "17-09")],
+                    "09-17", SetWorkingHours),
+                Knobs.Actions(
+                    ("Mon–Fri", () => SetWorkingDays(DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+                        DayOfWeek.Thursday, DayOfWeek.Friday)),
+                    ("Sun–Thu", () => SetWorkingDays(DayOfWeek.Sunday, DayOfWeek.Monday, DayOfWeek.Tuesday,
+                        DayOfWeek.Wednesday, DayOfWeek.Thursday)),
+                    ("Every day", () => SetWorkingDays(Enum.GetValues<DayOfWeek>()))),
                 Knobs.Actions(
                     ("ScrollToTime 06:00", () => scheduler.ScrollToTime(TimeSpan.FromHours(6))),
                     ("12:00", () => scheduler.ScrollToTime(TimeSpan.FromHours(12))),
@@ -105,9 +114,15 @@ public sealed class KnobsPanel : ContentView
 
                 Knobs.Section("Appearance"),
                 Knobs.Toggle("IsBusy", scheduler.IsBusy, on => scheduler.IsBusy = on),
-                new Segmented<string>("GridBackgroundColor",
-                    [("White", "#FFFFFF"), ("Paper", "#FBF8F2"), ("Slate", "#EEF1F5")],
-                    "#FFFFFF", hex => scheduler.GridBackgroundColor = Color.FromArgb(hex)),
+                Knobs.Toggle("ShowNonWorkingDaysShading", scheduler.ShowNonWorkingDaysShading,
+                    on => scheduler.ShowNonWorkingDaysShading = on),
+                Knobs.Toggle("ShowCurrentDayHighlight", scheduler.ShowCurrentDayHighlight,
+                    on => scheduler.ShowCurrentDayHighlight = on),
+                Knobs.Toggle("ShowNonWorkingHoursShading", scheduler.ShowNonWorkingHoursShading,
+                    on => scheduler.ShowNonWorkingHoursShading = on),
+                new Segmented<string>("Scheduler colors",
+                    [("Light", "light"), ("Dark", "dark"), ("Paper", "paper")],
+                    "light", ApplySchedulerColors),
                 Knobs.Toggle("Custom CellSelectionTemplate", false, UseCustomCellTemplate),
                 Knobs.Caption("Off draws the control's own bordered + box.")
             }
@@ -172,6 +187,43 @@ public sealed class KnobsPanel : ContentView
 
     private void SetTimeZone(string id) =>
         scheduler.TimeZone = id == "utc" ? TimeZoneInfo.Utc : TimeZoneInfo.Local;
+
+    private void SetWorkingDays(params DayOfWeek[] days) => scheduler.WorkingDays = days;
+
+    private void SetWorkingHours(string range)
+    {
+        var parts = range.Split('-');
+        scheduler.WorkingHoursStart = TimeOnly.Parse(parts[0]);
+        scheduler.WorkingHoursEnd = TimeOnly.Parse(parts[1]);
+    }
+
+    private void ApplySchedulerColors(string theme)
+    {
+        var dark = theme == "dark";
+        var paper = theme == "paper";
+
+        var background = Color.FromArgb(dark ? "#121212" : paper ? "#FBF8F2" : "#FFFFFF");
+
+        scheduler.BackgroundColor = background;
+        scheduler.GridBackgroundColor = background;
+        scheduler.GridLineColor = Color.FromArgb(dark ? "#3A3A3A" : paper ? "#DDD4C6" : "#E0E0E0");
+        scheduler.MinorGridLineColor = Color.FromArgb(dark ? "#292929" : paper ? "#EEE7DC" : "#F0F0F0");
+        scheduler.PrimaryTextColor = Color.FromArgb(dark ? "#F2F2F2" : "#212121");
+        scheduler.SecondaryTextColor = Color.FromArgb(dark ? "#A8A8A8" : "#6E6E6E");
+        scheduler.NonWorkingDaysBackgroundColor = Color.FromArgb(dark ? "#181818" : paper ? "#F3EDE3" : "#FAFAFA");
+        scheduler.NonWorkingHoursBackgroundColor = Color.FromArgb(dark ? "#1C1C1C" : paper ? "#F3EDE3" : "#FAFAFA");
+        scheduler.CurrentDayBackgroundColor = Color.FromArgb(dark ? "#28213D" : "#F3E8FC");
+        scheduler.CurrentDayTextColor = Color.FromArgb(dark ? "#B9C2FF" : "#4458C8");
+        scheduler.CurrentTimeIndicatorColor = Color.FromArgb(dark ? "#FF6B52" : "#FD4225");
+        scheduler.AdjacentMonthBackgroundColor = Color.FromArgb(dark ? "#161616" : paper ? "#F0E8DC" : "#F5F5F5");
+        scheduler.AdjacentMonthTextColor = Color.FromArgb(dark ? "#707070" : "#B0B0B0");
+        scheduler.CellSelectionBackgroundColor = Color.FromArgb(dark ? "#34284D" : "#F3E8FC");
+        scheduler.CellSelectionBorderColor = Color.FromArgb(dark ? "#745C96" : "#DAB8F4");
+        scheduler.CellSelectionTextColor = Color.FromArgb(dark ? "#DBC6F5" : "#6B3FA0");
+        scheduler.DragTimeIndicatorBackgroundColor = Color.FromArgb(dark ? "#E8E8E8" : "#212121");
+        scheduler.DragTimeIndicatorTextColor = Color.FromArgb(dark ? "#212121" : "#FFFFFF");
+        scheduler.BusyIndicatorColor = Color.FromArgb(dark ? "#B9C2FF" : "#4458C8");
+    }
 
     private void UseCustomCellTemplate(bool on) =>
         scheduler.CellSelectionTemplate = on ? new DataTemplate(static () => new CellSelectionBadge()) : null;

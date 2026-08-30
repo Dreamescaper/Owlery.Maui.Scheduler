@@ -7,7 +7,16 @@ using MC = Microsoft.Maui.Controls;
 namespace Owlery.Maui.Scheduler.Tests;
 
 /// <summary>An appointment view the tests can pick out of the surface and track by identity.</summary>
-internal sealed class TestAppointmentView : ContentView;
+internal sealed class TestAppointmentView : ContentView
+{
+    public int BindingChanges { get; private set; }
+
+    protected override void OnBindingContextChanged()
+    {
+        base.OnBindingContextChanged();
+        BindingChanges++;
+    }
+}
 
 /// <summary>
 /// A <see cref="SchedulerView"/> hosted in a headless MAUI app, arranged to a known size, with
@@ -46,7 +55,8 @@ internal sealed class SchedulerHarness
     private readonly PagingScrollView pagerScroll;
     private readonly ScrollView timelineScroll;
     private readonly List<Action> pendingScrollCompletions = [];
-    private readonly IGraphicsView surfaceView;
+    private readonly GraphicsView surfaceGraphicsView;
+    private IGraphicsView surfaceView => surfaceGraphicsView;
     private readonly Layout surface;
     private readonly Border dragIndicator;
     private readonly AbsoluteLayout headerStrip;
@@ -103,7 +113,7 @@ internal sealed class SchedulerHarness
         timelineScroll = Descendants(Scheduler).OfType<ScrollView>()
             .First(scrollView => scrollView.Orientation == ScrollOrientation.Vertical);
         surface = (Layout)pagerScroll.Content;
-        surfaceView = Descendants(surface).OfType<GraphicsView>().First();
+        surfaceGraphicsView = Descendants(surface).OfType<GraphicsView>().First();
 
         dragIndicator = Descendants(Scheduler)
             .OfType<Border>()
@@ -164,6 +174,16 @@ internal sealed class SchedulerHarness
             .SelectMany(grid => Descendants(grid).OfType<Label>())
             .Where(label => label.FontSize == 16)
     ];
+
+    public IDrawable SurfaceDrawable => surfaceGraphicsView.Drawable;
+
+    public Color GridBackground => surfaceGraphicsView.BackgroundColor;
+
+    public Color GutterBackground => ((VisualElement)dragIndicator.Parent).BackgroundColor;
+
+    public Border DragTimeIndicatorView => dragIndicator;
+
+    public ActivityIndicator BusyIndicator => Descendants(Scheduler).OfType<ActivityIndicator>().Single();
 
     public double MonthCellWidth => ViewWidth / 7;
 

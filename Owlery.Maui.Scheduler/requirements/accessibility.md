@@ -22,9 +22,9 @@ touching the grid is a convenience for sighted, pointing users, never the only r
 **ACC-7** Grid lines, shading and hour labels are decorative and are not announced. The same
 information is available from the appointments themselves and from the day headers.
 
-**ACC-8** Colour is never the only way information is conveyed. Today's column is distinguished by
-more than its background tint, and any meaning the host encodes in an appointment's colour must also
-be present in its text or icons.
+**ACC-8** Colour is never the only way information is conveyed. When today's highlight is enabled,
+its day number is emphasised as well as its background tint; any meaning the host encodes in an
+appointment's colour must also be present in its text or icons.
 
 **ACC-9** Text sizes respect the person's system text-size preference.
 

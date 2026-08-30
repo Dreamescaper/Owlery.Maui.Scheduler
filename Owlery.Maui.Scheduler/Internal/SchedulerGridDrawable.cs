@@ -6,17 +6,29 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// </summary>
 internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawable
 {
-    public Color HourLineColor { get; set; } = Color.FromArgb("#E0E0E0");
+    public Color GridLineColor { get; set; } = null!;
 
-    public Color HalfHourLineColor { get; set; } = Color.FromArgb("#F0F0F0");
+    public Color MinorGridLineColor { get; set; } = null!;
 
-    public Color DaySeparatorColor { get; set; } = Color.FromArgb("#E0E0E0");
+    public Color NonWorkingDaysBackgroundColor { get; set; } = null!;
 
-    public Color WeekendBackgroundColor { get; set; } = Color.FromArgb("#FAFAFA");
+    public Color NonWorkingHoursBackgroundColor { get; set; } = null!;
 
-    public Color TodayBackgroundColor { get; set; } = Color.FromArgb("#F3E8FC");
+    public Color CurrentDayBackgroundColor { get; set; } = null!;
 
-    public Color CurrentTimeColor { get; set; } = Color.FromArgb("#FD4225");
+    public Color CurrentTimeIndicatorColor { get; set; } = null!;
+
+    public bool ShowNonWorkingDaysShading { get; set; }
+
+    public bool ShowCurrentDayHighlight { get; set; }
+
+    public bool ShowNonWorkingHoursShading { get; set; }
+
+    public IReadOnlyCollection<DayOfWeek> WorkingDays { get; set; } = [];
+
+    public TimeOnly WorkingHoursStart { get; set; }
+
+    public TimeOnly WorkingHoursEnd { get; set; }
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
@@ -34,6 +46,7 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
         var today = DateOnly.FromDateTime(geometry.Now);
 
         DrawDayBackgrounds(canvas, dayWidth, height, today);
+        DrawNonWorkingHours(canvas, dayWidth);
         DrawHourLines(canvas);
         DrawDaySeparators(canvas, dayWidth, height);
         DrawCurrentTimeLine(canvas, today);
@@ -52,10 +65,10 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
             {
                 var date = geometry.SlotStarts[slot].AddDays(day);
 
-                var fill = date == today
-                    ? TodayBackgroundColor
-                    : date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday
-                        ? WeekendBackgroundColor
+                var fill = ShowCurrentDayHighlight && date == today
+                    ? CurrentDayBackgroundColor
+                    : ShowNonWorkingDaysShading && !SchedulerWorkingTime.IsWorkingDay(date, WorkingDays)
+                        ? NonWorkingDaysBackgroundColor
                         : null;
 
                 if (fill is null)
@@ -67,6 +80,49 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
         }
     }
 
+    private void DrawNonWorkingHours(ICanvas canvas, float dayWidth)
+    {
+        if (!ShowNonWorkingHoursShading
+            || !SchedulerWorkingTime.HasSameDayInterval(WorkingHoursStart, WorkingHoursEnd))
+        {
+            return;
+        }
+
+        var workingStart = SchedulerWorkingTime.Minutes(WorkingHoursStart);
+        var workingEnd = SchedulerWorkingTime.Minutes(WorkingHoursEnd);
+
+        for (var slot = 0; slot < SchedulerGeometry.SlotCount; slot++)
+        {
+            var slotOffset = (float)(slot * geometry.PageSpan);
+
+            for (var day = 0; day < geometry.VisibleDays; day++)
+            {
+                var date = geometry.SlotStarts[slot].AddDays(day);
+                if (!SchedulerWorkingTime.IsWorkingDay(date, WorkingDays))
+                    continue;
+
+                var x = slotOffset + day * dayWidth;
+
+                FillMinuteRange(canvas, x, dayWidth, geometry.WindowStartMinutes, workingStart);
+                FillMinuteRange(canvas, x, dayWidth, workingEnd, geometry.WindowEndMinutes);
+            }
+        }
+    }
+
+    private void FillMinuteRange(ICanvas canvas, float x, float width, double start, double end)
+    {
+        var clippedStart = Math.Clamp(start, geometry.WindowStartMinutes, geometry.WindowEndMinutes);
+        var clippedEnd = Math.Clamp(end, geometry.WindowStartMinutes, geometry.WindowEndMinutes);
+        if (clippedEnd <= clippedStart)
+            return;
+
+        var y = (float)geometry.YFromMinutes(clippedStart);
+        var height = (float)(geometry.YFromMinutes(clippedEnd) - y);
+
+        canvas.FillColor = NonWorkingHoursBackgroundColor;
+        canvas.FillRectangle(x, y, width, height);
+    }
+
     private void DrawHourLines(ICanvas canvas)
     {
         var width = (float)geometry.SurfaceWidth;
@@ -76,13 +132,13 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
         {
             var y = (float)geometry.YFromMinutes(hour * 60.0);
 
-            canvas.StrokeColor = HourLineColor;
+            canvas.StrokeColor = GridLineColor;
             canvas.DrawLine(0, y, width, y);
 
             if (hour < geometry.EndHour)
             {
                 var halfY = (float)geometry.YFromMinutes(hour * 60.0 + 30);
-                canvas.StrokeColor = HalfHourLineColor;
+                canvas.StrokeColor = MinorGridLineColor;
                 canvas.DrawLine(0, halfY, width, halfY);
             }
         }
@@ -90,7 +146,7 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
 
     private void DrawDaySeparators(ICanvas canvas, float dayWidth, float height)
     {
-        canvas.StrokeColor = DaySeparatorColor;
+        canvas.StrokeColor = GridLineColor;
         canvas.StrokeSize = 1;
 
         for (var slot = 0; slot < SchedulerGeometry.SlotCount; slot++)
@@ -120,11 +176,11 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
 
             var slotOffset = (float)(slot * geometry.PageSpan);
 
-            canvas.StrokeColor = CurrentTimeColor;
+            canvas.StrokeColor = CurrentTimeIndicatorColor;
             canvas.StrokeSize = 2;
             canvas.DrawLine(slotOffset, y, slotOffset + geometry.VisibleDays * dayWidth, y);
 
-            canvas.FillColor = CurrentTimeColor;
+            canvas.FillColor = CurrentTimeIndicatorColor;
             canvas.FillCircle(slotOffset + dayIndex * dayWidth + 4, y, 4);
         }
     }

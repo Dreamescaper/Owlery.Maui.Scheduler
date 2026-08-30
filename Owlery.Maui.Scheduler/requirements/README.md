@@ -44,6 +44,7 @@ outcome depends on the host acting on it.
 | **Snap interval** | The granularity times are rounded to. 15 minutes by default. |
 | **Page** | What is currently on screen and moves as a unit — a week, three days, one day, or a month. |
 | **Day window** | The range of hours shown vertically, 08:00–23:00 by default. |
+| **Working time** | Recurring working days and one same-day working interval, used only for optional shading. |
 
 ## Where the build does not yet meet these
 

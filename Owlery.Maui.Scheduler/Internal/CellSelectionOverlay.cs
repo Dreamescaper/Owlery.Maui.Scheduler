@@ -11,9 +11,19 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// re-placed afterwards. It is anchored to a column like an appointment, which is why it has to be
 /// re-placed whenever the columns move, not only when the selection changes.
 /// </remarks>
-internal sealed class CellSelectionOverlay(AbsoluteLayout host, int zIndex)
+internal sealed class CellSelectionOverlay(
+    AbsoluteLayout host,
+    int zIndex,
+    Color initialBackgroundColor,
+    Color initialBorderColor,
+    Color initialTextColor)
 {
     private View? view;
+    private Border? defaultBorder;
+    private Label? defaultLabel;
+    private Color backgroundColor = initialBackgroundColor;
+    private Color borderColor = initialBorderColor;
+    private Color textColor = initialTextColor;
 
     /// <summary>Optional host-supplied appearance. Changing it discards the view built from the old one.</summary>
     public DataTemplate? Template { get; set; }
@@ -25,6 +35,25 @@ internal sealed class CellSelectionOverlay(AbsoluteLayout host, int zIndex)
 
         host.Remove(view);
         view = null;
+        defaultBorder = null;
+        defaultLabel = null;
+    }
+
+    /// <summary>Updates the built-in affordance without touching a host-supplied template.</summary>
+    public void UpdateAppearance(Color background, Color border, Color text)
+    {
+        backgroundColor = background;
+        borderColor = border;
+        textColor = text;
+
+        if (defaultBorder is not null)
+        {
+            defaultBorder.BackgroundColor = background;
+            defaultBorder.Stroke = border;
+        }
+
+        if (defaultLabel is not null)
+            defaultLabel.TextColor = text;
     }
 
     /// <summary>Places the marker on the given slot, or hides it when nothing is selected or on screen.</summary>
@@ -83,25 +112,37 @@ internal sealed class CellSelectionOverlay(AbsoluteLayout host, int zIndex)
 
     private View Create()
     {
-        var created = Template?.CreateContent() as View ?? new Border
+        if (Template?.CreateContent() is View custom)
         {
-            BackgroundColor = Color.FromArgb("#F3E8FC"),
-            Stroke = Color.FromArgb("#DAB8F4"),
-            StrokeThickness = 1,
-            Content = new Label
-            {
-                Text = "+",
-                FontSize = 20,
-                TextColor = Color.FromArgb("#6B3FA0"),
-                HorizontalTextAlignment = TextAlignment.Center,
-                VerticalTextAlignment = TextAlignment.Center
-            }
+            Prepare(custom);
+            return custom;
+        }
+
+        defaultLabel = new Label
+        {
+            Text = "+",
+            FontSize = 20,
+            TextColor = textColor,
+            HorizontalTextAlignment = TextAlignment.Center,
+            VerticalTextAlignment = TextAlignment.Center
         };
 
+        defaultBorder = new Border
+        {
+            BackgroundColor = backgroundColor,
+            Stroke = borderColor,
+            StrokeThickness = 1,
+            Content = defaultLabel
+        };
+
+        Prepare(defaultBorder);
+        return defaultBorder;
+    }
+
+    private void Prepare(View created)
+    {
         created.InputTransparent = true;
         created.ZIndex = zIndex;
         host.Add(created);
-
-        return created;
     }
 }

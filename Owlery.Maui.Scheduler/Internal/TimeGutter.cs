@@ -50,7 +50,6 @@ internal sealed class TimeGutter
         indicatorLabel = new Label
         {
             FontSize = 11,
-            TextColor = Colors.White,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center
         };
@@ -60,7 +59,6 @@ internal sealed class TimeGutter
             AutomationId = IndicatorAutomationId,
             IsVisible = false,
             InputTransparent = true,
-            BackgroundColor = Color.FromArgb("#212121"),
             StrokeThickness = 0,
             Padding = 0,
             StrokeShape = new RoundRectangle { CornerRadius = 4 },
@@ -109,7 +107,7 @@ internal sealed class TimeGutter
     /// The first and last hours get no label: there is no line above the one or below the other for
     /// it to sit against. The background is opaque for the reason given in the constructor.
     /// </remarks>
-    public void Update(double width, string timeFormat, Color background)
+    public void Update(double width, string timeFormat, Color background, Color textColor)
     {
         View.IsVisible = true;
         View.WidthRequest = width;
@@ -124,7 +122,10 @@ internal sealed class TimeGutter
             .ToArray();
 
         if (hourLabels.Length != hours.Length)
-            RebuildLabels(hours.Length);
+            RebuildLabels(hours.Length, textColor);
+
+        foreach (var label in hourLabels)
+            label.TextColor = textColor;
 
         var culture = CultureInfo.CurrentUICulture;
 
@@ -181,6 +182,17 @@ internal sealed class TimeGutter
         indicatorLabel.Text = null;
     }
 
+    public void UpdateAppearance(Color background, Color textColor, Color indicatorBackground, Color indicatorText)
+    {
+        View.BackgroundColor = background;
+        input.BackgroundColor = background;
+        indicator.BackgroundColor = indicatorBackground;
+        indicatorLabel.TextColor = indicatorText;
+
+        foreach (var label in hourLabels)
+            label.TextColor = textColor;
+    }
+
     private void OnTapped(object? sender, TouchEventArgs e)
     {
         if (e.Touches.Length == 0)
@@ -189,7 +201,7 @@ internal sealed class TimeGutter
         Tapped?.Invoke(this, geometry.MinutesFromY(e.Touches[0].Y));
     }
 
-    private void RebuildLabels(int count)
+    private void RebuildLabels(int count, Color textColor)
     {
         foreach (var stale in hourLabels)
             View.Remove(stale);
@@ -197,7 +209,7 @@ internal sealed class TimeGutter
         hourLabels = [.. Enumerable.Range(0, count).Select(_ => new Label
         {
             FontSize = 11,
-            TextColor = Color.FromArgb("#6E6E6E"),
+            TextColor = textColor,
             HorizontalTextAlignment = TextAlignment.End,
             VerticalTextAlignment = TextAlignment.Center,
             InputTransparent = true

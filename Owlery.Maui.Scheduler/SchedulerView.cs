@@ -16,6 +16,15 @@ namespace Owlery.Maui.Scheduler;
 /// </remarks>
 public partial class SchedulerView : ContentView
 {
+    private static readonly IReadOnlyCollection<DayOfWeek> DefaultWorkingDays = Array.AsReadOnly(
+    [
+        DayOfWeek.Monday,
+        DayOfWeek.Tuesday,
+        DayOfWeek.Wednesday,
+        DayOfWeek.Thursday,
+        DayOfWeek.Friday
+    ]);
+
     private const int LongPressDelayMs = 350;
     private const double DragMovementToleranceDp = 12;
     private const double TapMovementToleranceDp = 8;
@@ -85,6 +94,7 @@ public partial class SchedulerView : ContentView
     private bool suppressDisplayDateSync;
     private bool initialised;
     private bool repopulateQueued;
+    private bool constructed;
     private double allocatedWidth;
     private double allocatedHeight;
 
@@ -133,7 +143,12 @@ public partial class SchedulerView : ContentView
         // Appointments never handle their own input: every touch on the surface is resolved by
         // OnSurfaceStartInteraction, which hit-tests them arithmetically.
         pool = new AppointmentViewPool(surface) { ViewCreated = view => view.InputTransparent = true };
-        cellSelection = new CellSelectionOverlay(surface, SelectionZIndex);
+        cellSelection = new CellSelectionOverlay(
+            surface,
+            SelectionZIndex,
+            CellSelectionBackgroundColor,
+            CellSelectionBorderColor,
+            CellSelectionTextColor);
 
         pagerScroll = new PagingScrollView { Content = surface };
         pagerScroll.Scrolled += OnPagerScrolled;
@@ -232,6 +247,9 @@ public partial class SchedulerView : ContentView
         Grid.SetRowSpan(dragOverlay, 2);
 
         Content = root;
+
+        constructed = true;
+        ApplyAppearance();
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -437,8 +455,6 @@ public partial class SchedulerView : ContentView
         active.Now = NowInZone();
         active.ViewportHeight = Math.Max(0, allocatedHeight - HeaderHeight);
 
-        gridView.BackgroundColor = GridBackgroundColor;
-
         if (ViewMode is SchedulerViewMode.Month)
             ApplyMonthChrome();
         else
@@ -476,7 +492,7 @@ public partial class SchedulerView : ContentView
 
         gridView.Drawable = gridDrawable;
 
-        gutter.Update(TimeGutterWidth, TimeFormat, GridBackgroundColor);
+        gutter.Update(TimeGutterWidth, TimeFormat, GridBackgroundColor, SecondaryTextColor);
 
         headerCorner.WidthRequest = TimeGutterWidth;
         headerCorner.Text = TimeZoneAbbreviation();
@@ -499,6 +515,63 @@ public partial class SchedulerView : ContentView
 
         headerClip.HeightRequest = HeaderHeight;
         headerSurface.HeightRequest = HeaderHeight;
+    }
+
+    /// <summary>Applies paint-only state without touching appointment layout or binding.</summary>
+    private void ApplyAppearance()
+    {
+        if (!constructed)
+            return;
+
+        gridView.BackgroundColor = GridBackgroundColor;
+        headerCorner.TextColor = SecondaryTextColor;
+
+        gridDrawable.GridLineColor = GridLineColor;
+        gridDrawable.MinorGridLineColor = MinorGridLineColor;
+        gridDrawable.NonWorkingDaysBackgroundColor = NonWorkingDaysBackgroundColor;
+        gridDrawable.NonWorkingHoursBackgroundColor = NonWorkingHoursBackgroundColor;
+        gridDrawable.CurrentDayBackgroundColor = CurrentDayBackgroundColor;
+        gridDrawable.CurrentTimeIndicatorColor = CurrentTimeIndicatorColor;
+        gridDrawable.ShowNonWorkingDaysShading = ShowNonWorkingDaysShading;
+        gridDrawable.ShowCurrentDayHighlight = ShowCurrentDayHighlight;
+        gridDrawable.ShowNonWorkingHoursShading = ShowNonWorkingHoursShading;
+        gridDrawable.WorkingDays = WorkingDays;
+        gridDrawable.WorkingHoursStart = WorkingHoursStart;
+        gridDrawable.WorkingHoursEnd = WorkingHoursEnd;
+
+        monthDrawable.GridLineColor = GridLineColor;
+        monthDrawable.NonWorkingDaysBackgroundColor = NonWorkingDaysBackgroundColor;
+        monthDrawable.AdjacentMonthBackgroundColor = AdjacentMonthBackgroundColor;
+        monthDrawable.CurrentDayBackgroundColor = CurrentDayBackgroundColor;
+        monthDrawable.DayNumberColor = PrimaryTextColor;
+        monthDrawable.AdjacentMonthDayNumberColor = AdjacentMonthTextColor;
+        monthDrawable.CurrentDayTextColor = CurrentDayTextColor;
+        monthDrawable.OverflowTextColor = SecondaryTextColor;
+        monthDrawable.ShowNonWorkingDaysShading = ShowNonWorkingDaysShading;
+        monthDrawable.ShowCurrentDayHighlight = ShowCurrentDayHighlight;
+        monthDrawable.WorkingDays = WorkingDays;
+        monthDrawable.OverflowFormat = MonthOverflowFormat;
+
+        gutter.UpdateAppearance(
+            GridBackgroundColor,
+            SecondaryTextColor,
+            DragTimeIndicatorBackgroundColor,
+            DragTimeIndicatorTextColor);
+
+        cellSelection.UpdateAppearance(
+            CellSelectionBackgroundColor,
+            CellSelectionBorderColor,
+            CellSelectionTextColor);
+
+        busyIndicator.Color = BusyIndicatorColor;
+
+        for (var i = 0; i < slots.Length; i++)
+        {
+            if (slots[i].DayNameLabels.Length > 0)
+                UpdateSlotHeader(slots[i], i);
+        }
+
+        gridView.Invalidate();
     }
 
     /// <summary>

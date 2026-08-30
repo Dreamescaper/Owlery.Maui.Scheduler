@@ -22,6 +22,16 @@
   first-class consumer — `Owlery.Maui.Scheduler.Sample` is one, and is the reference for what using
   it looks like without Blazor. Nothing in the control may assume a Blazor host, and no example in
   its documentation should require one.
+- **Raw MAUI is the tie-breaker.** Where two API shapes both work, take the one an ordinary MAUI
+  host would expect, even when the Blazor wrapper is indifferent or would prefer the other. The
+  wrapper is generated from whatever the control exposes, so it absorbs almost any shape — which is
+  exactly what makes it useless as a design signal. Judge a member by how it reads in a `Style`
+  setter, in an `AppThemeBinding`, and in plain C# from the sample. Worked example: nested settings
+  objects generate cleanly as Blazor child components — Syncfusion's do, in this very app — but in
+  raw MAUI they cannot be reached by a per-value `Style` setter or `AppThemeBinding`, and they force
+  a "null means inherit" sentinel onto every member so that a host can override one value without
+  supplying them all. That is why the colours are flat bindable properties rather than a palette
+  object (§20).
 - It owns no data and fetches nothing. It renders what the host supplies and reports what the user
   did. Do not add HTTP, storage, or domain types.
 
@@ -115,6 +125,8 @@ cited `DESIGN.md` section first.
   only change is line endings.
 - XML doc comments on public members are copied into the generated component, so they become the
   tooltips Razor authors see.
+- Regenerating is a downstream step, never a design input. What the generator makes convenient has no
+  bearing on what the public surface should be — see *What This Project Is*.
 
 ## File Layout
 

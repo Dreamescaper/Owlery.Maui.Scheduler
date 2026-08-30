@@ -171,6 +171,41 @@ running past midnight is clipped to its own day.
 **Changing any property in this group rebuilds all three rendered weeks.** They are configuration, not
 per-frame state — set them once rather than animating them.
 
+### Working time and shading
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `ShowNonWorkingDaysShading` | `bool` | `true` | Whether days absent from `WorkingDays` have a distinct background in timeline and month views. |
+| `ShowCurrentDayHighlight` | `bool` | `true` | Whether today's background and day number are emphasised. Does not control the current-time indicator. |
+| `ShowNonWorkingHoursShading` | `bool` | `false` | Whether time before and after the working interval is shaded on working days. Ignored in month view. |
+| `WorkingDays` | `IReadOnlyCollection<DayOfWeek>` | Monday–Friday | Days regarded as working. Replace the collection to report a change; in-place mutations are not observed. An empty collection makes every day non-working, and `null` restores the default week rather than throwing later from inside a draw. |
+| `WorkingHoursStart` | `TimeOnly` | `09:00` | Beginning of the same-day working interval. |
+| `WorkingHoursEnd` | `TimeOnly` | `17:00` | End of the same-day working interval. Equal or earlier than `WorkingHoursStart` suppresses hour shading rather than throwing. |
+
+On a working current day, non-working-hour bands are painted over the current-day background so both
+states remain visible. A current non-working day keeps the current-day background. Overnight working
+intervals and date-specific exceptions are not modelled.
+
+The whole group is settable from XAML. The endpoints take invariant `HH:mm` text, so a page reads the
+same on every device regardless of the phone's locale:
+
+```xml
+<scheduler:SchedulerView WorkingHoursStart="09:00"
+                         WorkingHoursEnd="17:30"
+                         ShowNonWorkingHoursShading="True">
+    <scheduler:SchedulerView.WorkingDays>
+        <x:Array Type="{x:Type sys:DayOfWeek}">
+            <sys:DayOfWeek>Monday</sys:DayOfWeek>
+            <sys:DayOfWeek>Tuesday</sys:DayOfWeek>
+            <sys:DayOfWeek>Wednesday</sys:DayOfWeek>
+            <sys:DayOfWeek>Thursday</sys:DayOfWeek>
+        </x:Array>
+    </scheduler:SchedulerView.WorkingDays>
+</scheduler:SchedulerView>
+```
+
+with `xmlns:sys="clr-namespace:System;assembly=System.Runtime"`.
+
 ### Month layout
 
 Only meaningful while `ViewMode` is `Month`.
@@ -198,7 +233,44 @@ implement tap-to-arm-then-tap-to-confirm; that is host policy.
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `IsBusy` | `bool` | `false` | Shows a non-blocking activity indicator over the grid. |
-| `GridBackgroundColor` | `Color` | `Colors.White` | Fill behind the grid. Keep it opaque: the drawing surface must reliably receive touches, since it handles all input. Like the layout group above, changing it rebuilds all three weeks. |
+| `GridBackgroundColor` | `Color` | `Colors.White` | Fill behind the grid and the time gutter. Keep it opaque: the drawing surface must reliably receive touches, since it handles all input. The inherited `BackgroundColor` still covers the control and its header container. |
+| `GridLineColor` | `Color` | `#E0E0E0` | Hour lines, day separators and month grid lines. |
+| `MinorGridLineColor` | `Color` | `#F0F0F0` | Half-hour lines. |
+| `PrimaryTextColor` | `Color` | `#212121` | Ordinary day numbers. |
+| `SecondaryTextColor` | `Color` | `#6E6E6E` | Weekday names, time-zone text, gutter labels and month overflow text. |
+| `NonWorkingDaysBackgroundColor` | `Color` | `#FAFAFA` | Background of a shaded non-working day. |
+| `NonWorkingHoursBackgroundColor` | `Color` | `#FAFAFA` | Background of shaded time outside the working interval. |
+| `CurrentDayBackgroundColor` | `Color` | `#F3E8FC` | Background used when today's highlight is enabled. |
+| `CurrentDayTextColor` | `Color` | `#4458C8` | Emphasised day-number colour for today. |
+| `CurrentTimeIndicatorColor` | `Color` | `#FD4225` | Current-time line and dot. |
+| `AdjacentMonthBackgroundColor` | `Color` | `#F5F5F5` | Background of leading and trailing month cells. |
+| `AdjacentMonthTextColor` | `Color` | `#B0B0B0` | Day number of a leading or trailing month cell. |
+| `CellSelectionBackgroundColor` | `Color` | `#F3E8FC` | Built-in selected-cell background; ignored by a custom `CellSelectionTemplate`. |
+| `CellSelectionBorderColor` | `Color` | `#DAB8F4` | Built-in selected-cell border; ignored by a custom template. |
+| `CellSelectionTextColor` | `Color` | `#6B3FA0` | Built-in selected-cell text; ignored by a custom template. |
+| `DragTimeIndicatorBackgroundColor` | `Color` | `#212121` | Background of the time chip shown while dragging. |
+| `DragTimeIndicatorTextColor` | `Color` | `Colors.White` | Text in the drag-time chip. |
+| `BusyIndicatorColor` | `Color?` | `null` | Activity-indicator colour; `null` preserves the platform default. |
+
+These are ordinary bindable properties, so a MAUI style is the theme. Appointment templates and a
+custom selection template keep ownership of their own colours:
+
+```xml
+<Style x:Key="DarkScheduler" TargetType="scheduler:SchedulerView">
+    <Setter Property="BackgroundColor" Value="#121212" />
+    <Setter Property="GridBackgroundColor" Value="#121212" />
+    <Setter Property="PrimaryTextColor" Value="#F2F2F2" />
+    <Setter Property="SecondaryTextColor" Value="#A8A8A8" />
+    <Setter Property="GridLineColor" Value="#3A3A3A" />
+    <Setter Property="MinorGridLineColor" Value="#292929" />
+    <Setter Property="NonWorkingDaysBackgroundColor" Value="#181818" />
+    <Setter Property="CurrentDayBackgroundColor" Value="#28213D" />
+    <Setter Property="CurrentDayTextColor" Value="#B9C2FF" />
+</Style>
+```
+
+Changing an appearance property updates native chrome and redraws the canvas. It does not rebuild or
+rebind appointment views.
 
 ### Events
 
