@@ -53,7 +53,7 @@ has exactly one package reference, and this is the host's tooling.
 |---|---|
 | `‹` `Today` `›` | Writes `DisplayDate` — by `VisibleDays`, or by a month in `Month` mode. |
 | `−` *count* `+` | Steps the number of generated appointments through 0, 10, 25, 50, 100, 250, 500, 1 000, 2 500, 5 000. |
-| **Knobs** | Opens the drawer. Every row writes straight to the property it is named after. |
+| **Knobs** | Opens the drawer. Every row writes straight to the property it is named after, and follows it back when something else changes it — tapping a day header drops `VisibleDays` to 1, and the knob says so. |
 | The bottom strip | The last three events the control raised, with what it reported. |
 
 The drawer also carries the two knobs that are not control properties — *Cancel drags of locked items*

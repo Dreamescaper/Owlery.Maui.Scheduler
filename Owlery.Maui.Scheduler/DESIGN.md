@@ -49,9 +49,15 @@ Two options are doing real work there:
   `IEnumerable<ISchedulerAppointment>`, so without the opt-out the component becomes
   `SchedulerView<T>` with a type parameter nothing uses.
 
-`PropertyChangedEvents` generates `DisplayDateChanged` and `SelectedSlotChanged` from
-`INotifyPropertyChanged`, which is what makes `@bind-DisplayDate` work — the control has no dedicated
-changed events.
+`PropertyChangedEvents` generates `DisplayDateChanged`, `SelectedSlotChanged` and
+`VisibleDaysChanged` from `INotifyPropertyChanged`, which is what makes `@bind-DisplayDate` and its
+siblings work — the control has no dedicated changed events.
+
+`VisibleDays` is on that list for the reason any of them is: a host keeps its own copy to render
+chrome from — a "Day / 3 days / Week" selector reads it — and a copy that only ever writes will
+eventually disagree with the control. Two-way binding is what stops the label describing a view that
+is not on screen. The same lesson, in its one-way form, is what made the sample's `VisibleDays` knob
+go on reading 7 after a day header dropped the page to one day.
 
 **A `RenderFragment` template is safe to pool**, which is not obvious. BlazorBindings' bridge
 (`DataTemplateItemComponent`) creates one `ContentView` root per `CreateContent()` call and then

@@ -364,6 +364,7 @@ Names differ on the Blazor side:
 | `CellSelectionTemplate` (`DataTemplate`) | `CellSelectionTemplate` (`RenderFragment`, no context) |
 | `DisplayDate` | `DisplayDate` + `DisplayDateChanged` → `@bind-DisplayDate` |
 | `SelectedSlot` | `SelectedSlot` + `SelectedSlotChanged` → `@bind-SelectedSlot` |
+| `VisibleDays` | `VisibleDays` + `VisibleDaysChanged` → `@bind-VisibleDays` |
 | `CellTapped` | `OnCellTapped` |
 | `AppointmentTapped` | `OnAppointmentTapped` |
 | `AppointmentDragStarting` | `OnAppointmentDragStarting` |
@@ -377,6 +378,7 @@ Value properties keep their names and become nullable parameters. Example:
 ```razor
 <SchedulerView @bind-DisplayDate="displayDate"
                    @bind-SelectedSlot="selectedSlot"
+                   @bind-VisibleDays="visibleDays"
                    ItemsSource="appointments"
                    TimeZone="TimeZoneHelper.GetSelectedTimeZone()"
                    StartHour="8"

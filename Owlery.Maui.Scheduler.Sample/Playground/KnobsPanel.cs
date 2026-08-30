@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Owlery.Maui.Scheduler.Sample.Data;
 using Owlery.Maui.Scheduler.Sample.Views;
 
@@ -13,6 +14,7 @@ public sealed class KnobsPanel : ContentView
     private readonly AppointmentSource source;
     private readonly Label countCaption;
     private readonly Segmented<int> countPresets;
+    private readonly Segmented<int> dayCounts;
 
     public KnobsPanel(SchedulerView scheduler, AppointmentSource source, DragPolicy policy, Action onClose)
     {
@@ -26,6 +28,12 @@ public sealed class KnobsPanel : ContentView
             [("0", 0), ("25", 25), ("100", 100), ("500", 500), ("2 000", 2000), ("5 000", 5000)],
             source.Count,
             source.SetCount);
+
+        dayCounts = new Segmented<int>(
+            "VisibleDays",
+            [("1", 1), ("2", 2), ("3", 3), ("5", 5), ("7", 7)],
+            scheduler.VisibleDays,
+            days => scheduler.VisibleDays = days);
 
         var viewModes = new Segmented<SchedulerViewMode>(
             "ViewMode",
@@ -52,8 +60,7 @@ public sealed class KnobsPanel : ContentView
 
                 Knobs.Section("View"),
                 viewModes,
-                new Segmented<int>("VisibleDays", [("1", 1), ("2", 2), ("3", 3), ("5", 5), ("7", 7)],
-                    scheduler.VisibleDays, days => scheduler.VisibleDays = days),
+                dayCounts,
                 new Segmented<DayOfWeek>("FirstDayOfWeek",
                     [("Mon", DayOfWeek.Monday), ("Tue", DayOfWeek.Tuesday), ("Wed", DayOfWeek.Wednesday),
                      ("Thu", DayOfWeek.Thursday), ("Fri", DayOfWeek.Friday), ("Sat", DayOfWeek.Saturday),
@@ -109,6 +116,8 @@ public sealed class KnobsPanel : ContentView
         source.Changed += (_, _) => RestateCount();
         RestateCount();
 
+        scheduler.PropertyChanged += OnSchedulerPropertyChanged;
+
         BackgroundColor = Theme.Chrome;
         Content = new ScrollView { Padding = new Thickness(16, 12, 16, 24), Content = content };
     }
@@ -143,6 +152,22 @@ public sealed class KnobsPanel : ContentView
         countCaption.Text =
             $"{source.Count:N0} appointments spread over {SampleDataGenerator.WindowDays} days centred on today — about {perDay:F1} a day.";
         countPresets.Show(source.Count);
+    }
+
+    /// <summary>
+    /// Follows the control when something other than this drawer changes a property it shows.
+    /// </summary>
+    /// <remarks>
+    /// Tapping a day header drops the page to a single day, and the knob went on reading 7 — a panel
+    /// whose whole purpose is to describe the control was describing something that was not there.
+    /// Watching for the change rather than being told about it keeps that true for whatever moves the
+    /// property next; <see cref="Segmented{T}.Show"/> repaints without reporting, so nothing bounces
+    /// back into the control.
+    /// </remarks>
+    private void OnSchedulerPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == SchedulerView.VisibleDaysProperty.PropertyName)
+            dayCounts.Show(scheduler.VisibleDays);
     }
 
     private void SetTimeZone(string id) =>
