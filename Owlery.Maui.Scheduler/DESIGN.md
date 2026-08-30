@@ -1000,6 +1000,28 @@ The animated slide when paging mid-drag is asserted in tests only as a sequence 
 the test shim applies them instantly. That it *looks* right, and that a programmatic scroll still runs
 while `UIScrollView.ScrollEnabled` is false, both need a device.
 
+**The slide onto an adjacent page (section 4) is confirmed on the iOS simulator**, through the sample
+app and DevFlow. The test shim cannot show that a scroll animates, so the header strip's
+`TranslationX` — which mirrors the pager offset on every scroll frame — was sampled repeatedly across
+a page change. It moves, in the right direction, and comes to rest centred:
+
+| | forward (`›`) | backward (`‹`) | four weeks back (`Today`) |
+|---|---|---|---|
+| at rest | −350 | −350 | −350 |
+| after the jump | −24 | −664 | −350 |
+| mid-slide | −237 | −396 | −350 |
+| settled | −350 | −350 | −350 |
+
+The two neighbours animate between the outgoing page and the centre; the far jump stays pinned at the
+centre for the whole tap, which is the rebuild taking the blunt path on purpose. The title tracked
+each one.
+
+One trap found doing this, and it is DevFlow's rather than the control's: **rapid repeated taps on a
+single element are dropped**. Four taps 0.6 s apart on `›` advanced the calendar once, which reads
+exactly like a paging bug. It is not — the same four taps on the appointment-count `+` button, which
+shares no code with paging, behaved identically. Space the taps out, and assert on what the app
+reports rather than on how many taps were sent.
+
 Nothing about the platform handlers is covered headlessly: with no handler registered, `PagingScrollView`
 holds whatever offset it was last told and raises `PageSettled` when a test says so, which is exactly
 what the suite wants and exactly what cannot catch a fling prediction or a clipping quirk.

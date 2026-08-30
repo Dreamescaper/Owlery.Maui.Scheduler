@@ -38,6 +38,14 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
   </ItemGroup>
 
+  <!-- Debug only, so nothing about the playground's tooling reaches a Release build. This is how a
+       device gets driven from a terminal: the playground is the reference host for the control, and
+       everything the headless suite cannot reach — gesture arbitration, platform paging, drag-and-drop
+       — has to be exercised here. See README.md. -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <PackageReference Include="Microsoft.Maui.DevFlow.Agent" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Owlery.Maui.Scheduler\Owlery.Maui.Scheduler.csproj" />
   </ItemGroup>

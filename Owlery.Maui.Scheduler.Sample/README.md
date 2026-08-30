@@ -17,6 +17,36 @@ dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f
 dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f net10.0-android -t:Run
 ```
 
+## Driving it from a terminal
+
+The app carries `Microsoft.Maui.DevFlow.Agent` in **Debug only**, so `maui devflow` can query its
+visual tree, tap, type and screenshot it without anyone touching the device:
+
+```sh
+maui devflow ui tap --text "›"
+```
+
+```sh
+maui devflow ui property <element-id> TranslationX
+```
+
+This is how anything the headless suite cannot reach gets checked — gesture arbitration, platform
+paging, drag-and-drop, and whether a transition actually animates rather than cutting. Reading a
+property back mid-animation is often a better answer than a screenshot: a burst of `TranslationX`
+samples across a page change shows the intermediate positions, where a screenshot usually arrives
+after everything has settled.
+
+Two things to know before trusting a result:
+
+- **The `maui` CLI needs `DOTNET_ROOT` set explicitly**, while `dotnet` must not have it set when a
+  path contains a space — see the DevFlow skill's `references/ios-and-mac.md`.
+- **Rapid repeated taps on one element are dropped.** Four taps 0.6 s apart on `›` moved the calendar
+  once; the same happened on `+`, which shares no code with it. Space taps out, and assert on what the
+  app reports rather than on how many taps were sent.
+
+The agent is `Debug`-only and the control's own project never references it — `Owlery.Maui.Scheduler`
+has exactly one package reference, and this is the host's tooling.
+
 ## What is on screen
 
 | Chrome | Does |

@@ -207,6 +207,10 @@ dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f
 
 - Reach for it before `Owlery.Mobile`. It builds in a fraction of the time, needs no signing identity,
   no Firebase configuration and no API, and its appointment count knob goes to five thousand.
+- It carries `Microsoft.Maui.DevFlow.Agent` in **Debug only**, so `maui devflow ui` can query, tap and
+  screenshot it from a terminal. Sampling a property back mid-animation — the header strip's
+  `TranslationX`, say — proves a transition animates where a screenshot usually arrives too late. Note
+  that rapid repeated taps on one element are dropped; see the sample's `README.md`.
 - It consumes the same public surface a host does, so it also catches a property that became awkward to
   set from outside. Add a knob when you add a property.
 - Its templates are the reference for the pooling rule — see its `README.md`.

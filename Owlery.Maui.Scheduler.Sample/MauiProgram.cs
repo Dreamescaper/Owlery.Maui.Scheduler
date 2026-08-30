@@ -1,5 +1,9 @@
 using Microsoft.Extensions.Logging;
 
+#if DEBUG
+using Microsoft.Maui.DevFlow.Agent;
+#endif
+
 namespace Owlery.Maui.Scheduler.Sample;
 
 public static class MauiProgram
@@ -21,6 +25,11 @@ public static class MauiProgram
 
 #if DEBUG
         builder.Logging.AddDebug();
+
+        // Lets `maui devflow ui` tap, type and screenshot this app from a terminal. The control's
+        // own project stays free of it — it has exactly one package reference, and this is the host's
+        // tooling, not the control's.
+        builder.AddMauiDevFlowAgent();
 #endif
 
         return builder.Build();
