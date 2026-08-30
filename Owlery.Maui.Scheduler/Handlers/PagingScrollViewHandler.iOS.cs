@@ -16,6 +16,45 @@ namespace Owlery.Maui.Scheduler.Handlers;
 /// </remarks>
 internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, MauiPagingScrollView>
 {
+    /// <summary>
+    /// Measures the pager by its content, which is what a <c>ContentView</c> normally does for itself.
+    /// </summary>
+    /// <remarks>
+    /// Taking over the handler cost this. <c>ContentViewHandler</c> measures the cross-platform
+    /// content; a bare <see cref="ViewHandler{TVirtualView,TPlatformView}"/> asks the platform view
+    /// instead, and a scroll view answers with its current bounds — so the pager reported "as tall as
+    /// I already am". It could still grow, because the hour gutter's own height pulls the row up and
+    /// the pager fills it, but nothing ever asked it to shrink: a month replacing a timeline, or a
+    /// smaller <c>HourHeight</c>, left the vertical scroll view scrolling over empty space above and
+    /// below. Both children had already shrunk; only this had not.
+    /// <para>
+    /// The width is the constraint rather than what the content measured. The content is deliberately
+    /// three pages wide and the pager is one page wide — that is the whole point of it — so reporting
+    /// the content's width would make the pager ask for the full surface and stop being a viewport.
+    /// </para>
+    /// <para>
+    /// This is iOS-only on purpose, and it is not an oversight that Android has no counterpart.
+    /// Measuring the cross-platform content from a handler satisfies MAUI's measure cache, and on
+    /// Android that starves the pass that actually matters: <c>MauiPagingContentViewGroup</c> measures
+    /// and then <em>arranges</em> the same content, so with the measure already considered done the
+    /// content was never laid out. Everything inside the pager — the drawing surface and every
+    /// appointment in it — came out unsized, and the grid rendered as blank white while the hour
+    /// gutter and day headers outside the pager still drew. Constraining the width differently does
+    /// not avoid it; making the call at all does. Android needs nothing here because its platform view
+    /// measures its child for itself.
+    /// </para>
+    /// </remarks>
+    public override Size GetDesiredSize(double widthConstraint, double heightConstraint)
+    {
+        if (VirtualView is not IContentView content)
+            return base.GetDesiredSize(widthConstraint, heightConstraint);
+
+        var measured = content.CrossPlatformMeasure(widthConstraint, heightConstraint);
+        var width = double.IsInfinity(widthConstraint) ? measured.Width : widthConstraint;
+
+        return new Size(width, measured.Height);
+    }
+
     protected override MauiPagingScrollView CreatePlatformView() => new()
     {
         // The frame is exactly one page and the content exactly three, so page boundaries already

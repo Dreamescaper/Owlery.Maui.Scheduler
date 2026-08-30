@@ -1028,6 +1028,28 @@ handler did**, including the parts that were never the reason for taking it over
 adopted for paging and offset control (above); its measurement came along silently and broke a month
 that had not been written yet.
 
+#### And the override is iOS-only, which it was not at first
+
+Applied to Android as well, it blanked the control completely. Every drawn thing — grid lines, day
+separators, shading — vanished, and so did every appointment, while the hour gutter and the day
+headers still rendered. The dividing line is the pager: everything inside it was unsized, everything
+beside it was fine. The day headers also fell one page out of step with the title, because a
+`PageSpan` of zero stacks all three of them at the same offset.
+
+Measuring the cross-platform content from a handler satisfies MAUI's measure cache. On iOS nothing is
+lost, because `LayoutSubviews` measures again on every pass. On Android it starves the pass that
+matters: `MauiPagingContentViewGroup` measures *and then arranges* the same content, so a measure
+already considered done leaves the arrange working from nothing. Constraining the width differently
+does not help — measuring there at all is the problem. Android needs no counterpart, because its
+platform view measures its child for itself.
+
+The reason it survived review is worth recording too. The fix was verified on the emulator by reading
+`ScrollView.ScrollY` across an injected swipe, and those numbers were correct: the scroll extents
+really were fixed. Nothing in that check asked whether the control still drew anything, and a blank
+grid scrolls exactly as well as a full one. It is the same trap as the tests in AGENTS.md that passed
+with and without the fix they were written for — measure the thing you changed, and you will not see
+what you broke beside it.
+
 ### Registration
 
 MAUI has no way for a library to register a handler on its own, so a host must call
