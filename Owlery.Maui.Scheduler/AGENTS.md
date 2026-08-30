@@ -97,6 +97,11 @@ cited `DESIGN.md` section first.
   content from a handler satisfies MAUI's measure cache, which on Android starves the pass that both
   measures and arranges it — every child of the pager comes out unsized and the grid renders blank.
   More generally: taking over a handler takes over *everything* it did, not only the part you wanted.
+- **The hour gutter and the pager share one vertical alignment** (§19). Both are `LayoutOptions.Start`.
+  When the hours are shorter than the screen the scroll view's row is taller than the content, and the
+  platforms split that slack differently — Android centres the gutter, iOS centres the pager — so
+  anything other than the two of them agreeing puts the hour labels off the lines they name on one
+  platform or the other.
 - **Platform-specific code is confined** to `Handlers/`, plus `ConfigurePlatformScrolling` and
   `SetScrollingEnabled` for the timeline's vertical scroll. If you need more of it, say so in
   `DESIGN.md` and explain why MAUI could not do the job. `Handlers/` earned its place the hard way —

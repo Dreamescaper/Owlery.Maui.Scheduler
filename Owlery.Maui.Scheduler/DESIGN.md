@@ -1050,6 +1050,29 @@ grid scrolls exactly as well as a full one. It is the same trap as the tests in 
 with and without the fix they were written for — measure the thing you changed, and you will not see
 what you broke beside it.
 
+#### The gutter and the pager must be aligned the same way
+
+Removing the override from Android exposed the defect underneath, which had been hidden the whole
+time behind the blank grid. Whenever the hours are shorter than the screen — a small `HourHeight`, a
+narrow day window — the scroll view leaves its row taller than the content, and the two platforms
+distribute that slack differently. Measured on the emulator at `HourHeight` 24, with 360dp of hours in
+a 675dp row:
+
+| | height | placed at |
+|---|---|---|
+| `bodyGrid` (the row) | 675 | 0 |
+| the surface, inside the pager | 360 | 0 |
+| the gutter | 360 | **157.5** |
+
+157.5 is exactly half the slack: Android stretches the pager and *centres* the gutter, which asks for
+an explicit height. iOS centres the pager instead. Either way the two children of the row disagreed,
+and the hour labels drifted away from the lines they name — by half the slack, in one direction on one
+platform and the other direction on the other.
+
+Both are pinned to `LayoutOptions.Start` for that reason. It is not a preference about where short
+content should sit; it is the two of them having to agree, since one draws the hours and the other
+labels them. Matching whichever alignment a platform happens to pick would only work on that platform.
+
 ### Registration
 
 MAUI has no way for a library to register a handler on its own, so a host must call

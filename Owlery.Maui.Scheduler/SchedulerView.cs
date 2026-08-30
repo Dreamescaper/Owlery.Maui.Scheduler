@@ -167,6 +167,15 @@ public partial class SchedulerView : ContentView
                 new ColumnDefinition(GridLength.Star)
             ]
         };
+        // Both explicitly Top, and they must agree. Whenever the hours are shorter than the screen
+        // the scroll view leaves the row taller than the content, and the two platforms distribute
+        // that slack differently: Android stretches the pager and centres the gutter, iOS centres the
+        // pager. Either way the hour labels drifted away from the lines they name — by half the slack
+        // in one direction or the other. Pinning both to the top removes the disagreement instead of
+        // matching one platform's guess.
+        gutter.View.VerticalOptions = LayoutOptions.Start;
+        pagerScroll.VerticalOptions = LayoutOptions.Start;
+
         bodyGrid.Add(gutter.View, 0);
         bodyGrid.Add(pagerScroll, 1);
 
