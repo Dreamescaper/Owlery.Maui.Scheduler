@@ -57,6 +57,9 @@ direction.
 **MON-16** Data is prepared for the months either side, so swiping to one does not show a blank or
 partially drawn calendar.
 
+**MON-16a** A host jumping to the month either side slides across to it, as NAV-11a describes for a
+week.
+
 **MON-17** Switching between a month and the timeline keeps the person on the day they were looking
 at, rather than moving them to the start of the period.
 

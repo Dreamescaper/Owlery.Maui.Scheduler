@@ -306,6 +306,9 @@ public partial class SchedulerView
         if (target == view.slots[1].PageStart)
             return;
 
+        if (view.TrySlideToPage(target))
+            return;
+
         view.RebuildAll(target);
         view.SyncDisplayDate();
     }

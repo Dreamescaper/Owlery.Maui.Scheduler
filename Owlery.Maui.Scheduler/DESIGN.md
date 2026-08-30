@@ -165,6 +165,34 @@ its week, and the slot offset lives in `TranslationX`. Shifting a whole week is 
 update per view and triggers no layout pass. Rebuilding is confined to `PopulateSlot`, which touches
 only the recycled slot.
 
+### A rotation is not only for swipes
+
+Three things move the calendar by one period, and all three go through the same rotation:
+
+| Trigger | Entry point |
+|---|---|
+| A swipe settling on a page either side | `OnPageSettled` |
+| Holding a dragged appointment against an edge | `PageDuringDragAsync` |
+| The host setting `DisplayDate` to the adjacent period | `TrySlideToPage` |
+
+The last of those used to call `RebuildAll` — which repopulates all three pages, and lands on the new
+period with no motion at all. Both halves of that are wrong for a destination that is *already
+rendered one page away*: its appointment views exist and are bound, and rebuilding discards them only
+to rent replacements for the same data; and a calendar that changes contents where it stands gives no
+clue which direction it moved in. A host's "next week" button is one page forward exactly as much as a
+swipe is.
+
+`SlideToAdjacentPageAsync` is the shared implementation: rotate, then jump to where the outgoing page
+has landed — visually identical to the frame before — and animate across to the centre. The jump is
+unanimated and the slide is not, which is what turns a rotation into a swipe the user did not make.
+Sliding through pages that were never rendered would be a lie, so anything further off than the two
+neighbours is still `RebuildAll`.
+
+Note the asymmetry with `OnPageSettled`, which must stay synchronous and recentres with
+`PagingScrollView.ScrollTo`: there the user has *already* moved the pages, so a frame drawn between
+the rotation and the recentre shows a page nobody swiped to. Here the pages have not moved yet, and
+the animation is the point.
+
 ---
 
 ## 5. One shared appointment layer with a shared pool

@@ -578,32 +578,7 @@ public partial class SchedulerView
 
         try
         {
-            var forward = edgePagingDirection > 0;
-
-            if (forward)
-                Advance();
-            else
-                Retreat();
-
-            // The ghost marks a slot in the week the drag started from, so it travels with that week
-            // and slides off screen once the drag has moved on.
-            if (floatingView is not null)
-                floatingView.TranslationX += forward ? -geometry.ViewportWidth : geometry.ViewportWidth;
-
-            SyncSlotStarts();
-            UpdateSelectionView();
-            SyncDisplayDate();
-            RaiseVisibleDatesChanged();
-
-            // Rotating swaps the weeks without moving anything, so on its own the calendar simply
-            // changes contents and it is hard to see that anything happened. Instead, jump to where
-            // the outgoing week has landed — visually identical to the frame before — and then slide
-            // across to the centre, so the change reads as the same motion as a swipe.
-            var outgoing = forward ? 0 : geometry.SurfaceWidth - geometry.ViewportWidth;
-
-            await pagerScroll.ScrollToAsync(outgoing, false);
-            await pagerScroll.ScrollToAsync(geometry.ViewportWidth, true);
-
+            await SlideToAdjacentPageAsync(edgePagingDirection > 0);
         }
         finally
         {

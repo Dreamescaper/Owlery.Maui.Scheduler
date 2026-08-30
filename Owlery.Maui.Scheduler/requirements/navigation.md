@@ -49,6 +49,11 @@ in step with it.
 **NAV-11** The host can jump to any date. The view then shows the week containing that date. Jumping
 to a date inside the week already shown changes nothing.
 
+**NAV-11a** Jumping to the week either side of the one shown slides across to it, in the direction it
+lies, rather than cutting to it. A "next week" button moves the calendar the same way a swipe does, so
+it is clear which way it went. Jumping further than that cuts, because there is nothing in between to
+travel through.
+
 ## The vertical timeline
 
 **NAV-12** Time runs from top to bottom over a configurable range of hours — 08:00 to 23:00 by

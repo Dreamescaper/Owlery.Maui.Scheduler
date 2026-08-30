@@ -183,7 +183,7 @@ Only meaningful while `ViewMode` is `Month`.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `DisplayDate` | `DateTime` | `DateTime.Today` | Any date inside the week to show. **Two-way**: after a swipe the control writes back the start of the new centre week, so a bound field follows the user. Setting a date in the week already displayed is a no-op. |
+| `DisplayDate` | `DateTime` | `DateTime.Today` | Any date inside the week to show. **Two-way**: after a swipe the control writes back the start of the new centre week, so a bound field follows the user. Setting a date in the week already displayed is a no-op; setting one in the week either side slides across to it, the way a swipe would. |
 | `SelectedSlot` | `SchedulerTimeSlot?` | `null` | The currently selected empty cell, or `null`. **Two-way**: set by the control when empty space is tapped, and settable by the host to move or clear the affordance. |
 | `SnapMinutes` | `int` | `15` | Granularity for cell selection and for dropped appointments. Selection rounds **down** into the containing cell; a drop rounds to the **nearest** boundary. |
 | `AllowDragAndDrop` | `bool` | `true` | When `false`, appointments cannot be picked up at all and no drag events are raised. |

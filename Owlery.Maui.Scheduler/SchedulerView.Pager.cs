@@ -98,6 +98,78 @@ public partial class SchedulerView
         PopulateSlot(recycled, 0);
     }
 
+    /// <summary>
+    /// Moves to a page the ring buffer already holds by sliding onto it, the way a swipe would.
+    /// </summary>
+    /// <remarks>
+    /// A date set from outside — a "next week" button, a mini-calendar, a deep link — is most often
+    /// the period either side of the one showing, and that period is already rendered and one page
+    /// away. Rebuilding all three to arrive at it, with no motion to say where it came from, discards
+    /// both the views and the only cue that tells the user which direction they moved in.
+    /// <para>
+    /// Anything further off is still a rebuild: the pages in between were never rendered, so there is
+    /// nothing to slide through and an animation would only be a delay.
+    /// </para>
+    /// </remarks>
+    private bool TrySlideToPage(DateOnly target)
+    {
+        // A drag owns the pager for its duration — scrolling is turned off and the drop target is
+        // resolved against the centre page — so a period change under it goes the blunt way.
+        if (dragArmed || ActiveGeometry.ViewportWidth <= 0)
+            return false;
+
+        var centre = slots[1].PageStart;
+        var forward = target == pageSurface.NextPage(centre);
+
+        if (!forward && target != pageSurface.PreviousPage(centre))
+            return false;
+
+        // Not awaited: the rotation and the date sync both happen before the first yield, so
+        // everything the caller depends on has already been done by the time this returns.
+        _ = SlideToAdjacentPageAsync(forward);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Rotates one page in the given direction and slides onto it, as a swipe would.
+    /// </summary>
+    /// <remarks>
+    /// Rotating swaps the pages over without moving anything, so on its own the calendar simply
+    /// changes contents where it stands and it is hard to see that anything happened. Instead, jump
+    /// to where the outgoing page has landed — visually identical to the frame before — and then
+    /// slide across to the centre, so the change reads as the same motion as a swipe.
+    /// <para>
+    /// Only the page rotated in is laid out. The two that were already rendered keep the views they
+    /// have, which is why this is worth reaching for whenever the destination is adjacent:
+    /// <see cref="RebuildAll"/> repopulates all three, and the page being moved to is one of them.
+    /// </para>
+    /// </remarks>
+    private async Task SlideToAdjacentPageAsync(bool forward)
+    {
+        var viewportWidth = ActiveGeometry.ViewportWidth;
+
+        if (forward)
+            Advance();
+        else
+            Retreat();
+
+        // The ghost marks a slot in the period a drag started from, so it travels with that period
+        // and slides off screen once the drag has moved on. Null unless a drag is in flight.
+        if (floatingView is not null)
+            floatingView.TranslationX += forward ? -viewportWidth : viewportWidth;
+
+        SyncSlotStarts();
+        UpdateSelectionView();
+        SyncDisplayDate();
+        RaiseVisibleDatesChanged();
+
+        var outgoing = forward ? 0 : ActiveGeometry.SurfaceWidth - viewportWidth;
+
+        await pagerScroll.ScrollToAsync(outgoing, false);
+        await pagerScroll.ScrollToAsync(viewportWidth, true);
+    }
+
     /// <summary>Puts the pager back on the centre page without anything being drawn in between.</summary>
     private void Recentre()
     {
