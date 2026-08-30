@@ -203,6 +203,26 @@ public class SchedulerViewTests
     }
 
     [Test]
+    public void The_selection_marker_is_exactly_as_tall_as_the_slot()
+    {
+        // A quarter hour at the default hour height is 12.5dp — below the 18dp floor a short
+        // appointment gets so it stays tappable. The marker is not tappable and must not claim time
+        // that is not selected, so it takes the slot's own height however small that is.
+        var harness = new SchedulerHarness(Monday);
+        harness.Scheduler.SlotMinutes = 15;
+
+        harness.Tap(harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:05")));
+
+        var bounds = harness.BoundsOf(harness.CellSelectionAffordance!);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(bounds.Height, Is.EqualTo(harness.Scheduler.HourHeight / 4).Within(0.01));
+            Assert.That(bounds.Y, Is.EqualTo(harness.GutterYAt(TimeSpan.Parse("10:00"))).Within(0.01));
+        });
+    }
+
+    [Test]
     public void A_drop_and_a_selection_use_their_own_intervals()
     {
         // Quarter-hour drops, whole-hour selection. The distances are picked so each would land

@@ -18,6 +18,15 @@ internal sealed class CellSelectionOverlay(
     Color initialBorderColor,
     Color initialTextColor)
 {
+    /// <summary>Point size of the built-in "+" when the slot has room for it.</summary>
+    private const double GlyphFontSize = 20;
+
+    /// <summary>Line height a glyph occupies, as a multiple of its point size.</summary>
+    private const double GlyphLineHeightRatio = 1.4;
+
+    /// <summary>Below this the box is left empty rather than filled with an illegible mark.</summary>
+    private const double SmallestGlyphBox = 10;
+
     private View? view;
     private Border? defaultBorder;
     private Label? defaultLabel;
@@ -83,7 +92,9 @@ internal sealed class CellSelectionOverlay(
         view.IsVisible = true;
 
         AbsoluteLayout.SetLayoutFlags(view, AbsoluteLayoutFlags.None);
-        AbsoluteLayout.SetLayoutBounds(view, surface.BoundsFor(slot, pages[pageIndex].PageStart));
+        var requested = surface.BoundsFor(slot, pages[pageIndex].PageStart);
+        AbsoluteLayout.SetLayoutBounds(view, requested);
+        FitGlyph(requested.Height);
         view.TranslationX = pageIndex * geometry.PageSpan + geometry.AnimationOffsetX;
 
         var culture = CultureInfo.CurrentUICulture;
@@ -110,6 +121,22 @@ internal sealed class CellSelectionOverlay(
             view.IsVisible = false;
     }
 
+    /// <summary>Sizes the built-in glyph to the box, or drops it when there is no room for one.</summary>
+    /// <remarks>
+    /// A quarter hour at the default hour height is 12.5dp and a 20pt "+" wants 27, so the label
+    /// overflowed its border and was left showing whichever part of itself happened to fall inside —
+    /// on Android, the bottom of the stroke, which reads as a stray tick rather than a plus. Nothing
+    /// here touches a host-supplied template: a host that provides its own view sizes it itself.
+    /// </remarks>
+    private void FitGlyph(double height)
+    {
+        if (defaultLabel is null)
+            return;
+
+        defaultLabel.IsVisible = height >= SmallestGlyphBox;
+        defaultLabel.FontSize = Math.Min(GlyphFontSize, height / GlyphLineHeightRatio);
+    }
+
     private View Create()
     {
         if (Template?.CreateContent() is View custom)
@@ -121,7 +148,7 @@ internal sealed class CellSelectionOverlay(
         defaultLabel = new Label
         {
             Text = "+",
-            FontSize = 20,
+            FontSize = GlyphFontSize,
             TextColor = textColor,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center

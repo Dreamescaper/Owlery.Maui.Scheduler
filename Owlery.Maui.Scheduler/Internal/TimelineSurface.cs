@@ -58,11 +58,18 @@ internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snap
         return new Rect(x, y, width, height);
     }
 
+    /// <summary>The exact extent of a slot, with none of the minimum an appointment gets.</summary>
+    /// <remarks>
+    /// <see cref="MinimumAppointmentHeight"/> exists so a short appointment stays visible and
+    /// tappable. A selection marker is neither: it is not touchable, and drawn taller than its slot it
+    /// claims time that is not selected — a quarter hour marked out to twenty-two minutes, overlapping
+    /// the slot below.
+    /// </remarks>
     public Rect BoundsFor(SchedulerTimeSlot slot, DateOnly pageStart)
     {
         var dayIndex = DateOnly.FromDateTime(slot.Start).DayNumber - pageStart.DayNumber;
         var y = geometry.YFromMinutes(slot.Start.TimeOfDay.TotalMinutes);
-        var height = Math.Max(MinimumAppointmentHeight, geometry.YFromMinutes(slot.End.TimeOfDay.TotalMinutes) - y);
+        var height = geometry.YFromMinutes(slot.End.TimeOfDay.TotalMinutes) - y;
 
         return new Rect(dayIndex * geometry.DayWidth, y, geometry.DayWidth, height);
     }
