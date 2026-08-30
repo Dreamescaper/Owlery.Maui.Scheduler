@@ -11,7 +11,7 @@ day, and its start and end times.
 
 **ACC-4** The selected time slot is exposed as an element and announced with its day and time.
 
-**ACC-5** The empty grid is **not** exposed cell by cell. A week at the snap interval is several
+**ACC-5** The empty grid is **not** exposed cell by cell. A week of slots is several
 hundred cells; presenting them individually would produce a list nobody can navigate and would make
 the calendar harder to use with a screen reader, not easier.
 

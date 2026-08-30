@@ -103,8 +103,10 @@ public sealed class KnobsPanel : ContentView
                     scheduler.MonthOverflowFormat, format => scheduler.MonthOverflowFormat = format),
 
                 Knobs.Section("Interaction"),
-                new Segmented<int>("SnapMinutes", [("5", 5), ("10", 10), ("15", 15), ("30", 30), ("60", 60)],
-                    scheduler.SnapMinutes, minutes => scheduler.SnapMinutes = minutes),
+                new Segmented<int>("SlotMinutes", [("5", 5), ("15", 15), ("30", 30), ("60", 60)],
+                    scheduler.SlotMinutes, minutes => scheduler.SlotMinutes = minutes),
+                new Segmented<int>("DragSnapMinutes", [("5", 5), ("15", 15), ("30", 30), ("60", 60)],
+                    scheduler.DragSnapMinutes, minutes => scheduler.DragSnapMinutes = minutes),
                 Knobs.Toggle("AllowDragAndDrop", scheduler.AllowDragAndDrop, on => scheduler.AllowDragAndDrop = on),
                 Knobs.Toggle("AllowDragAcrossPeriods", scheduler.AllowDragAcrossPeriods, on => scheduler.AllowDragAcrossPeriods = on),
                 Knobs.Toggle("ShowDragTimeIndicator", scheduler.ShowDragTimeIndicator, on => scheduler.ShowDragTimeIndicator = on),

@@ -7,7 +7,7 @@ How existing items are placed and presented on the grid.
 **APT-1** An appointment appears in the column for its day, with its top edge at its start time and
 its bottom edge at its end time, so its position and length can be read directly off the timeline.
 
-**APT-2** An appointment shorter than the snap interval is still drawn large enough to be seen and
+**APT-2** An appointment shorter than a slot is still drawn large enough to be seen and
 comfortably tapped.
 
 **APT-3** An appointment that starts before the day window opens, or ends after it closes, is trimmed

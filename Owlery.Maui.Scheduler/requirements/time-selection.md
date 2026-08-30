@@ -7,7 +7,7 @@ Picking an empty point in the week — the starting move for creating something.
 **SEL-1** Tapping empty space on the grid selects a time slot at that position.
 
 **SEL-2** The selected time is the day of the column tapped, and the time of the tap rounded **down**
-to the snap interval. Tapping anywhere within a slot selects that whole slot, so the result matches
+to the slot length. Tapping anywhere within a slot selects that whole slot, so the result matches
 where the person's finger visibly landed.
 
 **SEL-3** Selection never lands outside the day window, however close to the edge the tap is.

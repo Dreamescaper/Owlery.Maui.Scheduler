@@ -102,7 +102,7 @@ public sealed class SchedulerHeaderTappedEventArgs(DateTime date) : EventArgs
 public sealed class SchedulerTimeGutterTappedEventArgs(TimeSpan time) : EventArgs
 {
     /// <summary>
-    /// The time at the point tapped, snapped down to <see cref="SchedulerView.SnapMinutes"/> and held
+    /// The time at the point tapped, snapped down to <see cref="SchedulerView.SlotMinutes"/> and held
     /// inside the day window.
     /// </summary>
     public TimeSpan Time { get; } = time;

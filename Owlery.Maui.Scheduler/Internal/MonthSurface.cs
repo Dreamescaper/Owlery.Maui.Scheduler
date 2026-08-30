@@ -65,7 +65,7 @@ internal sealed class MonthSurface(MonthGeometry geometry) : ISchedulerSurface
     /// </summary>
     /// <remarks>
     /// A month cell has no time axis, so there is nothing finer to resolve to. The duration is what
-    /// tells a host which it has been handed: a timeline reports <c>SnapMinutes</c>, a month reports
+    /// tells a host which it has been handed: a timeline reports <c>SlotMinutes</c>, a month reports
     /// a day.
     /// </remarks>
     public SchedulerTimeSlot? SlotAt(Point point, PageSlot[] pages)

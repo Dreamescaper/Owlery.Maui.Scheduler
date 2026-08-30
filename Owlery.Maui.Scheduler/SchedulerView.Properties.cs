@@ -68,8 +68,11 @@ public partial class SchedulerView
     public static readonly BindableProperty HeaderHeightProperty = BindableProperty.Create(
         nameof(HeaderHeight), typeof(double), typeof(SchedulerView), 52d, propertyChanged: OnGeometryChanged);
 
-    public static readonly BindableProperty SnapMinutesProperty = BindableProperty.Create(
-        nameof(SnapMinutes), typeof(int), typeof(SchedulerView), 15);
+    public static readonly BindableProperty SlotMinutesProperty = BindableProperty.Create(
+        nameof(SlotMinutes), typeof(int), typeof(SchedulerView), 15);
+
+    public static readonly BindableProperty DragSnapMinutesProperty = BindableProperty.Create(
+        nameof(DragSnapMinutes), typeof(int), typeof(SchedulerView), 15);
 
     public static readonly BindableProperty AllowDragAndDropProperty = BindableProperty.Create(
         nameof(AllowDragAndDrop), typeof(bool), typeof(SchedulerView), true);
@@ -312,11 +315,32 @@ public partial class SchedulerView
         set => SetValue(HeaderHeightProperty, value);
     }
 
-    /// <summary>Granularity used when selecting a cell and when snapping a dropped appointment.</summary>
-    public int SnapMinutes
+    /// <summary>How long a slot is — the length of what a tap on empty grid selects.</summary>
+    /// <remarks>
+    /// This is the reported <c>Duration</c>, not merely a rounding: at <c>60</c> the timeline is
+    /// divided into hour-long slots and a tap anywhere inside one selects that whole hour. The start
+    /// therefore falls <em>down</em> to the slot containing the point touched, never past it — which
+    /// is what separates this from <see cref="DragSnapMinutes"/>, where a drop is pulled to the
+    /// nearest boundary in either direction. Also the granularity of the time reported by
+    /// <see cref="TimeGutterTapped"/>. A month cell ignores it and reports a whole day.
+    /// </remarks>
+    public int SlotMinutes
     {
-        get => (int)GetValue(SnapMinutesProperty);
-        set => SetValue(SnapMinutesProperty, value);
+        get => (int)GetValue(SlotMinutesProperty);
+        set => SetValue(SlotMinutesProperty, value);
+    }
+
+    /// <summary>Granularity a dragged appointment lands on.</summary>
+    /// <remarks>
+    /// Rounded to the <em>nearest</em> boundary rather than down: a drop should go where the
+    /// appointment looks like it is going. Separate from <see cref="SlotMinutes"/>
+    /// because picking a time and moving an existing booking are different acts — a host may want to
+    /// offer whole hours to book while still letting an existing lesson be nudged by a quarter.
+    /// </remarks>
+    public int DragSnapMinutes
+    {
+        get => (int)GetValue(DragSnapMinutesProperty);
+        set => SetValue(DragSnapMinutesProperty, value);
     }
 
     public bool AllowDragAndDrop
@@ -432,7 +456,7 @@ public partial class SchedulerView
     /// <c>30</c> draws the half hour, <c>15</c> the quarters. <c>60</c> is how you ask for hour lines
     /// only — at that spacing every mark would land on an hour line, so none is drawn. Zero and
     /// negative values are treated the same way rather than throwing. Independent of
-    /// <see cref="SnapMinutes"/>: this is what the grid shows, that is what a drag lands on.
+    /// <see cref="DragSnapMinutes"/>: this is what the grid shows, that is what a drag lands on.
     /// </remarks>
     public int MinorGridLineMinutes
     {

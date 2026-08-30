@@ -34,7 +34,7 @@ public sealed class CellSelectionBadge : Border
     {
         base.OnBindingContextChanged();
 
-        // A month cell reports a slot a whole day long; the timeline reports SnapMinutes. The
+        // A month cell reports a slot a whole day long; the timeline reports SlotMinutes. The
         // duration is what tells them apart.
         label.Text = BindingContext switch
         {

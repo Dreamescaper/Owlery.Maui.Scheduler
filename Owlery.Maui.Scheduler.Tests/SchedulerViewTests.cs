@@ -203,6 +203,32 @@ public class SchedulerViewTests
     }
 
     [Test]
+    public void A_drop_and_a_selection_use_their_own_intervals()
+    {
+        // Quarter-hour drops, whole-hour selection. The distances are picked so each would land
+        // somewhere different under the other's interval: 110 minutes down is 11:50, which is 11:45
+        // to the nearest quarter but 12:00 to the nearest hour; a tap at 10:50 floors to 10:00 on the
+        // hour but would give 10:45 on the quarter.
+        var appointment = TestAppointment.At(Monday.AddDays(2), "10:00", 1);
+        var harness = new SchedulerHarness(Monday, [appointment]);
+        harness.Scheduler.DragSnapMinutes = 15;
+        harness.Scheduler.SlotMinutes = 60;
+
+        var from = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+        var oneHundredAndTenMinutes = 110.0 / 60 * harness.Scheduler.HourHeight;
+        harness.LongPressDrag(from.X, from.Y, from.X, from.Y + oneHundredAndTenMinutes);
+
+        harness.Tap(harness.PointAt(CentreSlot, 4, TimeSpan.Parse("10:50")));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(2).AddHours(11).AddMinutes(45)));
+            Assert.That(harness.Scheduler.SelectedSlot?.Start, Is.EqualTo(Monday.AddDays(4).AddHours(10)));
+            Assert.That(harness.Scheduler.SelectedSlot?.Duration, Is.EqualTo(TimeSpan.FromHours(1)));
+        });
+    }
+
+    [Test]
     public void Dragging_sideways_moves_the_appointment_to_another_day()
     {
         var appointment = TestAppointment.At(Monday.AddDays(2), "10:00", 1);

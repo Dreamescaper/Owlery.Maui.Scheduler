@@ -94,7 +94,7 @@ In `Month`:
   to `StartHour`..`EndHour`.
 - Dragging is not offered, whatever `AllowDragAndDrop` says, so `AppointmentDragStarting` and
   `AppointmentDropped` are never raised. `ScrollToTime` does nothing.
-- `CellTapped` reports a slot a **day** long rather than `SnapMinutes` — a month cell has no finer
+- `CellTapped` reports a slot a **day** long rather than `SlotMinutes` — a month cell has no finer
   target. The `Duration` is what tells the two apart.
 - `VisibleDatesChanged` reports all 42 days of the grid, and its prefetch range spans the grids either
   side — roughly four months rather than three weeks. Size your queries accordingly.
@@ -220,7 +220,8 @@ Only meaningful while `ViewMode` is `Month`.
 |---|---|---|---|
 | `DisplayDate` | `DateTime` | `DateTime.Today` | Any date inside the week to show. **Two-way**: after a swipe the control writes back the start of the new centre week, so a bound field follows the user. Setting a date in the week already displayed is a no-op; setting one in the week either side slides across to it, the way a swipe would. |
 | `SelectedSlot` | `SchedulerTimeSlot?` | `null` | The currently selected empty cell, or `null`. **Two-way**: set by the control when empty space is tapped, and settable by the host to move or clear the affordance. |
-| `SnapMinutes` | `int` | `15` | Granularity for cell selection and for dropped appointments. Selection rounds **down** into the containing cell; a drop rounds to the **nearest** boundary. |
+| `SlotMinutes` | `int` | `15` | How long a slot is: the timeline is divided into slots of this length, and a tap anywhere inside one selects the whole of it. This is the `Duration` reported by `CellTapped`, not just a rounding — the start falls **down** to the containing slot and never past the point touched. Also the granularity of `TimeGutterTapped.Time`. A month cell ignores it and reports a whole day. |
+| `DragSnapMinutes` | `int` | `15` | Granularity a dragged appointment lands on, rounded to the **nearest** boundary so a drop goes where it looks like it is going. Independent of `SlotMinutes`: offering whole hours to book does not mean an existing lesson cannot be nudged by a quarter. |
 | `AllowDragAndDrop` | `bool` | `true` | When `false`, appointments cannot be picked up at all and no drag events are raised. |
 | `ShowDragTimeIndicator` | `bool` | `true` | Whether the time an appointment would take is shown in the hour gutter while it is being dragged. Turning it off does not affect rescheduling itself — only the readout. |
 | `AllowDragAcrossPeriods` | `bool` | `true` | Whether holding a dragged appointment against the leading or trailing edge pages to the adjacent period — here, the adjacent week — after a short dwell. When `false`, an appointment can only be moved within the period it started in. Has no effect unless `AllowDragAndDrop` is also `true`. Named for the period rather than the week because the behaviour belongs to paging itself. |
@@ -236,7 +237,7 @@ implement tap-to-arm-then-tap-to-confirm; that is host policy.
 | `GridBackgroundColor` | `Color` | `Colors.White` | Fill behind the grid and the time gutter. Keep it opaque: the drawing surface must reliably receive touches, since it handles all input. The inherited `BackgroundColor` still covers the control and its header container. |
 | `GridLineColor` | `Color` | `#E0E0E0` | Hour lines, day separators and month grid lines. |
 | `MinorGridLineColor` | `Color` | `#F0F0F0` | The marks inside the hour. |
-| `MinorGridLineMinutes` | `int` | `30` | How often the timeline is marked inside the hour. `30` draws the half hour, `15` the quarters. `60` asks for hour lines only — every mark would land on an hour line, so none is drawn; `0` and negatives are treated the same rather than throwing. Independent of `SnapMinutes`: this is what the grid shows, that is what a drag lands on. The pattern restarts at every hour rather than running through the day, so marks stay hour-aligned; a value that does not divide 60 simply leaves a short gap before the hour (`57` marks `:57` and nothing else). Ignored in month view, which has no hours. |
+| `MinorGridLineMinutes` | `int` | `30` | How often the timeline is marked inside the hour. `30` draws the half hour, `15` the quarters. `60` asks for hour lines only — every mark would land on an hour line, so none is drawn; `0` and negatives are treated the same rather than throwing. Independent of `SlotMinutes` and `DragSnapMinutes`: this is what the grid shows, those are what a tap and a drag land on. The pattern restarts at every hour rather than running through the day, so marks stay hour-aligned; a value that does not divide 60 simply leaves a short gap before the hour (`57` marks `:57` and nothing else). Ignored in month view, which has no hours. |
 | `PrimaryTextColor` | `Color` | `#212121` | Ordinary day numbers. |
 | `SecondaryTextColor` | `Color` | `#6E6E6E` | Weekday names, time-zone text, gutter labels and month overflow text. |
 | `NonWorkingDaysBackgroundColor` | `Color` | `#FAFAFA` | Background of a shaded non-working day. |
@@ -333,8 +334,8 @@ public readonly record struct SchedulerTimeSlot(DateTime Start, TimeSpan Duratio
 
 | Member | Type | Description |
 |---|---|---|
-| `Start` | `DateTime` | Snapped start of the slot. |
-| `Duration` | `TimeSpan` | Slot length — `SnapMinutes` for a cell tapped on the timeline, one day for a cell tapped in a month. |
+| `Start` | `DateTime` | Start of the slot. |
+| `Duration` | `TimeSpan` | Slot length — `SlotMinutes` for a cell tapped on the timeline, one day for a cell tapped in a month. |
 | `End` | `DateTime` | `Start + Duration`. |
 | `Date` | `DateOnly` | Calendar day the slot falls on. |
 
@@ -395,12 +396,12 @@ scheduler.HeaderTapped += (_, e) =>
 
 | Member | Type | Meaning |
 |---|---|---|
-| `Time` | `TimeSpan` | Time of day at the point tapped, snapped down to `SnapMinutes` and held inside the day window. |
+| `Time` | `TimeSpan` | Time of day at the point tapped, floored to `SlotMinutes` and held inside the day window. |
 
 A time of day rather than a `DateTime`, because the gutter runs alongside every day on the page at
 once — a tap on it names an hour, not a date. Read `DisplayDate` if you need to pair it with one.
 
-Snapped *down*, the same way `CellTapped` is: what a tap names begins at or before the point touched,
+Floored, the same way `CellTapped` is: what a tap names begins at or before the point touched,
 so tapping just below an hour line gives that hour rather than the next. The last slot of the day
 starts one interval before `EndHour`.
 

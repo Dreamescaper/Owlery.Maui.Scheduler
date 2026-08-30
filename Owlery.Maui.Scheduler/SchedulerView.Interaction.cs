@@ -408,7 +408,7 @@ public partial class SchedulerView
             dragGrabOffset,
             slotOffset,
             dragOriginalBounds.Height,
-            SnapMinutes);
+            DragSnapMinutes);
 
         var snappedX = target.XWithinPage(geometry, TimelineSurface.AppointmentGap);
         var snappedY = target.Y(geometry);

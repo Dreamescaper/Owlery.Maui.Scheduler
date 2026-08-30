@@ -496,7 +496,7 @@ fires on touch-*down*, before any movement. So the grid drawable owns all input:
    it from a distance threshold. Movement beyond 12 dp cancels too, as a secondary guard.
 3. The timer firing raises `AppointmentDragStarting` (cancellable). If it is not cancelled, scrolling
    is frozen for the duration.
-4. `DragInteraction` applies movement via `TranslationX/Y` only, snapped to `SnapMinutes`, keeping the
+4. `DragInteraction` applies movement via `TranslationX/Y` only, snapped to `DragSnapMinutes`, keeping the
    grabbed point under the finger. No layout pass runs during the drag.
 5. The time the appointment would take is drawn **in the hour gutter**, level with the line it would
    start on. It began as a label floating just above the appointment, which put it under the hand
@@ -1129,7 +1129,7 @@ to spell "none": at that spacing every mark lands on an hour line that is alread
 added and no sentinel value is needed. Zero and negatives fall out the same way, and are tolerated
 rather than thrown on, as reversed working hours are.
 
-It is deliberately independent of `SnapMinutes`. What the grid is ruled into and what a drag lands on
+It is deliberately independent of the snap intervals. What the grid is ruled into and what a drag lands on
 are different questions: a host may want quarter-hour precision without quarter-hour clutter, and the
 two have no reason to move together.
 

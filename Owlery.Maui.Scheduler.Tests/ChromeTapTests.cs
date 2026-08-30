@@ -112,13 +112,13 @@ public class ChromeTapTests
     }
 
     [Test]
-    public void A_gutter_tap_honours_the_snap_interval()
+    public void A_gutter_tap_honours_the_slot_length()
     {
         // 14:20 is chosen because it lands differently under each interval — it floors to 14:15 at the
         // default fifteen and to 14:00 at thirty. A time such as 14:37 gives 14:30 either way and
         // would pass whether or not the interval was read at all.
         var harness = new SchedulerHarness(Monday);
-        harness.Scheduler.SnapMinutes = 30;
+        harness.Scheduler.SlotMinutes = 30;
 
         harness.TapGutter(TimeSpan.Parse("14:20"));
 

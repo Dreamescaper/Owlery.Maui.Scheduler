@@ -40,8 +40,9 @@ outcome depends on the host acting on it.
 | Term | Meaning |
 |---|---|
 | **Appointment** | One item occupying a span of time on the grid. |
-| **Slot** | A position on the grid a person can select, rounded to the snap interval. |
-| **Snap interval** | The granularity times are rounded to. 15 minutes by default. |
+| **Slot** | A stretch of time on the grid a person can select. Its length is the slot length below, and a tap anywhere inside one selects the whole of it. |
+| **Slot length** | How long a selectable slot is. 15 minutes by default. |
+| **Snap interval** | The granularity a *dragged* appointment lands on, rounded to the nearest boundary. 15 minutes by default, and independent of the slot length — the two answer different questions. |
 | **Page** | What is currently on screen and moves as a unit — a week, three days, one day, or a month. |
 | **Day window** | The range of hours shown vertically, 08:00–23:00 by default. |
 | **Working time** | Recurring working days and one same-day working interval, used only for optional shading. |

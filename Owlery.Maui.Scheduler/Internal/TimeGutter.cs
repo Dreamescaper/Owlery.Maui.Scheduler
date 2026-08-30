@@ -92,7 +92,7 @@ internal sealed class TimeGutter
     /// Raised when the hours are tapped, carrying the minute of the day at that point.
     /// </summary>
     /// <remarks>
-    /// Unsnapped on purpose. The gutter has no <c>SnapMinutes</c> of its own and no business owning
+    /// Unsnapped on purpose. The gutter has no snap of its own and no business owning
     /// one; it reports where it was touched and the control decides what that rounds to.
     /// </remarks>
     public event EventHandler<double>? Tapped;

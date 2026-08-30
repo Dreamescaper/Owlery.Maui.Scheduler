@@ -119,9 +119,9 @@ public partial class SchedulerView : ContentView
     {
         gridDrawable = new SchedulerGridDrawable(geometry);
 
-        // Read through a delegate rather than copied in: SnapMinutes has no property-changed handler,
+        // Read through a delegate rather than copied in: the snap has no property-changed handler,
         // so a snapshot taken here would go stale the moment the host changed it.
-        timelineSurface = new TimelineSurface(geometry, () => SnapMinutes);
+        timelineSurface = new TimelineSurface(geometry, () => SlotMinutes);
         monthSurface = new MonthSurface(monthGeometry);
         pageSurface = timelineSurface;
 
