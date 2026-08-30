@@ -80,6 +80,11 @@ cited `DESIGN.md` section first.
 - **A tap is verified with `adb shell input tap`, never with `maui devflow ui tap`** (§15). The CLI
   invokes the gesture recognizer without a position, so `TappedEventArgs.GetPosition` returns null and
   a working handler looks broken. It cannot confirm a tap either way.
+- **A custom handler must still measure its content** (§19). Replacing `ContentViewHandler` with a
+  bare `ViewHandler<,>` loses the measurement it did for free, and a platform scroll view asked how
+  big it wants to be answers with its current bounds — so the view grows but never shrinks. Override
+  `GetDesiredSize`. More generally: taking over a handler takes over *everything* it did, not only
+  the part you wanted.
 - **Platform-specific code is confined** to `Handlers/`, plus `ConfigurePlatformScrolling` and
   `SetScrollingEnabled` for the timeline's vertical scroll. If you need more of it, say so in
   `DESIGN.md` and explain why MAUI could not do the job. `Handlers/` earned its place the hard way —

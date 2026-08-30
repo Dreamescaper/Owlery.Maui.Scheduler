@@ -316,10 +316,20 @@ public partial class SchedulerView : ContentView
         allocatedHeight = height;
 
         var viewport = Math.Max(0, width - ActiveGutterWidth);
-        var unchanged = Math.Abs(viewport - ActiveGeometry.ViewportWidth) < 0.5 && initialised;
+        var viewportHeight = Math.Max(0, height - HeaderHeight);
+
+        // Both axes, not just the width. A month is exactly one viewport tall, so its content height
+        // is a function of this value — and a height-only reallocation used to update the geometry
+        // and then return without applying it, leaving the surface sized for whatever the control was
+        // allocated first. It only ever surfaced by a dozen pixels or so, as a month that could still
+        // be scrolled a little, because a timeline measures its height in hours and does not care
+        // what the viewport is.
+        var unchanged = initialised
+            && Math.Abs(viewport - ActiveGeometry.ViewportWidth) < 0.5
+            && Math.Abs(viewportHeight - ActiveGeometry.ViewportHeight) < 0.5;
 
         ActiveGeometry.ViewportWidth = viewport;
-        ActiveGeometry.ViewportHeight = Math.Max(0, height - HeaderHeight);
+        ActiveGeometry.ViewportHeight = viewportHeight;
 
         if (unchanged)
             return;

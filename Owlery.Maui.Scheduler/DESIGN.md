@@ -904,6 +904,19 @@ is already there: both surfaces can measure the same appointment.
 only written back by a swipe, so switching to a month and back leaves the user on the day they were
 looking at rather than collapsing them to the first of the month.
 
+### A month is the only surface whose height depends on the viewport
+
+`SchedulerGeometry.ContentHeight` is hours times `HourHeight`; `MonthGeometry.ContentHeight` is simply
+`ViewportHeight`. That difference makes the month the only surface that has to be re-laid-out when the
+control's *height* changes, and `OnSizeAllocated` was deciding whether to re-apply the geometry by
+comparing the width alone. A height-only reallocation therefore updated `ViewportHeight` and returned
+without applying it, so the surface kept the height request derived from whatever the control was
+allocated first.
+
+It showed as a month that could still be scrolled by a dozen pixels or so — small enough to look like
+the same defect as the measurement bug above, and it survived fixing that one. Both axes are compared
+now. The timeline never noticed because its height has nothing to do with the viewport.
+
 ### What the month engine does not do
 
 No overlap packing — a month cell has no time axis, so nothing can collide and appointments are
@@ -990,6 +1003,33 @@ scroll view to clip nor clipping the grid around it puts that back. The gutter i
 opaque background instead, which is what fixed chrome over scrolling content should have been doing
 anyway.
 
+### Measuring is not free once you own the handler
+
+`PagingScrollView` is a `ContentView`, and MAUI would ordinarily give it `ContentViewHandler`, which
+measures such a view **by measuring its content**. Writing our own handler on top of
+`ViewHandler<PagingScrollView, MauiPagingScrollView>` quietly gave that up: the base implementation
+asks the *platform* view how big it wants to be, and a scroll view — `UIScrollView` inheriting
+`UIView.sizeThatFits`, and the Android equivalent — answers with its current bounds.
+
+So the pager reported "as tall as I already am". It could still grow, because the hour gutter's own
+`HeightRequest` pulls the surrounding grid row up and the pager fills the row, but nothing ever asked
+it to shrink. Switching a timeline for a month, or reducing `HourHeight`, left the vertical scroll
+view scrolling over a few hundred pixels of nothing. Measured on the simulator at `HourHeight` 60 → 20:
+
+| | hour gutter | grid surface | pager |
+|---|---|---|---|
+| before | 900 → 300 | 900 → 300 | 900 → **900** |
+| after | 900 → 300 | 900 → 300 | 900 → **300** |
+
+`GetDesiredSize` now measures the cross-platform content, as `ContentViewHandler` would have. The
+width is deliberately *not* the measured width: the content is three pages across and the pager is one
+page wide, which is the entire point of it, so the constraint is returned instead.
+
+The general lesson is worth more than the fix. **Taking over a handler takes over everything that
+handler did**, including the parts that were never the reason for taking it over. The pager was
+adopted for paging and offset control (above); its measurement came along silently and broke a month
+that had not been written yet.
+
 ### Registration
 
 MAUI has no way for a library to register a handler on its own, so a host must call
@@ -1075,6 +1115,22 @@ cannot place. Both events looked broken through the CLI on both platforms and we
 
 The iOS side of both events is therefore still unverified — there is no touch injection for the
 simulator here, and DevFlow's tap cannot stand in for one. Only the rendering was checked there.
+
+**Vertical scrolling is confirmed correct on both platforms** after the two measurement fixes in
+sections 18 and 19. On the simulator the numbers line up exactly — a month's content, the pager and
+the scroll viewport all measure 588 where the pager used to insist on 900. On the emulator, where a
+real gesture can be injected, `ScrollView.ScrollY` was read across an `adb shell input swipe`:
+
+| | after an up-swipe |
+|---|---|
+| timeline, `HourHeight` 50 | 75.0 — scrolls, as it should |
+| timeline, `HourHeight` 20 (content shorter than the viewport) | 0 |
+| month | 0.38 |
+
+That 0.38 is one physical pixel at this emulator's 2.625 density — rounding in the device-independent
+to pixel conversion, not scrollable slack. It was several hundred before. Left alone deliberately:
+flooring the measured height to whole pixels to chase it risks clipping the bottom row of cells, which
+is a worse defect than a pixel of travel nobody can see.
 
 One trap found doing this, and it is DevFlow's rather than the control's: **rapid repeated taps on a
 single element are dropped**. Four taps 0.6 s apart on `›` advanced the calendar once, which reads
