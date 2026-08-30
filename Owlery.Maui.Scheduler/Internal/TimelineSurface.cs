@@ -72,21 +72,51 @@ internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snap
 
     public SchedulerTimeSlot? SlotAt(Point point, PageSlot[] pages)
     {
+        if (DateAt(point.X, pages) is not { } date)
+            return null;
+
+        var snapped = Snap(geometry.MinutesFromY(point.Y));
+        var start = date.ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
+
+        return new SchedulerTimeSlot(start, TimeSpan.FromMinutes(SnapInterval));
+    }
+
+    /// <summary>
+    /// Which day a horizontal position falls in, across all three rendered pages.
+    /// </summary>
+    /// <remarks>
+    /// Shared by the grid and by the day headers above it. The two are separate views in separate
+    /// coordinate spaces, but both are three pages wide and laid out to the same column boundaries,
+    /// so resolving a column is one question and is answered here once.
+    /// </remarks>
+    public DateOnly? DateAt(double x, PageSlot[] pages)
+    {
         if (geometry.ViewportWidth <= 0)
             return null;
 
-        var slotIndex = Math.Clamp((int)(point.X / geometry.ViewportWidth), 0, SchedulerGeometry.SlotCount - 1);
-        var xInSlot = point.X - slotIndex * geometry.ViewportWidth;
+        var slotIndex = Math.Clamp((int)(x / geometry.ViewportWidth), 0, SchedulerGeometry.SlotCount - 1);
+        var xInSlot = x - slotIndex * geometry.ViewportWidth;
         var dayIndex = Math.Clamp((int)(xInSlot / geometry.DayWidth), 0, geometry.VisibleDays - 1);
 
-        var snap = Math.Max(1, snapMinutes());
-        var minutes = geometry.MinutesFromY(point.Y);
-        var snapped = Math.Floor(minutes / snap) * snap;
-        snapped = Math.Clamp(snapped, geometry.WindowStartMinutes, geometry.WindowEndMinutes - snap);
-
-        var date = pages[slotIndex].PageStart.AddDays(dayIndex);
-        var start = date.ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
-
-        return new SchedulerTimeSlot(start, TimeSpan.FromMinutes(snap));
+        return pages[slotIndex].PageStart.AddDays(dayIndex);
     }
+
+    /// <summary>
+    /// Rounds a minute of the day to the snap interval and holds it inside the day window.
+    /// </summary>
+    /// <remarks>
+    /// Snapped *down* rather than to the nearest interval, so what a tap selects always begins at or
+    /// before the point touched — tapping just under an hour line selects that hour, never the one
+    /// after it. Shared by the grid and the hour gutter so the two cannot disagree about which slot a
+    /// given height is.
+    /// </remarks>
+    public double Snap(double minutesOfDay)
+    {
+        var snap = SnapInterval;
+        var snapped = Math.Floor(minutesOfDay / snap) * snap;
+
+        return Math.Clamp(snapped, geometry.WindowStartMinutes, geometry.WindowEndMinutes - snap);
+    }
+
+    private int SnapInterval => Math.Max(1, snapMinutes());
 }

@@ -661,6 +661,44 @@ overlay view at that position. The **arm-then-confirm** behaviour (first tap sel
 same cell opens the create flow) lives in the host page, not the control — it is product behaviour, and
 keeping it out means the control does not have to guess what a second tap should do.
 
+### Taps on the chrome, which do not go through the drawing surface
+
+`HeaderTapped` and `TimeGutterTapped` report the day headers and the hour gutter. They take their
+input differently, and the difference was not a choice — it was a device correcting one.
+
+The **header** uses a `TapGestureRecognizer`. It sits outside the vertical scroll view and nothing
+scrolls by dragging on it, so a recognizer claiming the gesture costs nothing, and a tap is exactly
+what a `TapGestureRecognizer` is for.
+
+The **gutter** started the same way and had to change. The hours are *inside* the vertical scroll
+view, and a recognizer on the container claims the gesture outright: a drag begun on the hours stopped
+scrolling the timeline at all. Both were verified by injecting real touches with `adb shell input` —
+a swipe starting on the grid scrolled, the identical swipe starting on the gutter did nothing. So the
+gutter takes its input from a `GraphicsView` behind the labels, the way section 11 says everything
+else does, which receives the touch and still lets the scroll view have the drag. That the grid has
+always worked this way is what made it the obvious answer once the symptom was clear.
+
+The `GraphicsView` is opaque for the reason recorded in section 7 — a transparent drawing surface does
+not reliably receive taps — which also preserves the gutter's other job of painting over the pager
+beside it (section 19).
+
+What they do share with the grid is the arithmetic. `TimelineSurface.DateAt` resolves a column and
+`Snap` rounds a minute, and both the grid and the chrome go through them, so a header cannot name a
+different day than the column beneath it and the gutter cannot name a different slot than the cell
+beside it. `SlotAt` was split into exactly those two pieces rather than having them written twice.
+
+Two details that are easy to get wrong:
+
+- **The header strip is already in page space.** It is three pages wide and translated by the pager
+  offset, so a position taken against the strip needs no correction for the scroll — it is the same
+  space the columns were laid out in.
+- **A month raises neither.** Its header names weekdays that recur down six rows, so no column stands
+  for one date, and it has no gutter at all. Guarding the mode matters more than it looks: the
+  timeline's geometry is still populated after a switch, so without the check a header tap in a month
+  would report a date computed by counting days across a grid that is not laid out in days. A test
+  that opens *in* a month cannot catch that — there is no timeline geometry yet, so it stays silent
+  either way — which is why the one covering it switches into a month from a week.
+
 ---
 
 ## 13. Accessibility
@@ -1015,6 +1053,22 @@ a page change. It moves, in the right direction, and comes to rest centred:
 The two neighbours animate between the outgoing page and the centre; the far jump stays pinned at the
 centre for the whole tap, which is the rebuild taking the blunt path on purpose. The title tracked
 each one.
+
+**`HeaderTapped` and `TimeGutterTapped` are confirmed on the Android emulator**, by injecting real
+touches with `adb shell input tap`. A tap on a day header reports that day and the sample drops into a
+one-day view; a tap on the gutter reports the time under the finger, snapped down — 13:15 for a touch
+just below the 13:30 line. The hour labels still render above the input surface on both platforms.
+
+Getting there found a regression that only a real touch could: the gutter's first implementation used
+a `TapGestureRecognizer`, which claimed the drag and stopped the timeline scrolling when a swipe began
+on the hours. See section 12. **DevFlow could not have caught it, and worse, could not have caught the
+feature working either** — its synthetic tap invokes the recognizer without a position, so
+`TappedEventArgs.GetPosition` returns null and the handler correctly declines to report a tap it
+cannot place. Both events looked broken through the CLI on both platforms and were fine all along.
+`adb shell input` is the way to test a tap; the CLI's tap is not a touch.
+
+The iOS side of both events is therefore still unverified — there is no touch injection for the
+simulator here, and DevFlow's tap cannot stand in for one. Only the rendering was checked there.
 
 One trap found doing this, and it is DevFlow's rather than the control's: **rapid repeated taps on a
 single element are dropped**. Four taps 0.6 s apart on `›` advanced the calendar once, which reads

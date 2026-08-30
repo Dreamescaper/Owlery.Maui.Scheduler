@@ -36,6 +36,11 @@ requiring a confirming second tap, or nothing at all — is the host's decision.
 **SEL-10** The selected slot remains available to the host after the tap, so a separate action
 elsewhere in the app can act on the time the person picked.
 
+**SEL-15** Tapping the hour gutter reports the time at that point, rounded the same way SEL-2 rounds a
+tap on the grid and held inside the day window the same way SEL-3 holds one. It reports a time of day
+and no date: the gutter runs alongside every day on the page at once. Nothing is selected and no
+marker is drawn — the gutter names an hour, it does not pick a slot.
+
 ## Tapping an appointment
 
 **SEL-11** Tapping an existing appointment reports that appointment to the host, and does not change

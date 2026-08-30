@@ -54,6 +54,10 @@ lies, rather than cutting to it. A "next week" button moves the calendar the sam
 it is clear which way it went. Jumping further than that cuts, because there is nothing in between to
 travel through.
 
+**NAV-29** Tapping the header above a day reports that day, so a host can offer the usual way into a
+single day from a week. A month does not report it: its header names weekdays rather than dates, and
+one column stands for six of them.
+
 ## The vertical timeline
 
 **NAV-12** Time runs from top to bottom over a configurable range of hours — 08:00 to 23:00 by

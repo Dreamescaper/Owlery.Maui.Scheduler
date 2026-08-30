@@ -37,6 +37,7 @@ internal sealed class TimeGutter
     internal const string IndicatorAutomationId = "scheduler-drag-time";
 
     private readonly SchedulerGeometry geometry;
+    private readonly GraphicsView input;
     private readonly Border indicator;
     private readonly Label indicatorLabel;
 
@@ -71,14 +72,32 @@ internal sealed class TimeGutter
             ZIndex = 1
         };
 
-        // Drawn above the pager beside it, not merely next to it. MAUI leaves ClipChildren off on its
-        // Android layout views so shadows can spill, which means the pager is drawn without being
-        // clipped to its own bounds — and its content is three pages wide with an opaque background,
-        // so the page parked to the left painted straight over these labels. Fixed chrome over
-        // scrolling content should be drawn last regardless. See DESIGN.md section 19.
-        View = new AbsoluteLayout { InputTransparent = true, ZIndex = 1 };
+        // Taps land here, not on a gesture recognizer over the whole gutter. A recognizer on the
+        // container claims the gesture outright, and the hours sit inside the vertical scroll view:
+        // putting one there stopped a drag begun on the gutter from scrolling the timeline at all,
+        // which a device found straight away. A GraphicsView takes the touches and still lets the
+        // scroll view have the drag — the grid has worked exactly this way all along (section 11).
+        //
+        // Opaque for the same reason the grid is: a transparent drawing surface does not reliably
+        // receive taps. It also has to paint over the pager beside it — MAUI leaves ClipChildren off
+        // on its Android layout views so shadows can spill, so the pager draws unclipped, and its
+        // content is three pages wide with an opaque background of its own. See DESIGN.md section 19.
+        input = new GraphicsView();
+        input.EndInteraction += OnTapped;
+
+        View = new AbsoluteLayout { ZIndex = 1 };
+        View.Add(input);
         View.Add(indicator);
     }
+
+    /// <summary>
+    /// Raised when the hours are tapped, carrying the minute of the day at that point.
+    /// </summary>
+    /// <remarks>
+    /// Unsnapped on purpose. The gutter has no <c>SnapMinutes</c> of its own and no business owning
+    /// one; it reports where it was touched and the control decides what that rounds to.
+    /// </remarks>
+    public event EventHandler<double>? Tapped;
 
     /// <summary>The view to place beside the timeline.</summary>
     public AbsoluteLayout View { get; }
@@ -96,6 +115,9 @@ internal sealed class TimeGutter
         View.WidthRequest = width;
         View.HeightRequest = geometry.ContentHeight;
         View.BackgroundColor = background;
+
+        input.BackgroundColor = background;
+        Place(input, new Rect(0, 0, width, geometry.ContentHeight));
 
         var hours = Enumerable
             .Range(geometry.StartHour + 1, Math.Max(0, geometry.EndHour - geometry.StartHour - 1))
@@ -157,6 +179,14 @@ internal sealed class TimeGutter
     {
         indicator.IsVisible = false;
         indicatorLabel.Text = null;
+    }
+
+    private void OnTapped(object? sender, TouchEventArgs e)
+    {
+        if (e.Touches.Length == 0)
+            return;
+
+        Tapped?.Invoke(this, geometry.MinutesFromY(e.Touches[0].Y));
     }
 
     private void RebuildLabels(int count)

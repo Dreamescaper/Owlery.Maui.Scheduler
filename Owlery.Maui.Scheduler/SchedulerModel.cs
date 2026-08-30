@@ -80,6 +80,35 @@ public sealed class SchedulerAppointmentDroppedEventArgs(ISchedulerAppointment a
 }
 
 /// <summary>
+/// Raised when the header above a day column is tapped.
+/// </summary>
+/// <remarks>
+/// A month does not raise it: its header names weekdays that recur down six rows, so there is no one
+/// date a column stands for.
+/// </remarks>
+public sealed class SchedulerHeaderTappedEventArgs(DateTime date) : EventArgs
+{
+    /// <summary>Midnight on the day whose header was tapped, in <see cref="SchedulerView.TimeZone"/>.</summary>
+    public DateTime Date { get; } = date;
+}
+
+/// <summary>
+/// Raised when the hour gutter down the leading edge is tapped.
+/// </summary>
+/// <remarks>
+/// Carries a time of day rather than a <see cref="DateTime"/>: the gutter runs alongside every day on
+/// the page at once, so a tap on it names an hour and not a date.
+/// </remarks>
+public sealed class SchedulerTimeGutterTappedEventArgs(TimeSpan time) : EventArgs
+{
+    /// <summary>
+    /// The time at the point tapped, snapped down to <see cref="SchedulerView.SnapMinutes"/> and held
+    /// inside the day window.
+    /// </summary>
+    public TimeSpan Time { get; } = time;
+}
+
+/// <summary>
 /// Raised whenever the centre week changes, so the host can fetch the data it needs.
 /// </summary>
 public sealed class SchedulerVisibleDatesChangedEventArgs(

@@ -73,7 +73,13 @@ cited `DESIGN.md` section first.
 - **All input for the grid is handled on the drawing surface** (§11). Appointment views stay
   `InputTransparent`. Do not attach gesture recognizers to them, and do not use
   `PanGestureRecognizer` to detect a press — it only reports after movement has started, which makes
-  long-press-to-drag impossible.
+  long-press-to-drag impossible. This extends to **anything inside the vertical scroll view**: a
+  gesture recognizer there claims the drag and the timeline stops scrolling under it, which is how the
+  hour gutter ended up with a `GraphicsView` of its own (§12). The day headers may keep a
+  `TapGestureRecognizer` only because they sit outside that scroll view.
+- **A tap is verified with `adb shell input tap`, never with `maui devflow ui tap`** (§15). The CLI
+  invokes the gesture recognizer without a position, so `TappedEventArgs.GetPosition` returns null and
+  a working handler looks broken. It cannot confirm a tap either way.
 - **Platform-specific code is confined** to `Handlers/`, plus `ConfigurePlatformScrolling` and
   `SetScrollingEnabled` for the timeline's vertical scroll. If you need more of it, say so in
   `DESIGN.md` and explain why MAUI could not do the job. `Handlers/` earned its place the hard way —

@@ -208,6 +208,8 @@ implement tap-to-arm-then-tap-to-confirm; that is host policy.
 | `AppointmentTapped` | `SchedulerAppointmentTappedEventArgs` | An appointment is tapped without dragging it. |
 | `AppointmentDragStarting` | `SchedulerAppointmentDragStartingEventArgs` | A long press has been held on an appointment, before it lifts. **Cancellable.** |
 | `AppointmentDropped` | `SchedulerAppointmentDroppedEventArgs` | A dragged appointment is released. **Cancellable.** |
+| `HeaderTapped` | `SchedulerHeaderTappedEventArgs` | The header above a day column is tapped. Silent in `Month`. |
+| `TimeGutterTapped` | `SchedulerTimeGutterTappedEventArgs` | The hour gutter is tapped. A month has no gutter, so it never raises this. |
 | `VisibleDatesChanged` | `SchedulerVisibleDatesChangedEventArgs` | The centre week changes, including on first layout. This is the data-loading hook. |
 
 ### Methods
@@ -297,6 +299,38 @@ offline app. It is raised synchronously.
 | `DropStart` | `DateTime` | Snapped start it was dropped on, in `TimeZone`. |
 | `Cancel` | `bool` (settable) | Set `true` to reject the drop and return the appointment to its old position. |
 
+### `SchedulerHeaderTappedEventArgs`
+
+| Member | Type | Meaning |
+|---|---|---|
+| `Date` | `DateTime` | Midnight on the day whose header was tapped, in `TimeZone`. |
+
+Not raised while `ViewMode` is `Month`: a month's header names weekdays, and one column stands for six
+dates rather than one. Tap a month *cell* instead — `CellTapped` reports the whole day.
+
+A natural use is drilling in from a week to a single day:
+
+```csharp
+scheduler.HeaderTapped += (_, e) =>
+{
+    scheduler.DisplayDate = e.Date;
+    scheduler.VisibleDays = 1;
+};
+```
+
+### `SchedulerTimeGutterTappedEventArgs`
+
+| Member | Type | Meaning |
+|---|---|---|
+| `Time` | `TimeSpan` | Time of day at the point tapped, snapped down to `SnapMinutes` and held inside the day window. |
+
+A time of day rather than a `DateTime`, because the gutter runs alongside every day on the page at
+once — a tap on it names an hour, not a date. Read `DisplayDate` if you need to pair it with one.
+
+Snapped *down*, the same way `CellTapped` is: what a tap names begins at or before the point touched,
+so tapping just below an hour line gives that hour rather than the next. The last slot of the day
+starts one interval before `EndHour`.
+
 ### `SchedulerVisibleDatesChangedEventArgs`
 
 | Member | Type | Description |
@@ -334,6 +368,8 @@ Names differ on the Blazor side:
 | `AppointmentTapped` | `OnAppointmentTapped` |
 | `AppointmentDragStarting` | `OnAppointmentDragStarting` |
 | `AppointmentDropped` | `OnAppointmentDropped` |
+| `HeaderTapped` | `OnHeaderTapped` |
+| `TimeGutterTapped` | `OnTimeGutterTapped` |
 | `VisibleDatesChanged` | `OnVisibleDatesChanged` |
 
 Value properties keep their names and become nullable parameters. Example:

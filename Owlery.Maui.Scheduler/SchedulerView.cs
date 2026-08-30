@@ -50,7 +50,7 @@ public partial class SchedulerView : ContentView
 
     private readonly SchedulerGeometry geometry = new();
     private readonly MonthGeometry monthGeometry = new();
-    private readonly ISchedulerSurface timelineSurface;
+    private readonly TimelineSurface timelineSurface;
     private readonly ISchedulerSurface monthSurface;
     private ISchedulerSurface pageSurface;
     private readonly SchedulerGridDrawable gridDrawable;
@@ -118,6 +118,7 @@ public partial class SchedulerView : ContentView
         monthDrawable = new MonthGridDrawable(monthGeometry, slots);
 
         gutter = new TimeGutter(geometry);
+        gutter.Tapped += OnGutterTapped;
 
         gridView = new GraphicsView { Drawable = gridDrawable, ZIndex = GridZIndex };
         gridView.StartInteraction += OnSurfaceStartInteraction;
@@ -175,6 +176,14 @@ public partial class SchedulerView : ContentView
             HorizontalOptions = LayoutOptions.Start,
             VerticalOptions = LayoutOptions.Start
         };
+        // The strip is the one piece of chrome that resolves a tap by arithmetic without a drawing
+        // surface underneath it. Its labels are real views, so a recognizer per column would work —
+        // but there are three pages of them, rebuilt whenever the day count changes, and the column
+        // boundaries are already known from the geometry.
+        var headerTap = new TapGestureRecognizer();
+        headerTap.Tapped += OnHeaderTapped;
+        headerSurface.GestureRecognizers.Add(headerTap);
+
         headerClip = new Grid { IsClippedToBounds = true };
         headerClip.Add(headerSurface);
 

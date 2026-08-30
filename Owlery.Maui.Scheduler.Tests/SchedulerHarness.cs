@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Maui.Controls;
 using Owlery.Maui.Scheduler.Internal;
 using Microsoft.Maui.Graphics;
@@ -35,6 +36,10 @@ internal sealed class SchedulerHarness
 
     public List<SchedulerAppointmentDroppedEventArgs> Drops { get; } = [];
 
+    public List<SchedulerHeaderTappedEventArgs> HeaderTaps { get; } = [];
+
+    public List<SchedulerTimeGutterTappedEventArgs> GutterTaps { get; } = [];
+
     /// <summary>Every scroll the control asked the pager for, in order.</summary>
     public List<(double ScrollX, bool Animated)> PagerScrolls { get; } = [];
 
@@ -44,6 +49,8 @@ internal sealed class SchedulerHarness
     private readonly IGraphicsView surfaceView;
     private readonly Layout surface;
     private readonly Border dragIndicator;
+    private readonly AbsoluteLayout headerStrip;
+    private readonly IGraphicsView gutterInput;
 
     private readonly int visibleDays;
     private readonly SchedulerViewMode viewMode;
@@ -76,6 +83,8 @@ internal sealed class SchedulerHarness
         Scheduler.AppointmentTapped += (_, e) => AppointmentTaps.Add(e);
         Scheduler.AppointmentDragStarting += (_, e) => DragStarts.Add(e);
         Scheduler.AppointmentDropped += (_, e) => Drops.Add(e);
+        Scheduler.HeaderTapped += (_, e) => HeaderTaps.Add(e);
+        Scheduler.TimeGutterTapped += (_, e) => GutterTaps.Add(e);
 
         application.Windows[0].Page = new ContentPage { Content = Scheduler };
 
@@ -99,6 +108,14 @@ internal sealed class SchedulerHarness
         dragIndicator = Descendants(Scheduler)
             .OfType<Border>()
             .First(border => border.AutomationId == TimeGutter.IndicatorAutomationId);
+
+        // Both are found through something already identified rather than by size: the strip and the
+        // scrolling surface are the same width, so a width test would pick whichever came first.
+        gutterInput = Descendants((Element)dragIndicator.Parent).OfType<GraphicsView>().First();
+        headerStrip = (AbsoluteLayout)Descendants(Scheduler)
+            .OfType<Grid>()
+            .First(grid => grid.Parent is AbsoluteLayout && grid.ColumnDefinitions.Count > 0)
+            .Parent;
     }
 
     /// <summary>The appointment views currently showing, in the order the surface holds them.</summary>
@@ -335,6 +352,66 @@ internal sealed class SchedulerHarness
     public void ScrollPagerTo(double x) => pagerScroll.SetScrolledPosition(x);
 
     public void FireLongPressTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(350));
+
+    /// <summary>Where a day's header sits along the three-page strip.</summary>
+    public double HeaderXAt(int slotIndex, int dayIndex) =>
+        slotIndex * PageStride + (dayIndex + 0.5) * (PageStride / visibleDays);
+
+    /// <summary>Where a time sits down the hour gutter.</summary>
+    public double GutterYAt(TimeSpan time) =>
+        (time.TotalMinutes - Scheduler.StartHour * 60) / 60 * Scheduler.HourHeight;
+
+    /// <summary>Taps a day header, addressed by the page and column it belongs to.</summary>
+    public void TapHeader(int slotIndex, int dayIndex) =>
+        SendTap(headerStrip, new Point(HeaderXAt(slotIndex, dayIndex), Scheduler.HeaderHeight / 2));
+
+    /// <summary>Taps the hour gutter level with a time.</summary>
+    public void TapGutter(TimeSpan time) => TapGutterAt(GutterYAt(time));
+
+    /// <summary>Taps the hour gutter at a raw height, for the cases outside the day window.</summary>
+    /// <remarks>
+    /// Through the drawing surface, like the grid, rather than through a gesture recognizer — see the
+    /// note in <c>TimeGutter</c> on why the hours take their input that way.
+    /// </remarks>
+    public void TapGutterAt(double y)
+    {
+        var point = new PointF((float)(GutterWidth / 2), (float)y);
+
+        gutterInput.StartInteraction([point]);
+        gutterInput.EndInteraction([point], isInsideBounds: true);
+    }
+
+    /// <summary>
+    /// Stands in for the platform delivering a tap.
+    /// </summary>
+    /// <remarks>
+    /// <c>SendTapped</c> is how the platform raises a tap, and it is internal because app code has no
+    /// business calling it — but a harness is not app code, it is the platform. The position has to be
+    /// supplied because there is nothing underneath to ask for one: MAUI reads it back through a
+    /// callback the gesture platform normally provides.
+    /// <para>
+    /// Reflection rather than <c>InternalsVisibleTo</c>, which is not ours to grant. If MAUI renames
+    /// this, every tap test fails at once with the message below rather than silently passing.
+    /// </para>
+    /// </remarks>
+    private static void SendTap(View view, Point point)
+    {
+        var send = typeof(TapGestureRecognizer).GetMethod(
+            "SendTapped",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            ?? throw new MissingMethodException("TapGestureRecognizer.SendTapped is gone; the tap harness needs updating.");
+
+        // The overload gained a position callback when TappedEventArgs.GetPosition arrived; take
+        // either shape rather than pinning the test suite to one MAUI version.
+        object?[] arguments = send.GetParameters().Length switch
+        {
+            1 => [view],
+            _ => [view, (Func<IElement?, Point?>)(_ => point)]
+        };
+
+        foreach (var recognizer in view.GestureRecognizers.OfType<TapGestureRecognizer>())
+            send.Invoke(recognizer, arguments);
+    }
 
     /// <summary>
     /// Stands in for the platform scroll view: applies the requested offset and reports the scroll

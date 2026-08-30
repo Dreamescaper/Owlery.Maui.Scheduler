@@ -108,6 +108,43 @@ public partial class SchedulerView
         CellTapped?.Invoke(this, new SchedulerCellTappedEventArgs(slot));
     }
 
+    /// <summary>
+    /// Reports the day whose header was tapped.
+    /// </summary>
+    /// <remarks>
+    /// The strip carries all three pages and is translated by the pager offset, so a position taken
+    /// against the strip is already in the same space the columns were laid out in — the same space
+    /// <see cref="TimelineSurface.DateAt"/> resolves the grid in. Nothing has to undo the scroll.
+    /// <para>
+    /// Silent in a month. Its header names weekdays rather than dates, and a column of one stands for
+    /// six of them; there is no single day to report, so nothing is reported.
+    /// </para>
+    /// </remarks>
+    private void OnHeaderTapped(object? sender, TappedEventArgs e)
+    {
+        if (ViewMode is SchedulerViewMode.Month || HeaderTapped is null)
+            return;
+
+        if (e.GetPosition(headerSurface) is not { } point)
+            return;
+
+        if (timelineSurface.DateAt(point.X, slots) is not { } date)
+            return;
+
+        HeaderTapped.Invoke(this, new SchedulerHeaderTappedEventArgs(date.ToDateTime(TimeOnly.MinValue)));
+    }
+
+    /// <summary>Reports the time the hour gutter was tapped at, snapped like a cell tap.</summary>
+    private void OnGutterTapped(object? sender, double minutes)
+    {
+        if (TimeGutterTapped is null)
+            return;
+
+        var snapped = timelineSurface.Snap(minutes);
+
+        TimeGutterTapped.Invoke(this, new SchedulerTimeGutterTappedEventArgs(TimeSpan.FromMinutes(snapped)));
+    }
+
     /// <summary>Finds the topmost appointment under a surface point, mirroring the paint order.</summary>
     private View? HitTestAppointment(Point point)
     {

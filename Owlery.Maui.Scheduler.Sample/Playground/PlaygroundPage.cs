@@ -61,6 +61,8 @@ public sealed class PlaygroundPage : ContentPage
         scheduler.VisibleDatesChanged += OnVisibleDatesChanged;
         scheduler.CellTapped += OnCellTapped;
         scheduler.AppointmentTapped += OnAppointmentTapped;
+        scheduler.HeaderTapped += OnHeaderTapped;
+        scheduler.TimeGutterTapped += OnTimeGutterTapped;
         scheduler.AppointmentDragStarting += OnAppointmentDragStarting;
         scheduler.AppointmentDropped += OnAppointmentDropped;
 
@@ -269,6 +271,24 @@ public sealed class PlaygroundPage : ContentPage
 
     private void OnAppointmentTapped(object? sender, SchedulerAppointmentTappedEventArgs e) =>
         Log($"AppointmentTapped · {Name(e.Appointment)} at {e.Appointment.Start:ddd d MMM HH:mm}");
+
+    /// <summary>
+    /// Reports the day, and opens it — which is what a host almost always does with this.
+    /// </summary>
+    /// <remarks>
+    /// Left as a plain log in a month, where the event is not raised anyway: a month column names a
+    /// weekday rather than a date, so there is nothing to open.
+    /// </remarks>
+    private void OnHeaderTapped(object? sender, SchedulerHeaderTappedEventArgs e)
+    {
+        Log($"HeaderTapped · {e.Date:ddd d MMM}");
+
+        scheduler.DisplayDate = e.Date;
+        scheduler.VisibleDays = 1;
+    }
+
+    private void OnTimeGutterTapped(object? sender, SchedulerTimeGutterTappedEventArgs e) =>
+        Log($"TimeGutterTapped · {e.Time:hh\\:mm}");
 
     private void OnAppointmentDragStarting(object? sender, SchedulerAppointmentDragStartingEventArgs e)
     {

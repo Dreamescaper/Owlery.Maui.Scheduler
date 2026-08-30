@@ -292,6 +292,23 @@ public partial class SchedulerView
     /// <summary>Raised after a drag is released; set <c>Cancel</c> to snap the appointment back.</summary>
     public event EventHandler<SchedulerAppointmentDroppedEventArgs>? AppointmentDropped;
 
+    /// <summary>
+    /// Raised when the header above a day column is tapped, carrying that day.
+    /// </summary>
+    /// <remarks>
+    /// Not raised while <see cref="ViewMode"/> is <see cref="SchedulerViewMode.Month"/>: a month's
+    /// header names weekdays, and one column stands for six dates rather than one.
+    /// </remarks>
+    public event EventHandler<SchedulerHeaderTappedEventArgs>? HeaderTapped;
+
+    /// <summary>
+    /// Raised when the hour gutter is tapped, carrying the time at that point.
+    /// </summary>
+    /// <remarks>
+    /// A month has no gutter, so it never raises this.
+    /// </remarks>
+    public event EventHandler<SchedulerTimeGutterTappedEventArgs>? TimeGutterTapped;
+
     /// <summary>Raised whenever the centre week changes, including on first layout.</summary>
     public event EventHandler<SchedulerVisibleDatesChangedEventArgs>? VisibleDatesChanged;
 
