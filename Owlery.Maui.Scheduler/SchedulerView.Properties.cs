@@ -120,6 +120,10 @@ public partial class SchedulerView
     public static readonly BindableProperty MinorGridLineColorProperty = AppearanceColor(
         nameof(MinorGridLineColor), "#F0F0F0");
 
+    public static readonly BindableProperty MinorGridLineMinutesProperty = BindableProperty.Create(
+        nameof(MinorGridLineMinutes), typeof(int), typeof(SchedulerView), 30,
+        propertyChanged: OnAppearanceChanged);
+
     public static readonly BindableProperty PrimaryTextColorProperty = AppearanceColor(
         nameof(PrimaryTextColor), "#212121");
 
@@ -421,6 +425,19 @@ public partial class SchedulerView
     {
         get => (Color)GetValue(MinorGridLineColorProperty);
         set => SetValue(MinorGridLineColorProperty, value);
+    }
+
+    /// <summary>How often the timeline is marked inside the hour, in minutes.</summary>
+    /// <remarks>
+    /// <c>30</c> draws the half hour, <c>15</c> the quarters. <c>60</c> is how you ask for hour lines
+    /// only — at that spacing every mark would land on an hour line, so none is drawn. Zero and
+    /// negative values are treated the same way rather than throwing. Independent of
+    /// <see cref="SnapMinutes"/>: this is what the grid shows, that is what a drag lands on.
+    /// </remarks>
+    public int MinorGridLineMinutes
+    {
+        get => (int)GetValue(MinorGridLineMinutesProperty);
+        set => SetValue(MinorGridLineMinutesProperty, value);
     }
 
     public Color PrimaryTextColor

@@ -1122,6 +1122,17 @@ changes inside another mutable object. `GridBackgroundColor` stays separate from
 `BackgroundColor` because it is not decoration: the drawing surface and the gutter must stay opaque
 to receive input, so it defaults to white rather than to the container's colour.
 
+The marks inside the hour are one integer, `MinorGridLineMinutes`, rather than a flag beside an
+interval. A flag and an interval can disagree — "subdivisions off, every fifteen minutes" has to mean
+something — and the disagreement is the sort a host only discovers on screen. Sixty is the natural way
+to spell "none": at that spacing every mark lands on an hour line that is already drawn, so nothing is
+added and no sentinel value is needed. Zero and negatives fall out the same way, and are tolerated
+rather than thrown on, as reversed working hours are.
+
+It is deliberately independent of `SnapMinutes`. What the grid is ruled into and what a drag lands on
+are different questions: a host may want quarter-hour precision without quarter-hour clutter, and the
+two have no reason to move together.
+
 All of these properties take a paint-only path: update the two drawables and the handful of native
 labels or borders, then invalidate the canvas. They never repopulate a page or rebind an appointment.
 The draw order is explicit. A current-day fill wins over a non-working-day fill, while out-of-hours

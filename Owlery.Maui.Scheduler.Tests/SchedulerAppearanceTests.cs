@@ -166,6 +166,53 @@ public class SchedulerAppearanceTests
     }
 
     [Test]
+    public void Sub_hour_marks_follow_their_interval_and_stop_at_the_hour()
+    {
+        // 08:00-18:00 is ten hours, so nine of them have an hour below to subdivide.
+        Assert.Multiple(() =>
+        {
+            Assert.That(MinorLines(30), Has.Count.EqualTo(10), "the half hour");
+            Assert.That(MinorLines(15), Has.Count.EqualTo(30), "three quarters an hour");
+            Assert.That(MinorLines(20), Has.Count.EqualTo(20), "two thirds an hour");
+            Assert.That(MinorLines(60), Is.Empty, "every mark would land on an hour line");
+            Assert.That(MinorLines(0), Is.Empty);
+            Assert.That(MinorLines(-15), Is.Empty);
+        });
+    }
+
+    [Test]
+    public void An_interval_that_does_not_divide_the_hour_restarts_rather_than_drifting()
+    {
+        // 57 leaves a three-minute gap before each hour line. Ugly, but it stays hour-aligned all day
+        // rather than walking away from the hours it is meant to subdivide.
+        var offsets = MinorLines(57)
+            .Select(line => Math.Round(line.Start.Y / HourHeight * 60))
+            .ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(offsets, Has.Length.EqualTo(10), "one per hour that has an hour below it");
+            Assert.That(offsets[0], Is.EqualTo(57));
+            Assert.That(offsets.Zip(offsets.Skip(1), (a, b) => b - a), Is.All.EqualTo(60));
+        });
+    }
+
+    [Test]
+    public void Removing_the_sub_hour_marks_leaves_the_hour_lines_alone()
+    {
+        var drawable = Timeline();
+        drawable.MinorGridLineMinutes = 60;
+
+        var recording = Draw(drawable);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(recording.Lines, Has.None.Matches<LineOperation>(line => line.Color == MinorGrid));
+            Assert.That(recording.Lines.Count(line => line.Color == Grid), Is.GreaterThan(0));
+        });
+    }
+
+    [Test]
     public void Disabling_current_day_highlight_does_not_disable_the_current_time_indicator()
     {
         var drawable = Timeline();
@@ -325,6 +372,8 @@ public class SchedulerAppearanceTests
         Assert.That(harness.CellSelectionAffordance!.BackgroundColor, Is.EqualTo(custom));
     }
 
+    private const double HourHeight = 50;
+
     private static SchedulerGridDrawable Timeline(int startHour = 8, int endHour = 18)
     {
         var geometry = new SchedulerGeometry
@@ -332,7 +381,7 @@ public class SchedulerAppearanceTests
             ViewportWidth = 700,
             ViewportHeight = 500,
             VisibleDays = 7,
-            HourHeight = 50,
+            HourHeight = HourHeight,
             StartHour = startHour,
             EndHour = endHour,
             Now = new DateTime(2026, 8, 26, 10, 0, 0)
@@ -345,6 +394,7 @@ public class SchedulerAppearanceTests
         {
             GridLineColor = Grid,
             MinorGridLineColor = MinorGrid,
+            MinorGridLineMinutes = 30,
             NonWorkingDaysBackgroundColor = NonWorkingDay,
             NonWorkingHoursBackgroundColor = NonWorkingHour,
             CurrentDayBackgroundColor = CurrentDay,
@@ -356,6 +406,17 @@ public class SchedulerAppearanceTests
             WorkingHoursStart = new TimeOnly(9, 0),
             WorkingHoursEnd = new TimeOnly(17, 0)
         };
+    }
+
+    /// <summary>The horizontal minor-grid lines a timeline draws over one page's worth of hours.</summary>
+    private static IReadOnlyList<LineOperation> MinorLines(int minutes)
+    {
+        var drawable = Timeline();
+        drawable.MinorGridLineMinutes = minutes;
+
+        return [.. Draw(drawable).Lines
+            .Where(line => line.Color == MinorGrid)
+            .DistinctBy(line => line.Start.Y)];
     }
 
     private static RecordingCanvas Draw(IDrawable drawable)

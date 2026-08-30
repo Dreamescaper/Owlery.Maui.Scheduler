@@ -235,7 +235,8 @@ implement tap-to-arm-then-tap-to-confirm; that is host policy.
 | `IsBusy` | `bool` | `false` | Shows a non-blocking activity indicator over the grid. |
 | `GridBackgroundColor` | `Color` | `Colors.White` | Fill behind the grid and the time gutter. Keep it opaque: the drawing surface must reliably receive touches, since it handles all input. The inherited `BackgroundColor` still covers the control and its header container. |
 | `GridLineColor` | `Color` | `#E0E0E0` | Hour lines, day separators and month grid lines. |
-| `MinorGridLineColor` | `Color` | `#F0F0F0` | Half-hour lines. |
+| `MinorGridLineColor` | `Color` | `#F0F0F0` | The marks inside the hour. |
+| `MinorGridLineMinutes` | `int` | `30` | How often the timeline is marked inside the hour. `30` draws the half hour, `15` the quarters. `60` asks for hour lines only — every mark would land on an hour line, so none is drawn; `0` and negatives are treated the same rather than throwing. Independent of `SnapMinutes`: this is what the grid shows, that is what a drag lands on. The pattern restarts at every hour rather than running through the day, so marks stay hour-aligned; a value that does not divide 60 simply leaves a short gap before the hour (`57` marks `:57` and nothing else). Ignored in month view, which has no hours. |
 | `PrimaryTextColor` | `Color` | `#212121` | Ordinary day numbers. |
 | `SecondaryTextColor` | `Color` | `#6E6E6E` | Weekday names, time-zone text, gutter labels and month overflow text. |
 | `NonWorkingDaysBackgroundColor` | `Color` | `#FAFAFA` | Background of a shaded non-working day. |

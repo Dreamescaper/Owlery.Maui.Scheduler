@@ -537,6 +537,7 @@ public partial class SchedulerView : ContentView
 
         gridDrawable.GridLineColor = GridLineColor;
         gridDrawable.MinorGridLineColor = MinorGridLineColor;
+        gridDrawable.MinorGridLineMinutes = MinorGridLineMinutes;
         gridDrawable.NonWorkingDaysBackgroundColor = NonWorkingDaysBackgroundColor;
         gridDrawable.NonWorkingHoursBackgroundColor = NonWorkingHoursBackgroundColor;
         gridDrawable.CurrentDayBackgroundColor = CurrentDayBackgroundColor;

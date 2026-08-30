@@ -10,6 +10,9 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
 
     public Color MinorGridLineColor { get; set; } = null!;
 
+    /// <summary>How often to mark inside the hour. Anything that would land on the hour draws nothing.</summary>
+    public int MinorGridLineMinutes { get; set; } = 30;
+
     public Color NonWorkingDaysBackgroundColor { get; set; } = null!;
 
     public Color NonWorkingHoursBackgroundColor { get; set; } = null!;
@@ -135,11 +138,15 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
             canvas.StrokeColor = GridLineColor;
             canvas.DrawLine(0, y, width, y);
 
-            if (hour < geometry.EndHour)
+            if (hour >= geometry.EndHour || MinorGridLineMinutes is <= 0 or >= 60)
+                continue;
+
+            canvas.StrokeColor = MinorGridLineColor;
+
+            for (var minute = MinorGridLineMinutes; minute < 60; minute += MinorGridLineMinutes)
             {
-                var halfY = (float)geometry.YFromMinutes(hour * 60.0 + 30);
-                canvas.StrokeColor = MinorGridLineColor;
-                canvas.DrawLine(0, halfY, width, halfY);
+                var minorY = (float)geometry.YFromMinutes(hour * 60.0 + minute);
+                canvas.DrawLine(0, minorY, width, minorY);
             }
         }
     }

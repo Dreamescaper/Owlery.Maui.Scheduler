@@ -63,8 +63,9 @@ one column stands for six of them.
 **NAV-12** Time runs from top to bottom over a configurable range of hours — 08:00 to 23:00 by
 default. Times outside that range are not shown.
 
-**NAV-13** Hour boundaries are marked, with a lighter mark at each half hour, so a position can be
-read off the grid without counting.
+**NAV-13** Hour boundaries are marked, with lighter marks inside the hour, so a position can be read
+off the grid without counting. How often those inner marks fall is configurable — every half hour by
+default — and they can be turned off entirely, leaving the hour boundaries alone.
 
 **NAV-14** Hour labels run down a fixed column on the leading edge and stay aligned with the grid as
 it scrolls.
