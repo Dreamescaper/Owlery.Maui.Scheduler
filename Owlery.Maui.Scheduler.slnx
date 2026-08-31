@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="version.json" />
+    <File Path="README.md" />
+    <File Path=".github/workflows/publish-nuget.yml" />
+  </Folder>
+  <Project Path="Owlery.Maui.Scheduler/Owlery.Maui.Scheduler.csproj" />
+  <Project Path="Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj" />
+  <Project Path="Owlery.Maui.Scheduler.Tests/Owlery.Maui.Scheduler.Tests.csproj" />
+</Solution>

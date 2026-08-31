@@ -2,9 +2,9 @@
 
   <PropertyGroup>
     <!-- net10.0 carries no platform code, so the layout and geometry logic can be referenced and
-         unit-tested from a plain project. iOS stays conditional: the Android CI job runs on Linux
-         with only the maui-android workload installed, and this project is restored as part of
-         Owlery.Mobile's build there. -->
+         unit-tested from a plain project. iOS stays conditional so a consumer restoring on Linux
+         with only the maui-android workload does not fail on a target framework it never asked
+         for; the release workflow runs on macOS so the package still ships all three. -->
     <TargetFrameworks>net10.0;net10.0-android</TargetFrameworks>
     <TargetFrameworks Condition="!$([System.OperatingSystem]::IsLinux())">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
 
@@ -22,8 +22,35 @@
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">28.0</SupportedOSPlatformVersion>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <PackageId>Owlery.Maui.Scheduler</PackageId>
+    <Title>Owlery MAUI Scheduler</Title>
+    <Description>A .NET MAUI week-view scheduler control: infinite horizontal paging, drag-and-drop rescheduling, month view, and a drawn grid built from plain MAUI primitives. No XAML, no Blazor, one package reference.</Description>
+    <Authors>Oleksandr Liakhevych</Authors>
+    <PackageTags>maui;scheduler;calendar;week-view;agenda;control;drag-and-drop</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/Dreamescaper/Owlery.Maui.Scheduler</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Dreamescaper/Owlery.Maui.Scheduler</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- The public surface is documented in XML throughout; shipping it is what gives a consumer
+         tooltips. Undocumented members are not an error: plenty are self-evident. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Maui.Controls" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

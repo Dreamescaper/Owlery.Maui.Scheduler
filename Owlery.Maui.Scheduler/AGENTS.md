@@ -2,8 +2,8 @@
 
 ## Scope
 
-- These instructions apply to `Owlery.Maui.Scheduler` and override the repository root where they
-  differ. Root guidelines still apply for anything not covered here.
+- These instructions apply to `Owlery.Maui.Scheduler`, the control project. The sample and the tests
+  have guidance of their own; anything not covered here is a judgement call.
 - `CLAUDE.md` in this folder is a symlink to this file. Keep it a symlink — never replace it with a
   copy, and never edit the two separately.
 
@@ -11,14 +11,14 @@
 
 - A reusable .NET MAUI scheduler control — week, day and month surfaces — built from plain MAUI
   primitives.
-- **It is a public library, and it will move to a repository of its own.** Treat it as though that
-  has already happened: it cannot reach for anything in this solution, its documentation is written
-  for readers who have never seen this app, and its public surface is a contract with strangers
-  rather than with `Owlery.Mobile`.
+- **It is a public library in a repository of its own, published to nuget.org.** It cannot reach for
+  anything outside this repository, its documentation is written for readers who have never seen the
+  app it came from, and its public surface is a contract with strangers. Renaming a public member is
+  now a breaking change for people you cannot ask.
 - It has exactly one package reference: `Microsoft.Maui.Controls`. Do not add BlazorBindings,
   Syncfusion, CommunityToolkit, or any `Owlery.*` project reference.
-- **It is not BlazorBindings-specific.** This app happens to consume it through generated Blazor
-  wrappers, and that is a fact about the host, not about the control. A plain MAUI host is a
+- **It is not BlazorBindings-specific.** One known consumer happens to reach it through generated
+  Blazor wrappers, and that is a fact about that host, not about the control. A plain MAUI host is a
   first-class consumer — `Owlery.Maui.Scheduler.Sample` is one, and is the reference for what using
   it looks like without Blazor. Nothing in the control may assume a Blazor host, and no example in
   its documentation should require one.
@@ -119,19 +119,14 @@ cited `DESIGN.md` section first.
 
 ## Blazor Bindings
 
-- This project stays Blazor-free, but `Owlery.Mobile` consumes it through a generated wrapper.
-- The generation attribute lives in `Owlery.Mobile/Properties/Elements.cs`; output goes to
-  `Owlery.Mobile/Elements/Owlery.Scheduler/` and is never hand-edited.
-- After changing the public surface, regenerate from the `Owlery.Mobile` directory:
-
-  ```sh
-  dotnet generate-maui-blazor-components
-  ```
-
-- The generator rewrites every element file in that folder. Check the diff and revert files whose
-  only change is line endings.
+- This project stays Blazor-free. A consuming app that uses BlazorBindings.Maui generates its own
+  wrapper **in its own repository**, from `[assembly: GenerateComponent(...)]` against this package —
+  there is nothing to regenerate here, and no generated file lives in this repo.
+- That wrapper is regenerated on the consumer's side after a release changes the public surface. A
+  rename that costs one commit here costs them a package bump and a regeneration.
 - XML doc comments on public members are copied into the generated component, so they become the
-  tooltips Razor authors see.
+  tooltips Razor authors see. They also ship in the package, so they are the IntelliSense every
+  consumer gets — `GenerateDocumentationFile` is on for that reason.
 - Regenerating is a downstream step, never a design input. What the generator makes convenient has no
   bearing on what the public surface should be — see *What This Project Is*.
 
@@ -217,10 +212,11 @@ dotnet build Owlery.Maui.Scheduler/Owlery.Maui.Scheduler.csproj -f net10.0-andro
 - Build every target framework before considering a change done. The platform-conditional code is
   compiled separately for each, and `net10.0` compiles it out entirely — so a mistake inside
   `#if IOS` is invisible until the iOS target is built.
-- **Do not make `net10.0-ios` unconditional.** The Android CI job runs on `ubuntu-latest` with only
-  `maui-android` installed and publishes `Owlery.Mobile`, which references this project — restore
-  walks all of its declared target frameworks. `Owlery.Mobile.csproj` carries the same guard for the
-  same reason.
+- **Do not make `net10.0-ios` unconditional.** Restore walks every declared target framework, so a
+  consumer building only for Android on Linux — a common CI shape, with just `maui-android`
+  installed — fails on a target framework it never asked for. The guard costs nothing here and is
+  the difference between the package being usable on a Linux runner and not. The release workflow
+  runs on macOS precisely so the iOS target is built and packed.
 - `net10.0` contains no platform code, which is what lets the tests below run without a device.
 
 ## Sample App
@@ -235,8 +231,8 @@ dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f
 dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f net10.0-android -t:Run
 ```
 
-- Reach for it before `Owlery.Mobile`. It builds in a fraction of the time, needs no signing identity,
-  no Firebase configuration and no API, and its appointment count knob goes to five thousand.
+- Reach for it before any real host app. It needs no signing identity, no backend and no
+  configuration, and its appointment count knob goes to five thousand.
 - It carries `Microsoft.Maui.DevFlow.Agent` in **Debug only**, so `maui devflow ui` can query, tap and
   screenshot it from a terminal. Sampling a property back mid-animation — the header strip's
   `TranslationX`, say — proves a transition animates where a screenshot usually arrives too late. Note

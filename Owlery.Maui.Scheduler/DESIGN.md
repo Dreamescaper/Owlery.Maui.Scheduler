@@ -23,12 +23,12 @@ its own, so every dependency on this solution is something that would have to be
 and if the control ever stops working there, it has grown a dependency on the host it should not
 have.
 
-The Blazor wrapper below is therefore a fact about *this app*, not about the control. A plain MAUI
-host is the baseline consumer; a Blazor one is a host that happens to generate its own wrapper.
+The Blazor wrapper below is therefore a fact about *a consuming app*, not about the control. A plain
+MAUI host is the baseline consumer; a Blazor one is a host that happens to generate its own wrapper,
+in its own repository, from the published package.
 
-The Blazor app consumes it through `BlazorBindings.Maui.ComponentGenerator`. The wrapper is declared in
-`Owlery.Mobile/Properties/Elements.cs` and generated into
-`Owlery.Mobile/Elements/Owlery.Scheduler/SchedulerView.generated.cs`:
+Such a host consumes it through `BlazorBindings.Maui.ComponentGenerator`, declaring the wrapper on its
+own side with an assembly attribute and generating it into its own tree:
 
 ```csharp
 [assembly: GenerateComponent(typeof(SchedulerView),

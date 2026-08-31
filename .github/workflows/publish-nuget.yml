@@ -1,0 +1,65 @@
+name: Publish to NuGet
+
+# Publishing a GitHub release is the trigger. The tag it points at is what Nerdbank.GitVersioning
+# reads the version from, so a release on tag v0.1.4 publishes 0.1.4 — see version.json.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build and pack without pushing to nuget.org
+        type: boolean
+        default: true
+
+jobs:
+  publish:
+    # macOS, because the package includes a net10.0-ios target framework that only builds here.
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Nerdbank.GitVersioning walks the history to compute the version; a shallow clone
+          # gives it nothing to walk and the build fails rather than guessing.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Install MAUI workloads
+        run: dotnet workload install maui-android maui-ios
+
+      - name: Restore
+        run: |
+          dotnet restore Owlery.Maui.Scheduler/Owlery.Maui.Scheduler.csproj
+          dotnet restore Owlery.Maui.Scheduler.Tests/Owlery.Maui.Scheduler.Tests.csproj
+
+      - name: Test
+        run: dotnet test Owlery.Maui.Scheduler.Tests/Owlery.Maui.Scheduler.Tests.csproj --configuration Release
+
+      - name: Pack
+        run: dotnet pack Owlery.Maui.Scheduler/Owlery.Maui.Scheduler.csproj --configuration Release --output artifacts
+
+      - name: Report what was packed
+        run: ls -lh artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/*
+
+      - name: Push to nuget.org
+        if: github.event_name == 'release' || inputs.dry-run == false
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::error::NUGET_API_KEY is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          dotnet nuget push "artifacts/*.nupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
