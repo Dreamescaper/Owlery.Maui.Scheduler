@@ -64,8 +64,17 @@ dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f
 ## Releasing
 
 Versions come from [Nerdbank.GitVersioning](https://github.com/dotnet/Nerdbank.GitVersioning)
-(`version.json`). Publishing a GitHub release runs `.github/workflows/publish-nuget.yml`, which builds
-every target framework, runs the tests, and pushes the package and symbols to nuget.org.
+(`version.json`), so a release on tag `v0.1.4` publishes `0.1.4`.
+
+Publishing a GitHub release runs `.github/workflows/publish-nuget.yml`, which builds every target
+framework, runs the tests, and pushes the package and symbols to nuget.org. Authentication is
+[Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) — the workflow
+proves its identity with a short-lived OIDC token, so there is no API key stored anywhere. That also
+means the policy on nuget.org names this workflow file: renaming or moving it breaks publishing until
+the policy is updated to match.
+
+`workflow_dispatch` builds and packs without pushing, so the whole pipeline can be exercised before a
+real release.
 
 ## License
 

@@ -12,6 +12,13 @@ on:
         type: boolean
         default: true
 
+permissions:
+  # Trusted Publishing: the workflow proves who it is with a short-lived OIDC token, which
+  # NuGet/login exchanges for an API key valid for minutes. There is no stored secret to leak,
+  # rotate, or forget to remove when someone leaves.
+  id-token: write
+  contents: read
+
 jobs:
   publish:
     # macOS, because the package includes a net10.0-ios target framework that only builds here.
@@ -50,16 +57,20 @@ jobs:
           name: nupkg
           path: artifacts/*
 
+      # Exchanges this run's OIDC token for a short-lived key. It only succeeds for a workflow
+      # the Trusted Publishing policy on nuget.org actually names — repository, workflow file
+      # and branch or tag all have to match, so a fork or a stray branch cannot publish.
+      - name: Authenticate to nuget.org
+        id: nuget-login
+        if: github.event_name == 'release' || inputs.dry-run == false
+        uses: NuGet/login@v1
+        with:
+          user: Dreamescaper
+
       - name: Push to nuget.org
         if: github.event_name == 'release' || inputs.dry-run == false
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          if [ -z "$NUGET_API_KEY" ]; then
-            echo "::error::NUGET_API_KEY is not set. Add it under Settings → Secrets and variables → Actions."
-            exit 1
-          fi
           dotnet nuget push "artifacts/*.nupkg" \
-            --api-key "$NUGET_API_KEY" \
+            --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
