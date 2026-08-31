@@ -64,6 +64,7 @@ public sealed class PlaygroundPage : ContentPage
         scheduler.HeaderTapped += OnHeaderTapped;
         scheduler.TimeGutterTapped += OnTimeGutterTapped;
         scheduler.AppointmentDragStarting += OnAppointmentDragStarting;
+        scheduler.AppointmentDropTargetChanged += OnAppointmentDropTargetChanged;
         scheduler.AppointmentDropped += OnAppointmentDropped;
 
         source = new AppointmentSource(scheduler);
@@ -303,6 +304,11 @@ public sealed class PlaygroundPage : ContentPage
 
         Log($"AppointmentDragStarting · {Name(e.Appointment)}");
     }
+
+    // Logged rather than made to buzz: a haptic is what a real host does with this, and the emulator
+    // has none to feel. The count in the log is the point — one line per boundary, not per movement.
+    private void OnAppointmentDropTargetChanged(object? sender, SchedulerAppointmentDropTargetChangedEventArgs e) =>
+        Log($"DropTargetChanged · {e.DropStart:ddd d MMM HH:mm}");
 
     private void OnAppointmentDropped(object? sender, SchedulerAppointmentDroppedEventArgs e)
     {

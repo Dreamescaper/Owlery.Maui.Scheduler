@@ -115,6 +115,9 @@ public partial class SchedulerView : ContentView
     private bool interactionMoved;
     private DateTime dragDropStart;
 
+    /// <summary>The boundary the drag last came to rest on, or null before the first is resolved.</summary>
+    private DateTime? lastDropTarget;
+
     public SchedulerView()
     {
         gridDrawable = new SchedulerGridDrawable(geometry);

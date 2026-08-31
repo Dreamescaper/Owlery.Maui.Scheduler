@@ -203,6 +203,34 @@ public class SchedulerViewTests
     }
 
     [Test]
+    public void Dragging_reports_each_boundary_it_crosses_once()
+    {
+        // Quarter-hour snapping at the default hour height is a boundary every 12.5dp. The drag below
+        // travels 25 — two boundaries — in four steps, so a report per movement would give four.
+        var appointment = TestAppointment.At(Monday.AddDays(2), "10:00", 1);
+        var harness = new SchedulerHarness(Monday, [appointment]);
+        harness.Scheduler.DragSnapMinutes = 15;
+
+        var from = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
+        harness.BeginDrag(from);
+
+        Assert.That(harness.DropTargetChanges, Is.Empty, "picking it up has not moved it");
+
+        foreach (var step in new[] { 6.0, 12.5, 19.0, 25.0 })
+            harness.DragTo(new Point(from.X, from.Y + step));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.DropTargetChanges.Select(snap => snap.DropStart), Is.EqualTo(new[]
+            {
+                Monday.AddDays(2).AddHours(10).AddMinutes(15),
+                Monday.AddDays(2).AddHours(10).AddMinutes(30)
+            }).AsCollection);
+            Assert.That(harness.DropTargetChanges[0].Appointment, Is.SameAs(appointment));
+        });
+    }
+
+    [Test]
     public void The_selection_marker_is_exactly_as_tall_as_the_slot()
     {
         // A quarter hour at the default hour height is 12.5dp — below the 18dp floor a short

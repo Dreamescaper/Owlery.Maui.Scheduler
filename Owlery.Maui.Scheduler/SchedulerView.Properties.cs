@@ -567,6 +567,9 @@ public partial class SchedulerView
     public event EventHandler<SchedulerAppointmentDragStartingEventArgs>? AppointmentDragStarting;
 
     /// <summary>Raised after a drag is released; set <c>Cancel</c> to snap the appointment back.</summary>
+    /// <summary>Raised while dragging, each time the drop target moves to a different boundary.</summary>
+    public event EventHandler<SchedulerAppointmentDropTargetChangedEventArgs>? AppointmentDropTargetChanged;
+
     public event EventHandler<SchedulerAppointmentDroppedEventArgs>? AppointmentDropped;
 
     /// <summary>

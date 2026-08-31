@@ -45,6 +45,8 @@ internal sealed class SchedulerHarness
 
     public List<SchedulerAppointmentDroppedEventArgs> Drops { get; } = [];
 
+    public List<SchedulerAppointmentDropTargetChangedEventArgs> DropTargetChanges { get; } = [];
+
     public List<SchedulerHeaderTappedEventArgs> HeaderTaps { get; } = [];
 
     public List<SchedulerTimeGutterTappedEventArgs> GutterTaps { get; } = [];
@@ -95,6 +97,7 @@ internal sealed class SchedulerHarness
         Scheduler.AppointmentDropped += (_, e) => Drops.Add(e);
         Scheduler.HeaderTapped += (_, e) => HeaderTaps.Add(e);
         Scheduler.TimeGutterTapped += (_, e) => GutterTaps.Add(e);
+        Scheduler.AppointmentDropTargetChanged += (_, e) => DropTargetChanges.Add(e);
 
         application.Windows[0].Page = new ContentPage { Content = Scheduler };
 

@@ -114,6 +114,10 @@ reach.
 
 **DND-15** The new time is always a snap-interval boundary.
 
+**DND-15a** Each time the preview comes to rest on a different boundary, the host is told, so it can
+mark the step in whatever way suits the platform — a haptic tick, most obviously. It is told once per
+boundary, not once per movement, and not when the appointment is first picked up.
+
 **DND-16** Releasing an appointment on the time it already occupied results in no change.
 
 **DND-17** The host can reject a drop, in which case the appointment returns to where it was.

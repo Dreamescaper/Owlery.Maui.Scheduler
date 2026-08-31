@@ -68,6 +68,25 @@ public sealed class SchedulerAppointmentDragStartingEventArgs(ISchedulerAppointm
     public bool Cancel { get; set; }
 }
 
+/// <summary>
+/// Raised while dragging, each time the appointment comes to rest on a different snap boundary.
+/// </summary>
+/// <remarks>
+/// Not a movement event: it does not fire as the finger travels within one boundary, only when the
+/// position the appointment would be dropped on actually changes. That makes it the right moment for
+/// feedback a person should feel once per step — a short haptic tick, most obviously — rather than
+/// continuously. It does not fire when the drag is first picked up.
+/// </remarks>
+public sealed class SchedulerAppointmentDropTargetChangedEventArgs(ISchedulerAppointment appointment, DateTime dropStart)
+    : EventArgs
+{
+    public ISchedulerAppointment Appointment { get; } = appointment;
+
+    /// <summary>The snapped start it has moved to, in <see cref="SchedulerView.TimeZone"/>.</summary>
+    /// <remarks>Where it would land if released now; the drag may still move on or be cancelled.</remarks>
+    public DateTime DropStart { get; } = dropStart;
+}
+
 public sealed class SchedulerAppointmentDroppedEventArgs(ISchedulerAppointment appointment, DateTime dropStart) : EventArgs
 {
     public ISchedulerAppointment Appointment { get; } = appointment;

@@ -281,6 +281,7 @@ rebind appointment views.
 | `CellTapped` | `SchedulerCellTappedEventArgs` | Empty grid space is tapped. `SelectedSlot` has already been updated. |
 | `AppointmentTapped` | `SchedulerAppointmentTappedEventArgs` | An appointment is tapped without dragging it. |
 | `AppointmentDragStarting` | `SchedulerAppointmentDragStartingEventArgs` | A long press has been held on an appointment, before it lifts. **Cancellable.** |
+| `AppointmentDropTargetChanged` | `SchedulerAppointmentDropTargetChangedEventArgs` | A drag comes to rest on a different boundary. Not a movement event — silent while the finger travels within one boundary, and silent when the appointment is first picked up. |
 | `AppointmentDropped` | `SchedulerAppointmentDroppedEventArgs` | A dragged appointment is released. **Cancellable.** |
 | `HeaderTapped` | `SchedulerHeaderTappedEventArgs` | The header above a day column is tapped. Silent in `Month`. |
 | `TimeGutterTapped` | `SchedulerTimeGutterTappedEventArgs` | The hour gutter is tapped. A month has no gutter, so it never raises this. |
@@ -365,6 +366,18 @@ public readonly record struct SchedulerTimeSlot(DateTime Start, TimeSpan Duratio
 This is the right place to veto a drag — read-only items, items owned by an external calendar, or an
 offline app. It is raised synchronously.
 
+### `SchedulerAppointmentDropTargetChangedEventArgs`
+
+| Member | Type | Description |
+|---|---|---|
+| `Appointment` | `ISchedulerAppointment` | The appointment being dragged, resolved against the current `ItemsSource`. |
+| `DropStart` | `DateTime` | The boundary it has moved to, in `TimeZone`. Where it would land if released now; the drag may still move on or be cancelled. |
+
+Raised once per boundary crossed, which makes it the hook for feedback a person should feel one step
+at a time — a short haptic tick is the obvious use. Do not treat it as a commitment: only
+`AppointmentDropped` says where the appointment actually went. Edge paging into an adjacent week
+raises it too, since the drop target genuinely moved.
+
 ### `SchedulerAppointmentDroppedEventArgs`
 
 | Member | Type | Description |
@@ -442,6 +455,7 @@ Names differ on the Blazor side:
 | `CellTapped` | `OnCellTapped` |
 | `AppointmentTapped` | `OnAppointmentTapped` |
 | `AppointmentDragStarting` | `OnAppointmentDragStarting` |
+| `AppointmentDropTargetChanged` | `OnAppointmentDropTargetChanged` |
 | `AppointmentDropped` | `OnAppointmentDropped` |
 | `HeaderTapped` | `OnHeaderTapped` |
 | `TimeGutterTapped` | `OnTimeGutterTapped` |

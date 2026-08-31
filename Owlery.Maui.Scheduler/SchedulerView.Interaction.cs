@@ -230,6 +230,7 @@ public partial class SchedulerView
         }
 
         dragArmed = true;
+        lastDropTarget = null;
         SetScrollingEnabled(false);
 
         UpdateDragPosition(new Point(
@@ -426,6 +427,7 @@ public partial class SchedulerView
         }
 
         dragDropStart = target.Start;
+        RaiseDropTargetChangedIfMoved();
 
         // Shown in the time gutter rather than over the grid: anywhere near the appointment is under
         // the finger doing the dragging, which is precisely where it cannot be read.
@@ -434,6 +436,25 @@ public partial class SchedulerView
 
         UpdateEdgePaging(point);
         UpdateEdgeScrolling(point);
+    }
+
+    /// <summary>Reports a change of boundary, once per boundary rather than once per movement.</summary>
+    /// <remarks>
+    /// Silent on the first resolve of a drag. Picking an appointment up resolves it where it already
+    /// is, and a host tying feedback to this would otherwise buzz on every long press. From then on it
+    /// fires whenever the drop target moves, including when edge paging carries it to another week.
+    /// </remarks>
+    private void RaiseDropTargetChangedIfMoved()
+    {
+        var previous = lastDropTarget;
+        lastDropTarget = dragDropStart;
+
+        if (previous is null || previous == dragDropStart || AppointmentDropTargetChanged is null || floatingAppointment is null)
+            return;
+
+        AppointmentDropTargetChanged.Invoke(
+            this,
+            new SchedulerAppointmentDropTargetChangedEventArgs(Resolve(floatingAppointment), dragDropStart));
     }
 
     /// <summary>
