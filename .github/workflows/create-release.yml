@@ -1,0 +1,84 @@
+name: Create release
+
+# Tags the chosen commit with the version Nerdbank.GitVersioning computes for it, then publishes a
+# GitHub release on that tag. Publishing the release is what triggers publish-nuget.yml, so this is
+# the only button a release needs.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or SHA to release
+        required: true
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate release token
+        env:
+          RELEASE_TAG_TOKEN: ${{ secrets.RELEASE_TAG_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TAG_TOKEN" ]; then
+            echo "::error::Set the RELEASE_TAG_TOKEN secret to a token with contents:write permission."
+            echo "::error::The built-in GITHUB_TOKEN cannot be used here: GitHub suppresses events raised by it, so the release would be created and publish-nuget.yml would never run."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          # Nerdbank.GitVersioning derives the patch number from the commit height, so it needs
+          # the whole history rather than the tip.
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TAG_TOKEN }}
+
+      - name: Install nbgv
+        run: dotnet tool install --tool-path ../.tools nbgv --version 3.9.50
+
+      - name: Show version
+        run: ../.tools/nbgv get-version
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create release tag
+        id: tag
+        run: |
+          # nbgv reports the tag it created only by creating it, so the new tag is found by
+          # difference. Naming it from get-version instead would re-derive the version a second
+          # time and could disagree with what was actually written.
+          before_tags="$(git tag --points-at HEAD | sort)"
+
+          ../.tools/nbgv tag
+
+          after_tags="$(git tag --points-at HEAD | sort)"
+          release_tag="$(comm -13 <(printf '%s\n' "$before_tags") <(printf '%s\n' "$after_tags") | head -n 1)"
+
+          if [ -z "$release_tag" ]; then
+            echo "::error::No new tag was created. The selected ref may already have a release tag."
+            exit 1
+          fi
+
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Push release tag
+        run: git push origin "refs/tags/${{ steps.tag.outputs.release_tag }}"
+
+      - name: Publish GitHub release
+        env:
+          # The PAT again, not GITHUB_TOKEN — see the validation step. This is the event
+          # publish-nuget.yml listens for.
+          GH_TOKEN: ${{ secrets.RELEASE_TAG_TOKEN }}
+        run: |
+          gh release create "${{ steps.tag.outputs.release_tag }}" \
+            --title "${{ steps.tag.outputs.release_tag }}" \
+            --generate-notes \
+            --verify-tag
