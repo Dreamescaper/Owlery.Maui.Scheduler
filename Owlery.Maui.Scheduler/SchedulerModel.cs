@@ -7,8 +7,52 @@ public enum SchedulerViewMode
     Timeline,
 
     /// <summary>A calendar month on a fixed six-by-seven grid of days.</summary>
-    Month
+    Month,
+
+    /// <summary>
+    /// A vertical list of appointments grouped by day, in date order.
+    /// </summary>
+    /// <remarks>
+    /// The one surface that does not page sideways: it is a single continuous list and the whole of
+    /// it scrolls vertically. Days with nothing in them are left out, so the list is as short as the
+    /// calendar is empty.
+    /// </remarks>
+    Agenda
 }
+
+/// <summary>Which grouping a heading in the agenda introduces.</summary>
+public enum SchedulerAgendaSectionKind
+{
+    /// <summary>A month. Shown even when the month holds nothing, so the list keeps its spine.</summary>
+    Month,
+
+    /// <summary>A week. Left out when the week holds nothing.</summary>
+    Week,
+
+    /// <summary>
+    /// A day, shown beside its first appointment rather than above it.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the other two this takes no vertical space of its own: it sits in the gutter down the
+    /// leading edge, level with the top of that day's first row.
+    /// </remarks>
+    Day
+}
+
+/// <summary>
+/// A heading in the agenda. The binding context of a view built from
+/// <see cref="SchedulerView.AgendaSectionTemplate"/>.
+/// </summary>
+/// <remarks>
+/// One template renders all three kinds rather than one template each, which is the same reasoning
+/// that rules out a <c>DataTemplateSelector</c> for appointments: views are pooled and rebound, and a
+/// pool per kind is a pool that usually hands back the wrong shape. Branch on <see cref="Kind"/>
+/// inside the template, building each arm up front and toggling between them.
+/// </remarks>
+public sealed record SchedulerAgendaSection(
+    DateTime Date,
+    SchedulerAgendaSectionKind Kind,
+    int AppointmentCount);
 
 /// <summary>
 /// An item the scheduler places on the week grid.
