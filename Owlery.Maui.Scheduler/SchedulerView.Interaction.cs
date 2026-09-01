@@ -16,7 +16,7 @@ public partial class SchedulerView
     /// itself still happens, so <see cref="SelectedSlot"/> and <c>CellTapped</c> report as usual.
     /// </remarks>
     private void UpdateSelectionView() => cellSelection.Update(
-        ViewMode is SchedulerViewMode.Month ? null : SelectedSlot,
+        ViewMode is SchedulerViewMode.Timeline ? SelectedSlot : null,
         slots,
         ActiveGeometry,
         pageSurface,
@@ -122,7 +122,7 @@ public partial class SchedulerView
     /// </remarks>
     private void OnHeaderTapped(object? sender, TappedEventArgs e)
     {
-        if (ViewMode is SchedulerViewMode.Month || HeaderTapped is null)
+        if (ViewMode is not SchedulerViewMode.Timeline || HeaderTapped is null)
             return;
 
         if (e.GetPosition(headerSurface) is not { } point)

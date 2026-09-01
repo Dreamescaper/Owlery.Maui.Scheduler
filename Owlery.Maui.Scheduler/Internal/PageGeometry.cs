@@ -47,7 +47,12 @@ internal abstract class PageGeometry
     /// </remarks>
     public double AnimationOffsetX { get; set; }
 
-    public double SurfaceWidth => ViewportWidth * SlotCount;
+    /// <summary>How wide the shared drawing surface is.</summary>
+    /// <remarks>
+    /// Three viewports for a surface that pages, because all three live side by side on one canvas.
+    /// A surface that does not page overrides this to one, and its pages collapse onto each other.
+    /// </remarks>
+    public virtual double SurfaceWidth => ViewportWidth * SlotCount;
 
     /// <summary>How far apart the pages sit.</summary>
     public abstract double PageSpan { get; }

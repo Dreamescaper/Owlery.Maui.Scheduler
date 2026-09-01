@@ -18,8 +18,12 @@ public partial class SchedulerView
 
     /// <summary>Rebuilds a page's day headers, which is what a change of day count needs.</summary>
     /// <summary>How many columns a page's header has, which is not the same question in each mode.</summary>
-    private int HeaderColumns =>
-        ViewMode is SchedulerViewMode.Month ? MonthGeometry.Columns : geometry.VisibleDays;
+    private int HeaderColumns => ViewMode switch
+    {
+        SchedulerViewMode.Month => MonthGeometry.Columns,
+        SchedulerViewMode.Timeline => geometry.VisibleDays,
+        _ => throw new NotSupportedException($"{ViewMode} has no header columns."),
+    };
 
     /// <summary>
     /// Whether a page's header is built for the surface currently showing.
@@ -33,7 +37,7 @@ public partial class SchedulerView
     /// </remarks>
     private bool SlotHeaderMatchesMode(PageSlot slot) =>
         slot.DayNameLabels.Length == HeaderColumns
-        && slot.DayNumberLabels.Length == (ViewMode is SchedulerViewMode.Month ? 0 : HeaderColumns);
+        && slot.DayNumberLabels.Length == (ViewMode is SchedulerViewMode.Timeline ? HeaderColumns : 0);
 
     /// <summary>
     /// Builds one page's header.
@@ -54,7 +58,7 @@ public partial class SchedulerView
 
         var header = slot.Header;
         var nameLabels = new Label[columns];
-        var numberLabels = ViewMode is SchedulerViewMode.Month ? [] : new Label[columns];
+        var numberLabels = ViewMode is SchedulerViewMode.Timeline ? new Label[columns] : [];
 
         for (var day = 0; day < columns; day++)
         {
@@ -297,7 +301,7 @@ public partial class SchedulerView
     {
         var culture = CultureInfo.CurrentUICulture;
 
-        if (ViewMode is SchedulerViewMode.Month)
+        if (ViewMode is not SchedulerViewMode.Timeline)
         {
             for (var column = 0; column < slot.DayNameLabels.Length; column++)
             {

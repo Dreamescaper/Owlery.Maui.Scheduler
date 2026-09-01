@@ -72,6 +72,16 @@ internal sealed class PageSlot
     /// <summary>What this page could not fit, per cell. Empty on a surface where nothing overflows.</summary>
     public IReadOnlyList<int> Overflow { get; set; } = [];
 
+    /// <summary>
+    /// Views on this page that are not appointments — section headers and the like.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not part of <see cref="Views"/>: hit-testing walks that list and resolves what it
+    /// finds through <c>appointmentsByView</c>, so anything in there that is not an appointment is
+    /// returned as the pressed view and then silently does nothing.
+    /// </remarks>
+    public List<View> SectionViews { get; } = [];
+
     /// <summary>The day headers for this page, moved as a unit.</summary>
     public required Grid Header { get; init; }
 

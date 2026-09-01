@@ -75,6 +75,7 @@ public partial class SchedulerView : ContentView
     private readonly Dictionary<View, PageSlot> slotsByView = [];
 
     private readonly Grid root;
+    private readonly Grid headerGrid;
     private readonly Grid headerClip;
     private readonly AbsoluteLayout headerSurface;
     private readonly Label headerCorner;
@@ -214,7 +215,7 @@ public partial class SchedulerView : ContentView
         headerClip = new Grid { IsClippedToBounds = true };
         headerClip.Add(headerSurface);
 
-        var headerGrid = new Grid
+        headerGrid = new Grid
         {
             ColumnDefinitions =
             [
@@ -269,25 +270,33 @@ public partial class SchedulerView : ContentView
 
 
     /// <summary>The geometry of whichever surface is showing. Shared measurements only.</summary>
-    private PageGeometry ActiveGeometry => ViewMode is SchedulerViewMode.Month ? monthGeometry : geometry;
+    private PageGeometry ActiveGeometry => ViewMode switch
+    {
+        SchedulerViewMode.Month => monthGeometry,
+        SchedulerViewMode.Timeline => geometry,
+        _ => throw new NotSupportedException($"{ViewMode} has no geometry."),
+    };
 
     /// <summary>
     /// The template the pool is filled from. A month falls back to the timeline's when the host has
     /// not supplied one, which renders badly but renders.
     /// </summary>
-    private DataTemplate? ActiveTemplate => ViewMode is SchedulerViewMode.Month
-        ? MonthAppointmentTemplate ?? AppointmentTemplate
-        : AppointmentTemplate;
+    private DataTemplate? ActiveTemplate => ViewMode switch
+    {
+        SchedulerViewMode.Month => MonthAppointmentTemplate ?? AppointmentTemplate,
+        SchedulerViewMode.Timeline => AppointmentTemplate,
+        _ => throw new NotSupportedException($"{ViewMode} has no appointment template."),
+    };
 
     private bool DraggingEnabled => AllowDragAndDrop && ViewMode is SchedulerViewMode.Timeline;
 
     /// <summary>
     /// Scrolls the timeline so that <paramref name="time"/> is near the top of the viewport.
-    /// Does nothing in a month, which shows every day whole and does not scroll.
+    /// Timeline only: no other surface lays its content out against a time axis.
     /// </summary>
     public void ScrollToTime(TimeSpan time)
     {
-        if (ViewMode is SchedulerViewMode.Month)
+        if (ViewMode is not SchedulerViewMode.Timeline)
             return;
 
         var y = geometry.YFromMinutes(time.TotalMinutes);
@@ -325,8 +334,9 @@ public partial class SchedulerView : ContentView
 
         // The drawable re-evaluates "today" every time it repaints, but the day headers are real
         // labels that are only rewritten when a slot is rebuilt. Left alone they would keep marking
-        // yesterday until the next swipe. A month has no such labels — its day numbers are painted.
-        if (previousDate == ActiveGeometry.Now.Date || ViewMode is SchedulerViewMode.Month)
+        // yesterday until the next swipe. Only the timeline has such labels — a month's day numbers
+        // are painted, and a surface without a header strip has none at all.
+        if (previousDate == ActiveGeometry.Now.Date || ViewMode is not SchedulerViewMode.Timeline)
             return;
 
         for (var i = 0; i < slots.Length; i++)
@@ -383,9 +393,9 @@ public partial class SchedulerView : ContentView
     /// </remarks>
     private void ChangeVisibleDays(int oldDays, int newDays)
     {
-        // A month is not made of a number of days the host chose. The new count is picked up by
+        // Only a timeline is made of a number of days the host chose. The new count is picked up by
         // ApplyTimelineChrome whenever the timeline comes back.
-        if (ViewMode is SchedulerViewMode.Month)
+        if (ViewMode is not SchedulerViewMode.Timeline)
             return;
 
         var previousDayWidth = geometry.ViewportWidth / Math.Clamp(oldDays, 1, 7);
@@ -456,8 +466,13 @@ public partial class SchedulerView : ContentView
     }
 
 
-    /// <summary>A month reaches the left edge; only the timeline sets its hours aside a gutter.</summary>
-    private double ActiveGutterWidth => ViewMode is SchedulerViewMode.Month ? 0 : TimeGutterWidth;
+    /// <summary>
+    /// The height the day-header strip takes, which is not a given: a surface may have no strip.
+    /// </summary>
+    private double ActiveHeaderHeight => HeaderHeight;
+
+    /// <summary>Only the timeline sets its hours aside a gutter; every other surface reaches the edge.</summary>
+    private double ActiveGutterWidth => ViewMode is SchedulerViewMode.Timeline ? TimeGutterWidth : 0;
 
     private void ApplyGeometry()
     {
@@ -465,12 +480,14 @@ public partial class SchedulerView : ContentView
 
         active.FirstDayOfWeek = FirstDayOfWeek;
         active.Now = NowInZone();
-        active.ViewportHeight = Math.Max(0, allocatedHeight - HeaderHeight);
+        active.ViewportHeight = Math.Max(0, allocatedHeight - ActiveHeaderHeight);
 
-        if (ViewMode is SchedulerViewMode.Month)
-            ApplyMonthChrome();
-        else
-            ApplyTimelineChrome();
+        switch (ViewMode)
+        {
+            case SchedulerViewMode.Month: ApplyMonthChrome(); break;
+            case SchedulerViewMode.Timeline: ApplyTimelineChrome(); break;
+            default: throw new NotSupportedException($"{ViewMode} has no chrome.");
+        }
 
         if (active.ViewportWidth <= 0)
             return;
@@ -610,7 +627,12 @@ public partial class SchedulerView : ContentView
             dragOverlayView = null;
         }
 
-        pageSurface = mode is SchedulerViewMode.Month ? monthSurface : timelineSurface;
+        pageSurface = mode switch
+        {
+            SchedulerViewMode.Month => monthSurface,
+            SchedulerViewMode.Timeline => timelineSurface,
+            _ => throw new NotSupportedException($"{mode} has no surface."),
+        };
         pool.Template = ActiveTemplate;
         cellSelection.Reset();
 
