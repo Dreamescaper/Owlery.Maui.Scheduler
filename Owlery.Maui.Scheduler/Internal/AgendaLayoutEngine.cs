@@ -31,6 +31,9 @@ internal sealed class AgendaRow
     /// <summary>How many appointments that day has, for the marker to report.</summary>
     public int DayCount { get; init; }
 
+    /// <summary>This row's position in the table, so a correction can find it without a search.</summary>
+    public int Index { get; set; }
+
     public double Top { get; set; }
 
     public double Height { get; set; }
@@ -123,6 +126,9 @@ internal static class AgendaLayoutEngine
                 top += estimatedRowHeight;
             }
         }
+
+        for (var i = 0; i < rows.Count; i++)
+            rows[i].Index = i;
 
         return new AgendaPageLayout(rows, top);
     }
