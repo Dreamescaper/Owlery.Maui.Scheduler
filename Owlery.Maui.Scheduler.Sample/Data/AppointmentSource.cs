@@ -146,7 +146,7 @@ public sealed class AppointmentSource(SchedulerView scheduler)
 
         targetMonth.Add(moved);
 
-        // The dragged instance is the one in the flat collection, so it can be found by identity.
+        // A record, so this finds it by value — which is exact, because Id is unique and part of it.
         var position = appointments.IndexOf(appointment);
 
         if (position >= 0)

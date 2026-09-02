@@ -83,3 +83,7 @@ either side of the visible one — in the collection at once.
 change notification rather than one per item. The view reads the changed collection as a whole, so the
 single event is sufficient for it; the event still reports which items were added, removed or replaced,
 for any other consumer of the same collection.
+
+**DAT-21** The view observes the collection, not the appointments in it. A host that changes an
+appointment supplies it as a new instance keeping the same identity, and the view repaints it in place;
+an appointment mutated where it sits is not noticed, and the view goes on showing what it last read.

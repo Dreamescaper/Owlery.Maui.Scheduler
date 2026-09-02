@@ -122,6 +122,11 @@ cited design section first; `docs/design/README.md` maps every § to its file.
 - **Identity is `ISchedulerAppointment.Key`, never the instance** (§6, §11). A host may rebuild its
   collection at any moment, including mid-gesture. Match on the key, and resolve anything handed back
   to the host against the current `ItemsSource` first.
+- **Appointments are read, never observed** (§9). Nothing on `ISchedulerAppointment` is a bindable
+  property and the contract does not require `INotifyPropertyChanged`; a changed appointment reaches
+  the control as a new instance in the collection. Do not add a per-appointment subscription — that is
+  one subscription per item across the whole range a host is told to keep loaded, to learn something
+  the collection already reports.
 - **Every `DateTime` crossing the public API is wall-clock in `TimeZone`** (§9). The control performs
   no time-zone conversion. Do not add any.
 - **Cancellable events are read synchronously.** `Cancel` is checked the moment the handler returns,

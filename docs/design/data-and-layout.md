@@ -46,6 +46,17 @@ The control does not fetch anything. It exposes:
   longer draws, for as long as the host holds it. Nothing is lost by letting go: the collection is
   read afresh on every repopulate, so a change made while the view was away arrives with the rebuild
   that follows its reload.
+- `ISchedulerAppointment` — implemented by the host's own type, and expected to be immutable. The
+  control observes the collection, not its items: no member of the contract is a bindable property,
+  nothing in it derives from `BindableObject`, and it does not require `INotifyPropertyChanged`. That
+  is deliberate. Watching every appointment would mean a subscription per item — thousands of them at
+  the range hosts are told to keep loaded — to catch a change the control already learns about from
+  the collection, and it would put the host's model on a second notification path whose ordering
+  against the first nobody would want to reason about. The cost of the choice is that a host mutating
+  an appointment in place sees nothing happen, and then sees a repaint later when something unrelated
+  reloads the window; the contract's documentation says so plainly, and a `record` with `with` makes
+  the alternative a single line. Identity is `Key`, so a replaced instance lands on the view already
+  showing it (§6).
 - `VisibleDatesChanged` — raised whenever the active period changes, carrying the dates the surface
   exposes plus its prefetch range. A timeline reports its day columns and three pages, a month its 42
   cells and neighbouring grids, and an agenda its whole loaded vertical range.

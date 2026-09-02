@@ -50,8 +50,8 @@ public static class SampleDataGenerator
                 duration,
                 subject,
                 person,
-                palette: Math.Abs(id % SamplePalette.Count),
-                isLocked: random.Next(10) == 0));
+                Palette: Math.Abs(id % SamplePalette.Count),
+                IsLocked: random.Next(10) == 0));
         }
 
         appointments.Sort(static (a, b) => a.Start.CompareTo(b.Start));

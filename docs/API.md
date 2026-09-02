@@ -379,6 +379,31 @@ public interface ISchedulerAppointment
 Implement this on your own type and keep the domain object on it — that instance is the template's
 binding context, so the template can read whatever it needs.
 
+**Make it immutable.** The control observes your *collection*, never the appointments in it: none of
+these are bindable properties, nothing here derives from `BindableObject`, and the contract does not
+ask for `INotifyPropertyChanged`. Changing an appointment in place changes nothing on screen — and
+then the display disagrees with your model until something unrelated makes the control re-read the
+collection, at which point the repaint arrives looking like a bug rather than like the change it is.
+
+A change is a new instance carrying the same `Key`, put into the collection in place of the old one.
+A record makes that a line:
+
+```csharp
+public sealed record Lesson(int Id, DateTime Start, DateTime End, string? Subject)
+    : ISchedulerAppointment
+{
+    public object Key => Id;
+}
+
+// moving one, in the host:
+var moved = lesson with { Start = newStart, End = newStart + (lesson.End - lesson.Start) };
+appointments.ReplaceRange(appointments.IndexOf(lesson), 1, [moved]);
+```
+
+Because the key has not moved, the control reconciles `moved` onto the view already showing `lesson`
+and repaints it, rather than building a fresh view. `Owlery.Maui.Scheduler.Sample.Data.SampleAppointment`
+is the reference shape.
+
 `Key` is what makes the control safe to use with a collection you rebuild. It never assumes it is
 handed the same object twice: views are matched to appointments by key, so an unchanged reload repaints
 nothing and an insert does not disturb its neighbours, and everything reported back to you is looked up
@@ -618,6 +643,11 @@ The control watches your collection only while it is loaded — it unsubscribes 
 subscribes again on `Loaded`, so a collection that outlives the view does not keep the view alive.
 Nothing is missed by that: the collection is read again on reload, so changes made while the view was
 off screen show up when it comes back.
+
+**Appointments are immutable; the collection is what changes.** The control watches the collection
+and rebuilds from it — it never watches an appointment's properties, so mutating one in place is
+invisible to it. Replace the instance instead, keeping its `Key`. See
+[`ISchedulerAppointment`](#ischedulerappointment).
 
 **Time zones are yours to handle.** Every `DateTime` crossing this API — `ISchedulerAppointment.Start`,
 `SchedulerTimeSlot.Start`, `AppointmentDropped.DropStart`, `VisibleDatesChanged` — is wall-clock in

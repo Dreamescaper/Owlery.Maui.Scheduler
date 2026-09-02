@@ -64,6 +64,21 @@ public sealed record SchedulerAgendaSection(
 /// <see cref="Start"/> and <see cref="End"/> are wall-clock values in
 /// <see cref="SchedulerView.TimeZone"/>. The control never converts between time zones;
 /// the caller decides what "now" means and hands over already-converted values.
+/// <para>
+/// <b>Implementations should be immutable.</b> The control observes the collection, never the
+/// appointments in it: nothing here derives from <c>BindableObject</c>, none of these are bindable
+/// properties, and the contract does not ask for <see cref="System.ComponentModel.INotifyPropertyChanged"/>.
+/// Changing an appointment in place therefore changes nothing on screen. Worse than nothing: the
+/// display disagrees with the model until something unrelated makes the control re-read the
+/// collection, and the repaint then arrives looking like a bug rather than like the change it is.
+/// </para>
+/// <para>
+/// Build a new instance carrying the same <see cref="Key"/> instead, and put it in the collection in
+/// place of the old one. A <c>record</c> makes that a line — <c>appointment with { Start = newStart }</c>
+/// — and because the key has not moved, the control reconciles the new instance onto the view already
+/// showing it and repaints, rather than building a fresh view. The sample's <c>SampleAppointment</c>
+/// is the reference shape.
+/// </para>
 /// </remarks>
 public interface ISchedulerAppointment
 {
@@ -86,6 +101,7 @@ public interface ISchedulerAppointment
     /// <summary>Short text describing the appointment, used for the accessibility description.</summary>
     string? Subject { get; }
 }
+
 
 /// <summary>
 /// A position on the grid, produced by tapping empty space or by dropping an appointment.
