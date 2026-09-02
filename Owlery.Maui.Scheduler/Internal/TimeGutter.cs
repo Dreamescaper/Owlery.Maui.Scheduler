@@ -9,9 +9,9 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// </summary>
 /// <remarks>
 /// Real labels rather than a drawn canvas. There are only a dozen or so, which is nowhere near the
-/// two thousand cells that made the grid worth drawing (DESIGN.md section 7), and painting them cost
-/// text that would not scale with the system font size — recorded as the ACC-9 gap until this
-/// replaced it.
+/// two thousand cells that made the grid worth drawing (docs/design/grid-and-scrolling.md), and
+/// painting them cost text that would not scale with the system font size — recorded as the ACC-9
+/// gap until this replaced it.
 /// <para>
 /// Positioned from the same <see cref="SchedulerGeometry.YFromMinutes"/> the grid lines are drawn
 /// from, so a label cannot drift away from the line it names.
@@ -79,7 +79,7 @@ internal sealed class TimeGutter
         // Opaque for the same reason the grid is: a transparent drawing surface does not reliably
         // receive taps. It also has to paint over the pager beside it — MAUI leaves ClipChildren off
         // on its Android layout views so shadows can spill, so the pager draws unclipped, and its
-        // content is three pages wide with an opaque background of its own. See DESIGN.md section 19.
+        // content is three pages wide with an opaque background of its own. See docs/design/pager.md.
         input = new GraphicsView();
         input.EndInteraction += OnTapped;
 

@@ -12,7 +12,7 @@ namespace Owlery.Maui.Scheduler.Handlers;
 /// <remarks>
 /// Everything set up here used to be reached for through <c>Handler.PlatformView</c> from inside the
 /// scheduler. It belongs to the scroller, not to a calendar, which is most of why this control was
-/// separated out — see DESIGN.md section 19.
+/// separated out — see docs/design/pager.md.
 /// </remarks>
 internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, MauiPagingScrollView>
 {

@@ -10,7 +10,7 @@ public static class AppHostBuilderExtensions
     /// <remarks>
     /// MAUI has no way for a library to register a handler on its own, so this is the one line a host
     /// has to add. Without it <see cref="PagingScrollView"/> falls back to the handler for its base
-    /// type and simply does not scroll — see DESIGN.md section 19.
+    /// type and simply does not scroll — see docs/design/pager.md.
     /// <para>
     /// A no-op where there is no platform, which is what lets the headless tests run without it.
     /// </para>

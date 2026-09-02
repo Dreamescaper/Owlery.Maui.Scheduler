@@ -1,6 +1,6 @@
 # Scheduler Playground
 
-A bare .NET MAUI app for exercising [`Owlery.Maui.Scheduler`](../Owlery.Maui.Scheduler/API.md) on iOS
+A bare .NET MAUI app for exercising [`Owlery.Maui.Scheduler`](../docs/API.md) on iOS
 and Android without going anywhere near the real app.
 
 No Blazor, no XAML, no `Owlery.*` references beyond the control itself. The whole app is the control,
@@ -89,7 +89,7 @@ per binding would leave one live handler per appointment the view had ever shown
 `AgendaRow` supplies its own height through the optimized contract: the sample hands
 `SchedulerView.AgendaRowHeight` a static method (`AgendaRow.RowHeight`) that states the height from the
 appointment alone. That avoids the estimate→measurement correction pass, which otherwise shows up as the
-card wobbling a frame or two on an upward scroll (see `DESIGN.md` §14). The tradeoff is size, not
+card wobbling a frame or two on an upward scroll (see [design §21](../docs/design/agenda.md)). The tradeoff is size, not
 smoothness: the value is authoritative and fixed, so a row is a consistent amount off rather than
 resized to its text. The **AgendaRowHeight** knob toggles between that known height and letting the row
 be measured — most visible with the 2,000- and 5,000-per-month data presets during a fast fling.

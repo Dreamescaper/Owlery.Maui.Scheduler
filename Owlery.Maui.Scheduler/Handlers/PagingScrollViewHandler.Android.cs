@@ -17,7 +17,7 @@ namespace Owlery.Maui.Scheduler.Handlers;
 /// MAUI's <c>ScrollView</c>: its Android platform view is a <c>MauiScrollView : NestedScrollView</c>
 /// that grows an internal <c>MauiHorizontalScrollView</c> child when asked for a horizontal
 /// orientation, so paging would have had to be imposed across two nested view classes, neither ours.
-/// See DESIGN.md section 19.
+/// See docs/design/pager.md.
 /// </remarks>
 internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, MauiPagingScrollView>
 {

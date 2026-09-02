@@ -816,8 +816,9 @@ public partial class SchedulerView
     /// assignment, with the alternative named, is worth the few lines.
     /// <para>
     /// Supporting selectors would mean a pool per resolved template, and the reuse this control gets
-    /// most of its speed from is why that is not obviously a win — see DESIGN.md section 6. A single
-    /// template that varies its own content recycles better than several that do not.
+    /// most of its speed from is why that is not obviously a win — see
+    /// docs/design/appointment-views.md. A single template that varies its own content recycles
+    /// better than several that do not.
     /// </para>
     /// </remarks>
     private static void RejectTemplateSelector(object? template)
@@ -829,7 +830,7 @@ public partial class SchedulerView
                 + "rebound rather than rebuilt, so they are all made from one template. Use a single "
                 + "template that varies its own content — build every variant once and show the one "
                 + "that applies — which also rebinds far more cheaply than swapping templates would. "
-                + "See API.md.");
+                + "See docs/API.md.");
         }
     }
 

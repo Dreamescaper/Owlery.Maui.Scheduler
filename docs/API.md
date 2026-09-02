@@ -2,7 +2,7 @@
 
 A scheduler control for .NET MAUI. This document covers the public surface. For *what it
 does*, see the [functional requirements](requirements/README.md); for *why* it is built the way it is,
-see [DESIGN.md](DESIGN.md).
+see the [design notes](design/README.md).
 
 Namespace: `Owlery.Maui.Scheduler`
 
@@ -150,7 +150,7 @@ In `Agenda`:
 > ```
 >
 > This is faster as well as simpler. Switching between variants inside a live view constructs nothing,
-> so it costs a rebind (~0.25ms) rather than a fresh build (~3ms) — see `DESIGN.md` section 6.
+> so it costs a rebind (~0.25ms) rather than a fresh build (~3ms) — see [design §6](design/appointment-views.md).
 
 > **Hand back the same instance for an appointment that has not changed.** Binding contexts are
 > compared by reference, so an unchanged appointment that arrives as a new object re-renders its
@@ -161,7 +161,7 @@ In `Agenda`:
 
 > A template built from MAUI primitives binds roughly a third faster than the equivalent written as a
 > Blazor component through generated bindings — measured per *fresh* bind, which is what a page
-> rotation pays for. Rebinding a reused view is unaffected. See `DESIGN.md` section 6 if that matters
+> rotation pays for. Rebinding a reused view is unaffected. See [design §6](design/appointment-views.md) if that matters
 > to you; either kind of template works.
 
 > Assigning `ItemsSource` repeatedly is fine. Several assignments arriving together are collapsed into
@@ -581,4 +581,4 @@ keeps showing it at half opacity. Both that copy and the one under the finger co
 `AppointmentTemplate`, so nothing extra is needed to support it.
 
 **Not supported.** Multi-week grids; all-day and multi-day appointment spans; resizing an appointment
-by its edges. See [DESIGN.md §14](DESIGN.md).
+by its edges. See [design §14](design/README.md).

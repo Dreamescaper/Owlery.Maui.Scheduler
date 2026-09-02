@@ -358,8 +358,8 @@ public partial class SchedulerView
     /// disables interaction for the whole subtree and cancels the very touch that is driving the
     /// drag. Neither is <c>ScrollOrientation.Neither</c>, tempting as it looks — it maps to
     /// <c>ScrollEnabled</c> on iOS but on Android leaves <c>OnInterceptTouchEvent</c> unguarded, so
-    /// the ancestor still steals the gesture and then declines to scroll with it. See DESIGN.md
-    /// section 19.
+    /// the ancestor still steals the gesture and then declines to scroll with it. See
+    /// docs/design/pager.md.
     /// </remarks>
     private void SetScrollingEnabled(bool enabled)
     {

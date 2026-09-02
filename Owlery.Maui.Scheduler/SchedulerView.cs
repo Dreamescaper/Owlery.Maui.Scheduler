@@ -11,7 +11,7 @@ namespace Owlery.Maui.Scheduler;
 /// </summary>
 /// <remarks>
 /// Timeline and month views rotate three pages as a ring buffer; the agenda is one virtualized
-/// vertical list. See DESIGN.md for the reasoning behind each decision.
+/// vertical list. See docs/design/ for the reasoning behind each decision.
 /// </remarks>
 public partial class SchedulerView : ContentView
 {

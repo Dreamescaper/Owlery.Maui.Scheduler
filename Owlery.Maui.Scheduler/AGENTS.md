@@ -37,36 +37,45 @@
 
 ## Documentation Set
 
-Four documents describe this project. They answer different questions and must not be merged:
+Four documents describe this project. They answer different questions and must not be merged. All
+of them except this one live in `docs/`, at the repository root — the project folder holds code and
+agent instructions only:
 
 | Document | Answers |
 |---|---|
-| `requirements/` | What the control does, as behaviour. No implementation detail. |
-| `API.md` | What the public surface is — properties, events, contracts, defaults. |
-| `DESIGN.md` | Why it is built this way — decisions, alternatives rejected, costs. |
+| `docs/requirements/` | What the control does, as behaviour. No implementation detail. |
+| `docs/API.md` | What the public surface is — properties, events, contracts, defaults. |
+| `docs/design/` | Why it is built this way — decisions, alternatives rejected, costs. |
 | `AGENTS.md` | How to work on it. |
+
+`docs/design/` is one file per subject, and each keeps the section numbers the decisions were written
+with — §1 to §21, grouped rather than renumbered, so an older reference to "DESIGN.md section 19"
+still resolves through `docs/design/README.md`. Cite them as `docs/design/pager.md` (§19) rather than
+by number alone, and add a new section to the file whose subject it shares rather than starting a
+file per decision.
 
 ### Keeping Them In Sync
 
 Documentation drift here is treated as a defect, not a follow-up. When you change the code, update
 the matching document in the same change:
 
-- Added, removed or renamed a public property, event or method → update `API.md`, including its
+- Added, removed or renamed a public property, event or method → update `docs/API.md`, including its
   default value, and regenerate the Blazor bindings (see below).
-- Changed what the user sees or can do → update the relevant file in `requirements/`, keeping the
-  numbered identifiers stable. Add new numbers rather than renumbering existing ones.
+- Changed what the user sees or can do → update the relevant file in `docs/requirements/`, keeping
+  the numbered identifiers stable. Add new numbers rather than renumbering existing ones.
 - Chose an approach over an alternative, or hit a platform constraint that shaped the code → record
-  it in `DESIGN.md`. A decision that cost you an hour to work out is worth a paragraph.
+  it in the matching `docs/design/` file. A decision that cost you an hour to work out is worth a
+  paragraph.
 - Discovered the code does not meet a stated requirement → add a row to the conformance table in
-  `requirements/README.md` rather than quietly weakening the requirement.
-- Verified something on a device or simulator → update `DESIGN.md` section 15.
+  `docs/requirements/README.md` rather than quietly weakening the requirement.
+- Verified something on a device or simulator → update `docs/design/verification.md` (§15).
 
 If a change makes an existing statement wrong, fix the statement. Do not append a contradiction.
 
 ## Invariants
 
 These were each arrived at the hard way. Changing one is a design decision, not a refactor — read the
-cited `DESIGN.md` section first.
+cited design section first; `docs/design/README.md` maps every § to its file.
 
 - **Appointment views are pooled and rebound, never rebuilt** (§5, §6). Anything attached to a view
   must be attached once, at creation, and must read the currently bound appointment rather than
@@ -104,8 +113,9 @@ cited `DESIGN.md` section first.
   platform or the other.
 - **Platform-specific code is confined** to `Handlers/`, plus `ConfigurePlatformScrolling` and
   `SetScrollingEnabled` for the timeline's vertical scroll. If you need more of it, say so in
-  `DESIGN.md` and explain why MAUI could not do the job. `Handlers/` earned its place the hard way —
-  read §19 before changing it, and do not assume a platform scroll view behaves like the other one.
+  `docs/design/` and explain why MAUI could not do the job. `Handlers/` earned its place the hard
+  way — read §19 before changing it, and do not assume a platform scroll view behaves like the other
+  one.
 - **The pager decides which page a swipe lands on** (§3, §19). The control reacts to `PageSettled`;
   it does not infer the page from the offset going quiet. `OnPageSettled` must stay synchronous — a
   frame drawn between the rotation and the recentre shows a page the user never swiped to.
@@ -172,8 +182,8 @@ Everything here was learned by measuring this control, usually after guessing wr
   `adb shell dumpsys gfxinfo <pkg>` for what the frame actually cost — `Invalidate()` only queues the
   draw, so a stopwatch cannot see it.
 - **Identity, not equality, drives binding** (§6). Hand back the same appointment instance when nothing
-  changed; build a new one when something did. This is a contract with the host, and it is in `API.md`
-  for that reason.
+  changed; build a new one when something did. This is a contract with the host, and it is in
+  `docs/API.md` for that reason.
 - **Do not write a layout bound that has not changed.** An unchanged write still costs a layout pass,
   and on Android an arrange is a JNI call per child. `PositionAppointmentView` and
   `TimeGutter.ShowIndicator` both guard; anything running per frame or per touch should too.
@@ -264,5 +274,5 @@ dotnet test --project Owlery.Maui.Scheduler.Tests/Owlery.Maui.Scheduler.Tests.cs
   at the top of it, and a tap on an appointment was never reported while dragging was enabled.
 - What the suite cannot reach — real gesture arbitration between the scroll views, platform paging,
   fling prediction, clipping, anything in `Handlers/` — still needs a device. Three defects in the
-  pager were found only by running it; see DESIGN.md §19. Android is reachable through the DevFlow
-  skills, and `references/android.md` there records the deployment traps.
+  pager were found only by running it; see `docs/design/pager.md`. Android is reachable through the
+  DevFlow skills, and `references/android.md` there records the deployment traps.

@@ -28,7 +28,7 @@ internal sealed record MonthPageLayout(
 /// not the timeline would have it on screen.
 /// <para>
 /// Multi-day appointments are not spanned; an appointment is placed on the day it starts, matching
-/// the timeline (DESIGN.md section 14).
+/// the timeline (docs/design/README.md §14).
 /// </para>
 /// </remarks>
 internal static class MonthLayoutEngine

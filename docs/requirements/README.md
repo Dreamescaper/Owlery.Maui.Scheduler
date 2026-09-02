@@ -1,7 +1,7 @@
 # Scheduler — functional requirements
 
 What the scheduler does, described as behaviour. No implementation detail: how any of it is achieved
-is in [../DESIGN.md](../DESIGN.md), and the properties and events that expose it are in
+is in the [design notes](../design/README.md), and the properties and events that expose it are in
 [../API.md](../API.md).
 
 ## Purpose

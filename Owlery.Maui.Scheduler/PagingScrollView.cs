@@ -22,7 +22,7 @@ internal sealed class PagingScrollRequestedEventArgs(double scrollX, bool animat
 /// MAUI's <see cref="ScrollView"/> cannot do either job. Paging is a platform setting it does not
 /// expose, so a week only snapped on iOS; and its offset is applied through the handler on a later
 /// pass, which is what let a frame be drawn between rotating the ring buffer and recentring on it —
-/// see DESIGN.md section 19.
+/// see docs/design/pager.md.
 /// <para>
 /// Subclassing it was not an option on Android, where the platform view is a
 /// <c>MauiScrollView : NestedScrollView</c> that grows an internal <c>MauiHorizontalScrollView</c>
@@ -125,7 +125,7 @@ internal class PagingScrollView : ContentView
     /// <remarks>
     /// An animated scroll completes when the animation ends. An unanimated one is applied straight to
     /// the platform view, so by the time this returns the offset has already changed — that is what
-    /// closes the window described in DESIGN.md section 19, and why it must stay a method rather than
+    /// closes the window described in docs/design/pager.md, and why it must stay a method rather than
     /// becoming a bindable property applied by a mapper on some later pass.
     /// </remarks>
     public Task ScrollToAsync(double x, bool animated)
@@ -150,7 +150,7 @@ internal class PagingScrollView : ContentView
     /// this returns, not merely to have been asked for. Both platforms can do that —
     /// <c>setContentOffset:animated:NO</c> and <c>HorizontalScrollView.ScrollTo</c> are each
     /// immediate — and it is what stops a frame being composited between rotating the pages and
-    /// recentring on them. See DESIGN.md section 19.
+    /// recentring on them. See docs/design/pager.md.
     /// </remarks>
     public void ScrollTo(double x) =>
         ScrollToRequested?.Invoke(this, new PagingScrollRequestedEventArgs(x, animated: false));

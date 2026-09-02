@@ -43,9 +43,9 @@ including on first layout.
 
 | Document | Answers |
 |---|---|
-| [`API.md`](Owlery.Maui.Scheduler/API.md) | The public surface — properties, events, contracts, defaults |
-| [`DESIGN.md`](Owlery.Maui.Scheduler/DESIGN.md) | Why it is built this way — decisions, alternatives rejected, costs |
-| [`requirements/`](Owlery.Maui.Scheduler/requirements) | What it does, as behaviour |
+| [`docs/API.md`](docs/API.md) | The public surface — properties, events, contracts, defaults |
+| [`docs/design/`](docs/design/README.md) | Why it is built this way — decisions, alternatives rejected, costs |
+| [`docs/requirements/`](docs/requirements/README.md) | What it does, as behaviour |
 | [`AGENTS.md`](Owlery.Maui.Scheduler/AGENTS.md) | How to work on it |
 
 ## Repository layout

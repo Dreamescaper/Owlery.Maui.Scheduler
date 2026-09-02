@@ -6,7 +6,7 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// <remarks>
 /// A page is identified by the first of its month rather than by the first cell of its grid, so
 /// stepping between pages is plain month arithmetic and "does this day belong to another month" is a
-/// comparison against the page's own identity. See DESIGN.md section 18.
+/// comparison against the page's own identity. See docs/design/month.md.
 /// </remarks>
 internal sealed class MonthSurface(MonthGeometry geometry) : ISchedulerSurface
 {

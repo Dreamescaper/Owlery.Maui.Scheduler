@@ -2,7 +2,8 @@ namespace Owlery.Maui.Scheduler.Internal;
 
 /// <summary>
 /// Draws the entire scrollable background — every day column, hour line and shading for all three
-/// rendered weeks — onto one canvas. See DESIGN.md for why this is not a grid of cell views.
+/// rendered weeks — onto one canvas. See docs/design/grid-and-scrolling.md for why this is not a
+/// grid of cell views.
 /// </summary>
 internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawable
 {
