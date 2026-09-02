@@ -33,7 +33,7 @@ public sealed class PlaygroundPage : ContentPage
         FontSize = 13,
         FontAttributes = FontAttributes.Bold,
         TextColor = Theme.Accent,
-        WidthRequest = 52,
+        WidthRequest = 72,
         HorizontalTextAlignment = TextAlignment.Center,
         VerticalTextAlignment = TextAlignment.Center
     };
@@ -55,7 +55,9 @@ public sealed class PlaygroundPage : ContentPage
         {
             TimeZone = TimeZoneInfo.Local,
             AppointmentTemplate = new DataTemplate(static () => new AppointmentBox()),
-            MonthAppointmentTemplate = new DataTemplate(static () => new AppointmentChip())
+            MonthAppointmentTemplate = new DataTemplate(static () => new AppointmentChip()),
+            AgendaAppointmentTemplate = new DataTemplate(static () => new AgendaRow()),
+            AgendaRowHeight = AgendaRow.RowHeight
         };
 
         scheduler.VisibleDatesChanged += OnVisibleDatesChanged;
@@ -68,7 +70,7 @@ public sealed class PlaygroundPage : ContentPage
         scheduler.AppointmentDropped += OnAppointmentDropped;
 
         source = new AppointmentSource(scheduler);
-        source.Changed += (_, _) => countLabel.Text = $"{source.Count:N0}";
+        source.Changed += (_, _) => countLabel.Text = $"{source.Count:N0}/mo";
 
         scrim = new BoxView { Color = Theme.Scrim, IsVisible = false, Opacity = 0 };
         scrim.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => _ = SetDrawerOpen(false)) });
@@ -140,7 +142,7 @@ public sealed class PlaygroundPage : ContentPage
         next.Clicked += (_, _) => Step(1);
 
         var today = Knobs.SmallButton("Today", Theme.Unselected, Theme.Ink);
-        today.Clicked += (_, _) => scheduler.DisplayDate = DateTime.Today;
+        today.Clicked += (_, _) => scheduler.ScrollToDate(DateTime.Today);
 
         var navigation = new HorizontalStackLayout
         {
@@ -242,6 +244,7 @@ public sealed class PlaygroundPage : ContentPage
 
     private void OnVisibleDatesChanged(object? sender, SchedulerVisibleDatesChangedEventArgs e)
     {
+        source.SetRange(e.PrefetchFrom, e.PrefetchTo);
         title.Text = Describe(e.VisibleDates);
         Log($"VisibleDatesChanged · {e.VisibleDates.Count} days, prefetch {e.PrefetchFrom:d MMM}–{e.PrefetchTo:d MMM}");
     }
@@ -324,8 +327,7 @@ public sealed class PlaygroundPage : ContentPage
 
         // The control leaves the appointment where it was dropped and does not touch the model. The
         // move only becomes real when the host writes it down and re-emits ItemsSource.
-        appointment.MoveTo(e.DropStart);
-        source.Publish();
+        source.Move(appointment, e.DropStart);
 
         Log($"AppointmentDropped · {Name(e.Appointment)} → {e.DropStart:ddd d MMM HH:mm}");
     }

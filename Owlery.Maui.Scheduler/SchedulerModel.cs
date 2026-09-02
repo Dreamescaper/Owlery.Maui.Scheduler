@@ -49,6 +49,9 @@ public enum SchedulerAgendaSectionKind
 /// pool per kind is a pool that usually hands back the wrong shape. Branch on <see cref="Kind"/>
 /// inside the template, building each arm up front and toggling between them.
 /// </remarks>
+/// <param name="Date">The month, week or day introduced, at midnight in the scheduler's time zone.</param>
+/// <param name="Kind">Which grouping the section introduces.</param>
+/// <param name="AppointmentCount">Appointments in that grouping within the loaded agenda range.</param>
 public sealed record SchedulerAgendaSection(
     DateTime Date,
     SchedulerAgendaSectionKind Kind,
@@ -172,7 +175,7 @@ public sealed class SchedulerTimeGutterTappedEventArgs(TimeSpan time) : EventArg
 }
 
 /// <summary>
-/// Raised whenever the centre week changes, so the host can fetch the data it needs.
+/// Raised whenever the visible period changes, so the host can fetch the data it needs.
 /// </summary>
 public sealed class SchedulerVisibleDatesChangedEventArgs(
     IReadOnlyList<DateTime> visibleDates,

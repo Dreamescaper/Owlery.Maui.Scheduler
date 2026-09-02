@@ -13,13 +13,18 @@ public class AgendaLayoutEngineTests
     private const double RowHeight = 64;
     private const double MonthHeight = 40;
     private const double WeekHeight = 24;
+    private const double DayGap = 0;
 
     private static AgendaPageLayout Layout(params ISchedulerAppointment[] appointments)
         => Layout(RangeStart, RangeEnd, appointments);
 
     private static AgendaPageLayout Layout(DateOnly from, DateOnly to, params ISchedulerAppointment[] appointments)
         => AgendaLayoutEngine.Layout(
-            appointments, from, to, DayOfWeek.Monday, RowHeight, MonthHeight, WeekHeight);
+            appointments, from, to, DayOfWeek.Monday, RowHeight, MonthHeight, WeekHeight, DayGap);
+
+    private static AgendaPageLayout GappedLayout(double dayGap, params ISchedulerAppointment[] appointments)
+        => AgendaLayoutEngine.Layout(
+            appointments, RangeStart, RangeEnd, DayOfWeek.Monday, RowHeight, MonthHeight, WeekHeight, dayGap);
 
     private static DateTime Day(int month, int day) => new(2026, month, day);
 
@@ -36,6 +41,44 @@ public class AgendaLayoutEngineTests
         Assert.That(
             Of(layout, AgendaRowKind.MonthSection).Select(row => row.Date),
             Is.EqualTo(new[] { new DateOnly(2026, 8, 1), new DateOnly(2026, 9, 1) }).AsCollection);
+    }
+
+    [Test]
+    public void A_week_straddling_the_range_edge_gets_no_heading()
+    {
+        // 1 August 2026 is a Saturday, so the first week (Mon 27 Jul – Sun 2 Aug) straddles the range
+        // start and must not be announced — its Monday and Tuesday are not loaded. 3 August starts a
+        // whole week inside the range and is.
+        var layout = Layout(
+            TestAppointment.At(Day(8, 1), "10:00", 1),
+            TestAppointment.At(Day(8, 3), "10:00", 1));
+
+        var weekDates = Of(layout, AgendaRowKind.WeekSection).Select(row => row.Date).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(weekDates, Does.Not.Contain(new DateOnly(2026, 7, 27)));
+            Assert.That(weekDates, Does.Contain(new DateOnly(2026, 8, 3)));
+        });
+    }
+
+    [Test]
+    public void Section_rows_carry_the_number_of_appointments_they_group()
+    {
+        var layout = Layout(
+            TestAppointment.At(Day(8, 3), "10:00", 1),
+            TestAppointment.At(Day(8, 4), "10:00", 1),
+            TestAppointment.At(Day(9, 2), "10:00", 1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                Of(layout, AgendaRowKind.MonthSection).Select(row => row.DayCount),
+                Is.EqualTo(new[] { 2, 1 }).AsCollection);
+            Assert.That(
+                Of(layout, AgendaRowKind.WeekSection).Select(row => row.DayCount),
+                Is.EqualTo(new[] { 2, 1 }).AsCollection);
+        });
     }
 
     [Test]
@@ -157,13 +200,57 @@ public class AgendaLayoutEngineTests
         var untouched = rows[1].Top;
 
         rows[2].Height += 20;
-        var height = AgendaLayoutEngine.Reflow(rows, 2);
+        var height = AgendaLayoutEngine.Reflow(rows, 2, DayGap);
 
         Assert.Multiple(() =>
         {
             Assert.That(rows[1].Top, Is.EqualTo(untouched), "rows above the correction do not move");
             Assert.That(rows[3].Top, Is.EqualTo(rows[2].Bottom));
             Assert.That(height, Is.EqualTo(layout.ContentHeight + 20));
+        });
+    }
+
+    [Test]
+    public void A_day_gap_separates_days_but_not_appointments_within_a_day()
+    {
+        const double gap = 16;
+        var layout = GappedLayout(
+            gap,
+            TestAppointment.At(Day(8, 3), "09:00", 1),
+            TestAppointment.At(Day(8, 3), "10:00", 1),
+            TestAppointment.At(Day(8, 4), "09:00", 1));
+
+        var rows = Of(layout, AgendaRowKind.Appointment).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows[1].Top, Is.EqualTo(rows[0].Bottom), "same-day rows stay contiguous");
+            Assert.That(rows[2].Top, Is.EqualTo(rows[1].Bottom + gap), "the next day is owed the gap");
+        });
+    }
+
+    [Test]
+    public void A_day_gap_survives_a_reflow()
+    {
+        const double gap = 16;
+        var layout = GappedLayout(
+            gap,
+            TestAppointment.At(Day(8, 3), "09:00", 1),
+            TestAppointment.At(Day(8, 4), "09:00", 1),
+            TestAppointment.At(Day(8, 5), "09:00", 1));
+
+        var rows = layout.Rows;
+        var appointments = Of(layout, AgendaRowKind.Appointment).ToArray();
+        var taller = appointments[1];
+        var heightBefore = layout.ContentHeight;
+
+        taller.Height += 10;
+        var height = AgendaLayoutEngine.Reflow(rows, taller.Index, gap);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(appointments[2].Top, Is.EqualTo(taller.Bottom + gap), "the gap follows the corrected row");
+            Assert.That(height, Is.EqualTo(heightBefore + 10));
         });
     }
 

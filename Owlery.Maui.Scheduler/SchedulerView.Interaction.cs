@@ -116,8 +116,8 @@ public partial class SchedulerView
     /// against the strip is already in the same space the columns were laid out in — the same space
     /// <see cref="TimelineSurface.DateAt"/> resolves the grid in. Nothing has to undo the scroll.
     /// <para>
-    /// Silent in a month. Its header names weekdays rather than dates, and a column of one stands for
-    /// six of them; there is no single day to report, so nothing is reported.
+    /// Silent outside the timeline. A month header names weekdays rather than dates, and an agenda
+    /// names its days down the list instead of in the fixed strip.
     /// </para>
     /// </remarks>
     private void OnHeaderTapped(object? sender, TappedEventArgs e)

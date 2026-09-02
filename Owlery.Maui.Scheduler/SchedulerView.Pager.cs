@@ -31,9 +31,15 @@ public partial class SchedulerView
     /// request — this method never yields, so no frame can be composited part-way through it.
     /// </para>
     /// </remarks>
+    /// <summary>Whether this surface pages sideways at all. An agenda is one continuous page.</summary>
+    private bool Paged => ViewMode is not SchedulerViewMode.Agenda;
+
     private void OnPageSettled(object? sender, PagingPageSettledEventArgs e)
     {
-        if (recentring || dragArmed || ActiveGeometry.ViewportWidth <= 0)
+        // Without this the pager would report page 0 on a one-page surface and retreat off the front
+        // of the calendar; and Recentre would scroll to an offset the surface is no longer wide
+        // enough to hold.
+        if (!Paged || recentring || dragArmed || ActiveGeometry.ViewportWidth <= 0)
             return;
 
         // An accepted drop waits for the host to feed the change back before rejoining a week. If that
@@ -113,6 +119,9 @@ public partial class SchedulerView
     /// </remarks>
     private bool TrySlideToPage(DateOnly target)
     {
+        if (!Paged)
+            return false;
+
         // A drag owns the pager for its duration — scrolling is turned off and the drop target is
         // resolved against the centre page — so a period change under it goes the blunt way.
         if (dragArmed || ActiveGeometry.ViewportWidth <= 0)
@@ -173,7 +182,7 @@ public partial class SchedulerView
     /// <summary>Puts the pager back on the centre page without anything being drawn in between.</summary>
     private void Recentre()
     {
-        if (ActiveGeometry.ViewportWidth <= 0)
+        if (!Paged || ActiveGeometry.ViewportWidth <= 0)
             return;
 
         recentring = true;
@@ -194,11 +203,40 @@ public partial class SchedulerView
             .Select(date => date.ToDateTime(TimeOnly.MinValue))
             .ToArray();
 
-        // Taken from the rendered dates rather than from the page starts, because a page does not
-        // have to begin on the first date it shows — a month grid opens on the tail of the previous
-        // month, and the host has to be told to fetch that far back.
-        var first = pageSurface.DatesOn(slots[0].PageStart)[0];
-        var last = pageSurface.DatesOn(slots[2].PageStart)[^1];
+        DateOnly first;
+        DateOnly last;
+
+        if (ViewMode is SchedulerViewMode.Agenda)
+        {
+            // Every date in the agenda's loaded range is reachable by vertical scrolling. Reporting
+            // neighbouring month identities would claim that data is rendered when it is not.
+            first = DateOnly.FromDateTime(visible[0]);
+            last = DateOnly.FromDateTime(visible[^1]);
+        }
+        else
+        {
+            // Taken from the rendered dates rather than from the page starts, because a page does
+            // not have to begin on the first date it shows — a month grid opens on the tail of the
+            // previous month, and the host has to be told to fetch that far back.
+            first = pageSurface.DatesOn(slots[0].PageStart)[0];
+            last = pageSurface.DatesOn(slots[2].PageStart)[^1];
+        }
+
+        var key = new VisibleDatesReportKey(
+            ViewMode,
+            DateOnly.FromDateTime(visible[0]),
+            DateOnly.FromDateTime(visible[^1]),
+            visible.Length,
+            first,
+            last);
+
+        // A report is a statement of effective range, not a trace of internal rebuilds. Store the
+        // key before invoking the host so a synchronous ItemsSource response cannot re-enter with
+        // the same report.
+        if (lastVisibleDatesReport == key)
+            return;
+
+        lastVisibleDatesReport = key;
 
         VisibleDatesChanged?.Invoke(this, new SchedulerVisibleDatesChangedEventArgs(
             visible,

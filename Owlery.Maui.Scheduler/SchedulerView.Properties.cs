@@ -26,6 +26,30 @@ public partial class SchedulerView
         nameof(MonthAppointmentTemplate), typeof(DataTemplate), typeof(SchedulerView), null,
         propertyChanged: OnAppointmentTemplateChanged);
 
+    public static readonly BindableProperty AgendaAppointmentTemplateProperty = BindableProperty.Create(
+        nameof(AgendaAppointmentTemplate), typeof(DataTemplate), typeof(SchedulerView), null,
+        propertyChanged: OnAppointmentTemplateChanged);
+
+    public static readonly BindableProperty AgendaSectionTemplateProperty = BindableProperty.Create(
+        nameof(AgendaSectionTemplate), typeof(DataTemplate), typeof(SchedulerView), null,
+        propertyChanged: OnAgendaSectionTemplateChanged);
+
+    public static readonly BindableProperty AgendaEstimatedRowHeightProperty = BindableProperty.Create(
+        nameof(AgendaEstimatedRowHeight), typeof(double), typeof(SchedulerView), 64d,
+        propertyChanged: OnGeometryChanged);
+
+    public static readonly BindableProperty AgendaRowHeightProperty = BindableProperty.Create(
+        nameof(AgendaRowHeight), typeof(Func<ISchedulerAppointment, double>), typeof(SchedulerView), null,
+        propertyChanged: OnAgendaRowHeightChanged);
+
+    public static readonly BindableProperty AgendaDayGutterWidthProperty = BindableProperty.Create(
+        nameof(AgendaDayGutterWidth), typeof(double), typeof(SchedulerView), 56d,
+        propertyChanged: OnGeometryChanged);
+
+    public static readonly BindableProperty AgendaEmptyTextProperty = BindableProperty.Create(
+        nameof(AgendaEmptyText), typeof(string), typeof(SchedulerView), "No appointments",
+        propertyChanged: OnAgendaEmptyTextChanged);
+
     public static readonly BindableProperty MonthOverflowFormatProperty = BindableProperty.Create(
         nameof(MonthOverflowFormat), typeof(string), typeof(SchedulerView), "+{0} more",
         propertyChanged: OnAppearanceChanged);
@@ -275,8 +299,8 @@ public partial class SchedulerView
     /// <remarks>
     /// Anything from 1 to 7 works — 5 gives a working week. Only a full week snaps to
     /// <see cref="FirstDayOfWeek"/>; shorter pages start on <see cref="DisplayDate"/>, and swiping
-    /// moves by exactly one page. Ignored while <see cref="ViewMode"/> is
-    /// <see cref="SchedulerViewMode.Month"/>.
+    /// moves by exactly one page. Ignored unless <see cref="ViewMode"/> is
+    /// <see cref="SchedulerViewMode.Timeline"/>.
     /// </remarks>
     public int VisibleDays
     {
@@ -558,6 +582,87 @@ public partial class SchedulerView
         set => SetValue(BusyIndicatorColorProperty, value);
     }
 
+    /// <summary>The template each agenda row is built from.</summary>
+    /// <remarks>
+    /// Falls back to <see cref="AppointmentTemplate"/> when unset, which renders but rarely reads
+    /// well: a timeline box is as tall as its appointment is long, whereas an agenda row is as tall
+    /// as its own content requires and usually wants to state its time, having no hour gutter to read
+    /// it from.
+    /// </remarks>
+    public DataTemplate? AgendaAppointmentTemplate
+    {
+        get => (DataTemplate?)GetValue(AgendaAppointmentTemplateProperty);
+        set => SetValue(AgendaAppointmentTemplateProperty, value);
+    }
+
+    /// <summary>The template the agenda's headings and day markers are built from.</summary>
+    /// <remarks>
+    /// One template for all three kinds, bound to a <see cref="SchedulerAgendaSection"/> and branching
+    /// on its <see cref="SchedulerAgendaSection.Kind"/>. Unset, a plain built-in heading is used.
+    /// </remarks>
+    public DataTemplate? AgendaSectionTemplate
+    {
+        get => (DataTemplate?)GetValue(AgendaSectionTemplateProperty);
+        set => SetValue(AgendaSectionTemplateProperty, value);
+    }
+
+    /// <summary>What an agenda row is assumed to be worth before it has been measured.</summary>
+    /// <remarks>
+    /// Only an estimate: a row is measured the first time it is built and the list corrects itself.
+    /// Setting it close to the truth keeps that correction small and the scrollbar honest from the
+    /// start; setting it wildly wrong is a visual settling, not an error.
+    /// </remarks>
+    public double AgendaEstimatedRowHeight
+    {
+        get => (double)GetValue(AgendaEstimatedRowHeightProperty);
+        set => SetValue(AgendaEstimatedRowHeightProperty, value);
+    }
+
+    /// <summary>
+    /// Returns an authoritative height for an agenda appointment row, bypassing view measurement.
+    /// </summary>
+    /// <remarks>
+    /// Unset, each row is measured the first time it is realized and the list corrects itself. Set
+    /// this to state the height from the appointment alone. Setting it is <b>highly recommended</b>
+    /// for an agenda — and especially when the template's height is content-dependent — because it
+    /// removes the measure-and-correct pass from the scroll path. Left unmeasured, rows are placed at
+    /// <see cref="AgendaEstimatedRowHeight"/>, then measured and reflowed as they appear, which on a
+    /// live scroll reads as the row content wobbling up and down for a frame or so; a known height
+    /// also keeps the scrollbar extent honest from the first render.
+    /// <para>
+    /// The returned value is authoritative: the agenda lays the row out at exactly that height, then
+    /// arranges the row's own content within it. It is clamped to the agenda's minimum row height, and
+    /// a non-finite result falls back to <see cref="AgendaEstimatedRowHeight"/>. Because the height is
+    /// fixed, a value too short clips the content and one too long leaves white space, so state the
+    /// template's height as it actually renders and err slightly generous rather than tight.
+    /// </para>
+    /// <para>
+    /// Templates whose height depends on available width, wrapping, font scale or other view state
+    /// cannot be sized from the appointment alone and should keep the default measured behaviour —
+    /// which is why the measured path remains the default rather than being removed.
+    /// </para>
+    /// </remarks>
+    public Func<ISchedulerAppointment, double>? AgendaRowHeight
+    {
+        get => (Func<ISchedulerAppointment, double>?)GetValue(AgendaRowHeightProperty);
+        set => SetValue(AgendaRowHeightProperty, value);
+    }
+
+    /// <summary>Width of the column down the agenda's leading edge that day markers sit in.</summary>
+    public double AgendaDayGutterWidth
+    {
+        get => (double)GetValue(AgendaDayGutterWidthProperty);
+        set => SetValue(AgendaDayGutterWidthProperty, value);
+    }
+
+    /// <summary>Text the built-in month heading shows when that agenda month has no appointments.</summary>
+    /// <remarks>A custom <see cref="AgendaSectionTemplate"/> owns its empty presentation.</remarks>
+    public string AgendaEmptyText
+    {
+        get => (string?)GetValue(AgendaEmptyTextProperty) ?? string.Empty;
+        set => SetValue(AgendaEmptyTextProperty, value);
+    }
+
     /// <summary>Raised when empty grid space is tapped.</summary>
     public event EventHandler<SchedulerCellTappedEventArgs>? CellTapped;
 
@@ -566,7 +671,6 @@ public partial class SchedulerView
     /// <summary>Raised before a drag begins; set <c>Cancel</c> to refuse it.</summary>
     public event EventHandler<SchedulerAppointmentDragStartingEventArgs>? AppointmentDragStarting;
 
-    /// <summary>Raised after a drag is released; set <c>Cancel</c> to snap the appointment back.</summary>
     /// <summary>Raised while dragging, each time the drop target moves to a different boundary.</summary>
     public event EventHandler<SchedulerAppointmentDropTargetChangedEventArgs>? AppointmentDropTargetChanged;
 
@@ -576,8 +680,8 @@ public partial class SchedulerView
     /// Raised when the header above a day column is tapped, carrying that day.
     /// </summary>
     /// <remarks>
-    /// Not raised while <see cref="ViewMode"/> is <see cref="SchedulerViewMode.Month"/>: a month's
-    /// header names weekdays, and one column stands for six dates rather than one.
+    /// Raised only in <see cref="SchedulerViewMode.Timeline"/>. A month header names weekdays rather
+    /// than dates, and an agenda names its days down the list instead of in a header strip.
     /// </remarks>
     public event EventHandler<SchedulerHeaderTappedEventArgs>? HeaderTapped;
 
@@ -585,28 +689,45 @@ public partial class SchedulerView
     /// Raised when the hour gutter is tapped, carrying the time at that point.
     /// </summary>
     /// <remarks>
-    /// A month has no gutter, so it never raises this.
+    /// Raised only in <see cref="SchedulerViewMode.Timeline"/>; the other surfaces have no hour
+    /// gutter.
     /// </remarks>
     public event EventHandler<SchedulerTimeGutterTappedEventArgs>? TimeGutterTapped;
 
-    /// <summary>Raised whenever the centre week changes, including on first layout.</summary>
+    /// <summary>Raised whenever the visible period changes, including on first layout.</summary>
     public event EventHandler<SchedulerVisibleDatesChangedEventArgs>? VisibleDatesChanged;
 
     private static void OnDisplayDateChanged(BindableObject bindable, object oldValue, object newValue)
     {
         var view = (SchedulerView)bindable;
 
+
         if (view.suppressDisplayDateSync || !view.initialised)
             return;
 
         var target = view.pageSurface.StartOfPage(DateOnly.FromDateTime((DateTime)newValue));
         if (target == view.slots[1].PageStart)
+        {
+            if (view.ViewMode is SchedulerViewMode.Agenda)
+                view.ScrollAgendaToDate(DateOnly.FromDateTime((DateTime)newValue));
+
             return;
+        }
 
         if (view.TrySlideToPage(target))
             return;
 
+        if (view.ViewMode is SchedulerViewMode.Agenda)
+            view.agendaNavigationInProgress = true;
+
         view.RebuildAll(target);
+
+        if (view.ViewMode is SchedulerViewMode.Agenda)
+        {
+            view.ScrollAgendaToDate(DateOnly.FromDateTime((DateTime)newValue));
+            return;
+        }
+
         view.SyncDisplayDate();
     }
 
@@ -620,10 +741,15 @@ public partial class SchedulerView
         if (newValue is INotifyCollectionChanged newCollection)
             newCollection.CollectionChanged += view.OnItemsCollectionChanged;
 
+        view.agendaSurface.Invalidate();
         view.QueueRepopulate();
     }
 
-    private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => QueueRepopulate();
+    private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        agendaSurface.Invalidate();
+        QueueRepopulate();
+    }
 
     /// <summary>
     /// Asks for a repopulate on the next tick, collapsing a burst of them into one.
@@ -667,6 +793,15 @@ public partial class SchedulerView
         // the change back. This is that moment.
         ReleaseFloatingAppointment();
 
+        // The agenda's row table is built from the items, so new items make it stale. Scrolling does
+        // not — that only moves the window over a table that is still good.
+        agendaSurface.Invalidate();
+
+        // Items arriving is the host answering whatever the last growth asked for: the range it was
+        // asked to cover can now be laid out, and the edge may ask again.
+        agendaSurface.AdoptRequestedRange();
+        forwardGrowAwaitingData = false;
+
         for (var i = 0; i < slots.Length; i++)
             PopulateSlot(slots[i], i);
     }
@@ -701,6 +836,43 @@ public partial class SchedulerView
     private static void OnViewModeChanged(BindableObject bindable, object oldValue, object newValue)
         => ((SchedulerView)bindable).ChangeViewMode((SchedulerViewMode)newValue);
 
+    private static void OnAgendaSectionTemplateChanged(BindableObject bindable, object oldValue, object newValue)
+    {
+        var view = (SchedulerView)bindable;
+
+        RejectTemplateSelector(newValue);
+
+        foreach (var slot in view.slots)
+            view.ReleaseSectionViews(slot);
+
+        view.agendaSurface.Invalidate(clearMeasurements: true);
+        view.sectionPool.Clear();
+        view.sectionPool.Template = view.ActiveSectionTemplate;
+        view.RepopulateAllSlots();
+    }
+
+    private static void OnAgendaRowHeightChanged(BindableObject bindable, object oldValue, object newValue)
+    {
+        var view = (SchedulerView)bindable;
+
+        view.agendaSurface.RowHeightResolver = (Func<ISchedulerAppointment, double>?)newValue;
+        view.agendaSurface.Invalidate(clearMeasurements: true);
+        view.RepopulateAllSlots();
+    }
+
+    private static void OnAgendaEmptyTextChanged(BindableObject bindable, object oldValue, object newValue)
+    {
+        var scheduler = (SchedulerView)bindable;
+
+        foreach (var section in scheduler.slots
+                     .SelectMany(slot => slot.SectionViews)
+                     .OfType<AgendaSectionView>())
+        {
+            section.EmptyText = newValue as string ?? string.Empty;
+            section.Refresh();
+        }
+    }
+
     private static void OnAppointmentTemplateChanged(BindableObject bindable, object oldValue, object newValue)
     {
         var view = (SchedulerView)bindable;
@@ -715,6 +887,9 @@ public partial class SchedulerView
 
         foreach (var slot in view.slots)
             view.ReleaseSlot(slot);
+
+        if (view.ViewMode is SchedulerViewMode.Agenda)
+            view.agendaSurface.Invalidate(clearMeasurements: true);
 
         if (view.dragOverlayView is not null)
         {

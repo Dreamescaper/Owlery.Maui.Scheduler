@@ -6,10 +6,10 @@ is in [../DESIGN.md](../DESIGN.md), and the properties and events that expose it
 
 ## Purpose
 
-A calendar surface that shows either a run of days as a vertical timeline — a week, three days or one
-— or a whole month at a glance, so someone can see how their time is laid out, find a free slot, and
-move things around. The shape of interaction people already know from Google Calendar and the iOS
-Calendar.
+A calendar surface that shows a run of days as a vertical timeline, a whole month at a glance, or an
+agenda grouped into months, weeks and days, so someone can see how their time is laid out, find a free
+slot, and move through it. The shape of interaction people already know from Google Calendar and the
+iOS Calendar.
 
 ## Documents
 
@@ -17,6 +17,7 @@ Calendar.
 |---|---|
 | [Navigation and the time axis](navigation.md) | `NAV-*` — which week is shown, moving between weeks, the timeline, today |
 | [Month view](month.md) | `MON-*` — the month grid, what a cell holds, moving between months |
+| [Agenda view](agenda.md) | `AGD-*` — the grouped vertical list, measured rows and navigation |
 | [Appointments](appointments.md) | `APT-*` — how existing items are placed and drawn |
 | [Selecting a time](time-selection.md) | `SEL-*` — picking an empty slot |
 | [Rescheduling](rescheduling.md) | `DND-*` — moving an appointment by dragging |
@@ -43,7 +44,7 @@ outcome depends on the host acting on it.
 | **Slot** | A stretch of time on the grid a person can select. Its length is the slot length below, and a tap anywhere inside one selects the whole of it. |
 | **Slot length** | How long a selectable slot is. 15 minutes by default. |
 | **Snap interval** | The granularity a *dragged* appointment lands on, rounded to the nearest boundary. 15 minutes by default, and independent of the slot length — the two answer different questions. |
-| **Page** | What is currently on screen and moves as a unit — a week, three days, one day, or a month. |
+| **Page** | A horizontally moving period — a week, three days, one day, or a month. The agenda is continuous and has no horizontal page. |
 | **Day window** | The range of hours shown vertically, 08:00–23:00 by default. |
 | **Working time** | Recurring working days and one same-day working interval, used only for optional shading. |
 
@@ -61,8 +62,8 @@ Requirements state what is intended. These are the known gaps as things stand:
 
 Deliberately not provided, and not planned as part of this component:
 
-- Agenda and multi-week views. Day, three-day, week and month views are supported; see `NAV-1a` and
-  `MON-1`.
+- Multi-week grid views. Day, three-day, week, month and agenda views are supported; see `NAV-1a`,
+  `MON-1` and `AGD-1`.
 - All-day appointments, and appointments spanning more than one day.
 - Changing an appointment's duration by dragging its edges.
 - Creating, editing or deleting appointments — the view reports intent; the host acts.

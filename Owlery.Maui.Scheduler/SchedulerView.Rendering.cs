@@ -16,12 +16,13 @@ public partial class SchedulerView
         return new PageSlot { Header = header };
     }
 
-    /// <summary>Rebuilds a page's day headers, which is what a change of day count needs.</summary>
     /// <summary>How many columns a page's header has, which is not the same question in each mode.</summary>
     private int HeaderColumns => ViewMode switch
     {
         SchedulerViewMode.Month => MonthGeometry.Columns,
         SchedulerViewMode.Timeline => geometry.VisibleDays,
+        // An agenda names its days down the list rather than across the top of one.
+        SchedulerViewMode.Agenda => 0,
         _ => throw new NotSupportedException($"{ViewMode} has no header columns."),
     };
 
@@ -109,6 +110,7 @@ public partial class SchedulerView
         SyncSlotStarts();
         UpdateSelectionView();
         RaiseVisibleDatesChanged();
+        ApplyContentExtent();
         Recentre();
     }
 
@@ -120,8 +122,7 @@ public partial class SchedulerView
         gridView.Invalidate();
     }
 
-    /// <summary>Rebinds one week from scratch: releases its views, re-lays out, and re-rents.</summary>
-    /// <summary>Brings one week's appointment views in line with the data, reusing what is already there.</summary>
+    /// <summary>Brings one slot's appointment views in line with the data, reusing what is already there.</summary>
     /// <remarks>
     /// This reconciles rather than rebuilds. Releasing every view and renting them back would hide and
     /// re-show each one, and the pool is a stack, so the views would come back in reverse order — each
@@ -141,14 +142,43 @@ public partial class SchedulerView
     /// </remarks>
     private void PopulateSlot(PageSlot slot, int slotIndex)
     {
+        if (ViewMode is SchedulerViewMode.Agenda && slotIndex != CentreSlot)
+        {
+            ReleaseSlot(slot);
+            return;
+        }
+
         UpdateSlotHeader(slot, slotIndex);
 
-        IReadOnlyList<IAppointmentPlacement> positions =
-            ActiveTemplate is null || ItemsSource is null || ActiveGeometry.ViewportWidth <= 0
-                ? []
-                : pageSurface.Layout(LayoutItems(), slot.PageStart);
+        IReadOnlyList<IAppointmentPlacement> positions;
 
-        // Index what this week already has by the identity of what it is showing. Reused across
+        if (ActiveTemplate is null || ItemsSource is null || ActiveGeometry.ViewportWidth <= 0)
+        {
+            positions = [];
+
+            // Nothing to lay out — and the agenda answers SectionsFor from its last slice, so leaving
+            // it alone would keep the previous window's headings and day markers on screen, placed
+            // over the space every appointment row has just been released from.
+            if (ViewMode is SchedulerViewMode.Agenda)
+                agendaSurface.ClearWindow();
+        }
+        else
+        {
+            positions = pageSurface.Layout(LayoutItems(), slot.PageStart);
+        }
+
+        if (ViewMode is SchedulerViewMode.Agenda)
+        {
+            var shift = agendaSurface.TakeContentShift();
+
+            if (Math.Abs(shift) >= 0.5)
+            {
+                ShiftContentAbove(shift);
+                positions = agendaSurface.Slice();
+            }
+        }
+
+        // Index what this slot already has by the identity of what it is showing. Reused across
         // calls: this runs three times per rebuild, and again for every page rotation.
         reusableByKey.Clear();
         var available = reusableByKey;
@@ -167,7 +197,9 @@ public partial class SchedulerView
             available[bound.Key] = view;
         }
 
-        var arranged = new List<View>(positions.Count);
+        reusableArrangedViews.Clear();
+        reusableArrangedViews.EnsureCapacity(positions.Count);
+        var arranged = reusableArrangedViews;
 
         foreach (var position in positions)
         {
@@ -197,12 +229,179 @@ public partial class SchedulerView
                 slot.Positions.Add(positions[i]);
         }
 
-        // Whatever no appointment claimed is genuinely gone from this week.
+        // Whatever no appointment claimed is genuinely gone from this slot.
         foreach (var surplus in available.Values)
             Discard(surplus);
 
         slot.Views.Clear();
         slot.Views.AddRange(arranged);
+
+        PopulateSections(slot, slotIndex);
+        MeasureAgendaRows(slot, slotIndex);
+    }
+
+    /// <summary>
+    /// Places the agenda's headings and day markers, reconciled by the date they name.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as the appointment reconciliation above, keyed by date and kind instead of by
+    /// appointment. They are kept in their own list rather than among <see cref="PageSlot.Views"/>
+    /// because hit-testing walks that one and resolves what it finds to an appointment — a heading in
+    /// there would be picked up as a press and then do nothing at all.
+    /// </remarks>
+    private void PopulateSections(PageSlot slot, int slotIndex)
+    {
+        if (ViewMode is not SchedulerViewMode.Agenda)
+        {
+            ReleaseSectionViews(slot);
+            return;
+        }
+
+        var sections = pageSurface.SectionsFor(slot.PageStart);
+
+        sectionPool.Template ??= ActiveSectionTemplate;
+
+        reusableSections.Clear();
+        var spare = reusableSections;
+
+        foreach (var existing in slot.SectionViews)
+        {
+            if (existing.BindingContext is not SchedulerAgendaSection section)
+            {
+                sectionPool.Return(existing);
+                continue;
+            }
+
+            var key = (section.Date, section.Kind);
+
+            if (!spare.TryAdd(key, existing))
+                sectionPool.Return(existing);
+        }
+
+        slot.SectionViews.Clear();
+
+        foreach (var placement in sections)
+        {
+            var key = (placement.Section.Date, placement.Section.Kind);
+
+            if (!spare.Remove(key, out var view))
+            {
+                view = sectionPool.Rent();
+
+                if (view is null)
+                    break;
+            }
+
+            slot.SectionViews.Add(view);
+            BindSectionView(view, placement, slotIndex);
+        }
+
+        foreach (var surplus in spare.Values)
+            sectionPool.Return(surplus);
+    }
+
+    private void BindSectionView(View view, AgendaSectionPlacement placement, int slotIndex)
+    {
+        var wasShowing = view.BindingContext as SchedulerAgendaSection;
+
+        if (wasShowing != placement.Section)
+            view.BindingContext = placement.Section;
+
+        if (view is AgendaSectionView built)
+        {
+            built.EmptyText = AgendaEmptyText;
+            built.UpdateAppearance(PrimaryTextColor, SecondaryTextColor);
+        }
+
+        // A heading is what a screen reader uses to find its way down the list, so it is described
+        // rather than left as decoration — and only rewritten when it actually says something new.
+        if (wasShowing is null || wasShowing.Date != placement.Section.Date || wasShowing.Kind != placement.Section.Kind)
+        {
+            SemanticProperties.SetDescription(
+                view,
+                placement.Section.Date.ToString("D", CultureInfo.CurrentUICulture));
+        }
+
+        if (AbsoluteLayout.GetLayoutBounds(view) != placement.Bounds)
+        {
+            AbsoluteLayout.SetLayoutFlags(view, AbsoluteLayoutFlags.None);
+            AbsoluteLayout.SetLayoutBounds(view, placement.Bounds);
+        }
+
+        view.TranslationX = slotIndex * ActiveGeometry.PageSpan + ActiveGeometry.AnimationOffsetX;
+        view.TranslationY = 0;
+        view.ZIndex = AppointmentZIndex;
+    }
+
+    /// <summary>
+    /// Measures the agenda rows just placed, and corrects the table where the estimate was wrong.
+    /// </summary>
+    /// <remarks>
+    /// The one place in this control that measures anything. Every other surface knows a view's size
+    /// before it builds it — a timeline from the appointment's duration, a month from a fixed chip —
+    /// but an agenda row is as tall as its content, and its content is the host's.
+    /// <para>
+    /// A row is measured once. The result is kept on the row, so scrolling back over it costs
+    /// nothing, and a correction reflows only the rows below the first one that moved.
+    /// </para>
+    /// </remarks>
+    private void MeasureAgendaRows(PageSlot slot, int slotIndex)
+    {
+        if (ViewMode is not SchedulerViewMode.Agenda)
+            return;
+
+        List<(AgendaRow Row, double Height)>? measured = null;
+
+        for (var i = 0; i < slot.Views.Count && i < slot.Positions.Count; i++)
+        {
+            if (slot.Positions[i] is not AgendaPlacement placement || placement.Row.Measured)
+                continue;
+
+            var bounds = agendaGeometry.RowBounds(placement.Row);
+            var size = slot.Views[i].Measure(bounds.Width, double.PositiveInfinity);
+
+            (measured ??= []).Add((placement.Row, size.Height));
+        }
+
+        if (measured is null)
+        {
+            ApplyContentExtent();
+            return;
+        }
+
+        var correction = agendaSurface.ApplyMeasuredHeights(measured);
+
+        ApplyContentExtent();
+        ShiftContentAbove(correction.ShiftAbove);
+
+        if (!correction.LayoutChanged)
+            return;
+
+        // Corrected rows have moved, and shorter ones may have brought more into view. Running the
+        // pass again re-places what is showing and realizes anything newly revealed; the cap is what
+        // keeps a template that cannot settle on a height from taking the frame with it.
+        if (agendaMeasurePasses >= MaxAgendaMeasurePasses)
+            return;
+
+        agendaMeasurePasses++;
+
+        try
+        {
+            PopulateSlot(slot, slotIndex);
+        }
+        finally
+        {
+            agendaMeasurePasses--;
+        }
+    }
+
+    /// <summary>Hands a page's headings back, without touching the appointments beside them.</summary>
+    private void ReleaseSectionViews(PageSlot slot)
+    {
+        foreach (var view in slot.SectionViews)
+            sectionPool.Return(view);
+
+        slot.SectionViews.Clear();
     }
 
     /// <summary>
@@ -249,7 +448,8 @@ public partial class SchedulerView
 
         appointmentsByView.TryGetValue(view, out var previous);
 
-        view.BindingContext = appointment;
+        if (!ReferenceEquals(view.BindingContext, appointment))
+            view.BindingContext = appointment;
 
         // Only when the text would actually differ. Three date formats — one of them the long date
         // pattern — plus a semantic write is the largest per-appointment cost here, and a reload that
@@ -295,6 +495,7 @@ public partial class SchedulerView
             Discard(view);
 
         slot.Views.Clear();
+        ReleaseSectionViews(slot);
     }
 
     private void UpdateSlotHeader(PageSlot slot, int slotIndex)
@@ -350,9 +551,16 @@ public partial class SchedulerView
         }
 
         // The slot offset lives in TranslationX so rotating pages never triggers a layout pass.
-        view.TranslationX = slotIndex * ActiveGeometry.PageSpan + ActiveGeometry.AnimationOffsetX;
-        view.TranslationY = 0;
-        view.ZIndex = AppointmentZIndex;
+        var translationX = slotIndex * ActiveGeometry.PageSpan + ActiveGeometry.AnimationOffsetX;
+
+        if (Math.Abs(view.TranslationX - translationX) >= 0.5)
+            view.TranslationX = translationX;
+
+        if (Math.Abs(view.TranslationY) >= 0.5)
+            view.TranslationY = 0;
+
+        if (view.ZIndex != AppointmentZIndex)
+            view.ZIndex = AppointmentZIndex;
     }
 
     /// <summary>Moves an untouched week to a new physical position — the cheap half of a rotation.</summary>

@@ -7,12 +7,11 @@ using Owlery.Maui.Scheduler.Internal;
 namespace Owlery.Maui.Scheduler;
 
 /// <summary>
-/// A Google-Calendar-style timeline built from plain .NET MAUI primitives, showing a week, three days
-/// or a single day depending on <see cref="VisibleDays"/>.
+/// A scheduler built from plain .NET MAUI primitives, with timeline, month and agenda surfaces.
 /// </summary>
 /// <remarks>
-/// Three pages are rendered at all times and rotated as a ring buffer, so swiping is infinite
-/// while only one page is ever rebuilt. See DESIGN.md for the reasoning behind each decision.
+/// Timeline and month views rotate three pages as a ring buffer; the agenda is one virtualized
+/// vertical list. See DESIGN.md for the reasoning behind each decision.
 /// </remarks>
 public partial class SchedulerView : ContentView
 {
@@ -24,6 +23,19 @@ public partial class SchedulerView : ContentView
         DayOfWeek.Thursday,
         DayOfWeek.Friday
     ]);
+
+    /// <summary>The slot the pager rests on, and the only one an agenda uses.</summary>
+    private const int CentreSlot = 1;
+
+    /// <summary>
+    /// How many times a populate pass may re-run itself after rows corrected their height.
+    /// </summary>
+    /// <remarks>
+    /// A correction can shorten rows and so reveal more of them, which measure in turn. Two extra
+    /// passes settle every realistic case; a cap is what stops an unlucky template oscillating
+    /// between two heights and hanging the frame rather than merely looking wrong.
+    /// </remarks>
+    private const int MaxAgendaMeasurePasses = 2;
 
     private const int LongPressDelayMs = 350;
     private const double DragMovementToleranceDp = 12;
@@ -59,19 +71,33 @@ public partial class SchedulerView : ContentView
 
     private readonly SchedulerGeometry geometry = new();
     private readonly MonthGeometry monthGeometry = new();
+    private readonly AgendaGeometry agendaGeometry = new();
     private readonly TimelineSurface timelineSurface;
     private readonly ISchedulerSurface monthSurface;
+    private readonly AgendaSurface agendaSurface;
     private ISchedulerSurface pageSurface;
     private readonly SchedulerGridDrawable gridDrawable;
     private readonly MonthGridDrawable monthDrawable;
+    private readonly AgendaGridDrawable agendaDrawable;
 
     private readonly AppointmentViewPool pool;
+
+    /// <summary>
+    /// Headings and day markers, pooled apart from the appointments they sit among.
+    /// </summary>
+    /// <remarks>
+    /// A second pool rather than a second template on the first: a spare built as a month banner is
+    /// no use to a row and vice versa, so one pool would mostly hand back the wrong shape.
+    /// </remarks>
+    private readonly AppointmentViewPool sectionPool;
     private readonly CellSelectionOverlay cellSelection;
     private readonly PageSlot[] slots = new PageSlot[SchedulerGeometry.SlotCount];
     private readonly Dictionary<View, ISchedulerAppointment> appointmentsByView = [];
 
-    /// <summary>Scratch for <c>PopulateSlot</c>, which would otherwise allocate one per page.</summary>
+    /// <summary>Scratch for <c>PopulateSlot</c>, reused because its passes cannot overlap.</summary>
     private readonly Dictionary<object, View> reusableByKey = [];
+    private readonly List<View> reusableArrangedViews = [];
+    private readonly Dictionary<(DateTime Date, SchedulerAgendaSectionKind Kind), View> reusableSections = [];
     private readonly Dictionary<View, PageSlot> slotsByView = [];
 
     private readonly Grid root;
@@ -82,6 +108,16 @@ public partial class SchedulerView : ContentView
     private readonly ScrollView verticalScroll;
     private readonly PagingScrollView pagerScroll;
     private readonly AbsoluteLayout surface;
+
+    /// <summary>
+    /// The vertical scroll view's content, and the only thing above it that a transform moves.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="surface"/>: that is the content view of <c>PagingScrollView</c>, whose handler
+    /// owns its frame, so a translation written there is silently discarded. Verified on the
+    /// simulator — a forced offset on the surface moved nothing, the same offset here moved the list.
+    /// </remarks>
+    private readonly Grid bodyGrid;
     private readonly GraphicsView gridView;
     private readonly TimeGutter gutter;
     private readonly ActivityIndicator busyIndicator;
@@ -93,11 +129,82 @@ public partial class SchedulerView : ContentView
 
     private bool recentring;
     private bool suppressDisplayDateSync;
+    private bool agendaNavigationInProgress;
+    private double? pendingAgendaScrollTarget;
+    private VisibleDatesReportKey? lastVisibleDatesReport;
     private bool initialised;
     private bool repopulateQueued;
     private bool constructed;
+
+    /// <summary>How deep the current populate pass has re-run itself after a height correction.</summary>
+    private int agendaMeasurePasses;
+    private double lastAgendaObservedTop;
     private double allocatedWidth;
     private double allocatedHeight;
+
+    /// <summary>
+    /// Defers backward range growth until the vertical scroll is quiet.
+    /// </summary>
+    /// <remarks>
+    /// Growing backward prepends content above the viewport, which changes the anchor and so the
+    /// offset — and <c>ScrollToAsync</c> writes the offset by cancelling the platform's in-flight
+    /// fling, which is precisely the interruption the reader feels as scrolling up and getting
+    /// stopped. Forward growth is different: it adds content below, the offset does not move, and the
+    /// fling is untouched. So backward growth waits for the scroll to go quiet (it naturally does so
+    /// at the loaded top) and completes then.
+    /// </remarks>
+    private IDispatcherTimer? agendaBackwardGrowTimer;
+    private bool backwardGrowPending;
+
+    /// <summary>
+    /// Bounds how long the agenda treats its scroll events as its own after asking for an offset.
+    /// </summary>
+    /// <remarks>
+    /// <c>ScrollToAsync</c> is applied by the handler on a later pass, and iOS reports every offset it
+    /// passes through on the way. Those are the platform settling, not the reader scrolling, and
+    /// nothing in the event distinguishes them — so recognising only the exact offset that was asked
+    /// for leaves each intermediate one looking like a gesture. Entering an agenda from a scrolled
+    /// timeline settles <em>upward</em>, which reads as a fling into the top and grows the range
+    /// backwards before the reader has touched anything.
+    /// <para>
+    /// The window is timed rather than held open until the offset arrives, because it may never:
+    /// the platform clamps the request against a content size it has not resized yet, stops short,
+    /// and reports nothing further. An open-ended window would leave the agenda ignoring the reader
+    /// for the rest of the session, which is a far worse failure than the one it fixes.
+    /// </para>
+    /// </remarks>
+    private IDispatcherTimer? agendaNavigationSettleTimer;
+
+    /// <summary>
+    /// The offset a compensating shift asked for, while the platform still owes it.
+    /// </summary>
+    /// <remarks>
+    /// Rows are reflowed and the surface regrown synchronously; the offset that pays for them is
+    /// applied by the handler on a later pass. Between the two the reader is looking at content that
+    /// has moved without the scroll having moved with it — a month of appointments arriving above the
+    /// viewport is five thousand units of that, which reads as the list jumping and snapping back.
+    /// While this is set, the difference between it and the offset the platform reports is held in
+    /// <see cref="bodyGrid"/>'s translation, so the content stays exactly where the reader left it.
+    /// The transform and the scroll are both applied to the platform view, so they compose in one
+    /// frame rather than fighting across two.
+    /// </remarks>
+    private double? agendaCompensationTarget;
+
+    /// <summary>
+    /// Whether a month has been added ahead of the reader that the host has not answered yet.
+    /// </summary>
+    /// <remarks>
+    /// Growing forward is really a request: it widens the range and asks the host, through
+    /// <c>VisibleDatesChanged</c>, to fetch it. The answer arrives on a later tick, so without a gate
+    /// every frame of a fling into the end asks again — and a month the host has nothing for adds
+    /// only its own heading, so the position keeps asking and the range runs away, rebuilding the
+    /// whole row table each time. One request at a time. Leaving the end clears it, so coming back
+    /// grows again even for a host that had nothing to send.
+    /// </remarks>
+    private bool forwardGrowAwaitingData;
+
+    /// <summary>The width rows were last measured at, which is the only thing that invalidates one.</summary>
+    private double lastAgendaRowWidth = double.NaN;
 
     private View? dragView;
     private View? pressedView;
@@ -127,9 +234,11 @@ public partial class SchedulerView : ContentView
         // so a snapshot taken here would go stale the moment the host changed it.
         timelineSurface = new TimelineSurface(geometry, () => SlotMinutes);
         monthSurface = new MonthSurface(monthGeometry);
+        agendaSurface = new AgendaSurface(agendaGeometry);
         pageSurface = timelineSurface;
 
         monthDrawable = new MonthGridDrawable(monthGeometry, slots);
+        agendaDrawable = new AgendaGridDrawable(agendaGeometry, agendaSurface);
 
         gutter = new TimeGutter(geometry);
         gutter.Tapped += OnGutterTapped;
@@ -147,6 +256,10 @@ public partial class SchedulerView : ContentView
         // Appointments never handle their own input: every touch on the surface is resolved by
         // OnSurfaceStartInteraction, which hit-tests them arithmetically.
         pool = new AppointmentViewPool(surface) { ViewCreated = view => view.InputTransparent = true };
+
+        // Headings are chrome, not content: they never take a touch, and hit-testing must not find
+        // them among the appointments it walks.
+        sectionPool = new AppointmentViewPool(surface) { ViewCreated = view => view.InputTransparent = true };
         cellSelection = new CellSelectionOverlay(
             surface,
             SelectionZIndex,
@@ -162,7 +275,7 @@ public partial class SchedulerView : ContentView
         // spill, which also means the pager is drawn without being clipped to its own bounds — and the
         // pager's content is three pages wide with an opaque background, so the page parked to the
         // left of the viewport painted straight over the hour gutter beside it.
-        var bodyGrid = new Grid
+        bodyGrid = new Grid
         {
             IsClippedToBounds = true,
             ColumnDefinitions =
@@ -189,6 +302,8 @@ public partial class SchedulerView : ContentView
             VerticalScrollBarVisibility = ScrollBarVisibility.Never,
             Content = bodyGrid
         };
+
+        verticalScroll.Scrolled += OnVerticalScrolled;
 
         headerCorner = new Label
         {
@@ -274,6 +389,7 @@ public partial class SchedulerView : ContentView
     {
         SchedulerViewMode.Month => monthGeometry,
         SchedulerViewMode.Timeline => geometry,
+        SchedulerViewMode.Agenda => agendaGeometry,
         _ => throw new NotSupportedException($"{ViewMode} has no geometry."),
     };
 
@@ -285,6 +401,7 @@ public partial class SchedulerView : ContentView
     {
         SchedulerViewMode.Month => MonthAppointmentTemplate ?? AppointmentTemplate,
         SchedulerViewMode.Timeline => AppointmentTemplate,
+        SchedulerViewMode.Agenda => AgendaAppointmentTemplate ?? AppointmentTemplate,
         _ => throw new NotSupportedException($"{ViewMode} has no appointment template."),
     };
 
@@ -303,6 +420,21 @@ public partial class SchedulerView : ContentView
         _ = verticalScroll.ScrollToAsync(0, Math.Max(0, y), false);
     }
 
+    /// <summary>Brings a date into view on the active surface.</summary>
+    /// <remarks>
+    /// On a timeline or month this is the programmatic counterpart to changing
+    /// <see cref="DisplayDate"/>. In an agenda it additionally places the first appointment on or
+    /// after that date at the top of the viewport; an empty day therefore advances to the next
+    /// meaningful row rather than manufacturing an empty one.
+    /// </remarks>
+    public void ScrollToDate(DateTime date)
+    {
+        DisplayDate = date;
+
+        if (ViewMode is SchedulerViewMode.Agenda && initialised)
+            ScrollAgendaToDate(DateOnly.FromDateTime(date));
+    }
+
     private void OnLoaded(object? sender, EventArgs e)
     {
         ConfigurePlatformScrolling();
@@ -311,6 +443,14 @@ public partial class SchedulerView : ContentView
         currentTimeTimer.Interval = TimeSpan.FromMinutes(1);
         currentTimeTimer.Tick += OnCurrentTimeTick;
         currentTimeTimer.Start();
+
+        agendaBackwardGrowTimer = Dispatcher.CreateTimer();
+        agendaBackwardGrowTimer.Interval = TimeSpan.FromMilliseconds(200);
+        agendaBackwardGrowTimer.Tick += OnAgendaBackwardGrowTicked;
+
+        agendaNavigationSettleTimer = Dispatcher.CreateTimer();
+        agendaNavigationSettleTimer.Interval = TimeSpan.FromMilliseconds(250);
+        agendaNavigationSettleTimer.Tick += OnAgendaNavigationSettled;
 
         // Open on the current time rather than at StartHour, like most calendars do.
         var now = NowInZone();
@@ -324,6 +464,8 @@ public partial class SchedulerView : ContentView
         currentTimeTimer = null;
         longPressTimer?.Stop();
         longPressTimer = null;
+        agendaBackwardGrowTimer?.Stop();
+        agendaNavigationSettleTimer?.Stop();
     }
 
     private void OnCurrentTimeTick(object? sender, EventArgs e)
@@ -356,7 +498,7 @@ public partial class SchedulerView : ContentView
         allocatedHeight = height;
 
         var viewport = Math.Max(0, width - ActiveGutterWidth);
-        var viewportHeight = Math.Max(0, height - HeaderHeight);
+        var viewportHeight = Math.Max(0, height - ActiveHeaderHeight);
 
         // Both axes, not just the width. A month is exactly one viewport tall, so its content height
         // is a function of this value — and a height-only reallocation used to update the geometry
@@ -469,7 +611,7 @@ public partial class SchedulerView : ContentView
     /// <summary>
     /// The height the day-header strip takes, which is not a given: a surface may have no strip.
     /// </summary>
-    private double ActiveHeaderHeight => HeaderHeight;
+    private double ActiveHeaderHeight => ViewMode is SchedulerViewMode.Agenda ? 0 : HeaderHeight;
 
     /// <summary>Only the timeline sets its hours aside a gutter; every other surface reaches the edge.</summary>
     private double ActiveGutterWidth => ViewMode is SchedulerViewMode.Timeline ? TimeGutterWidth : 0;
@@ -486,8 +628,23 @@ public partial class SchedulerView : ContentView
         {
             case SchedulerViewMode.Month: ApplyMonthChrome(); break;
             case SchedulerViewMode.Timeline: ApplyTimelineChrome(); break;
+            case SchedulerViewMode.Agenda: ApplyAgendaChrome(); break;
             default: throw new NotSupportedException($"{ViewMode} has no chrome.");
         }
+
+        // The row table is derived from geometry, so any application makes it stale. Its measurements
+        // are not: they are cached by appointment key, and only the width a row was measured at can
+        // make one wrong. Clearing them for every application — an hour height, a size reallocation —
+        // would have every pass re-measure the screen, which is the cost the cache exists to avoid.
+        // Read after the chrome, which is what settles the gutter the column is inset past.
+        var rowWidth = agendaGeometry.RowWidth;
+
+        agendaSurface.Invalidate(
+            clearMeasurements: ViewMode is SchedulerViewMode.Agenda
+                && !(Math.Abs(rowWidth - lastAgendaRowWidth) < 0.5));
+
+        if (ViewMode is SchedulerViewMode.Agenda)
+            lastAgendaRowWidth = rowWidth;
 
         if (active.ViewportWidth <= 0)
             return;
@@ -508,12 +665,28 @@ public partial class SchedulerView : ContentView
             AbsoluteLayout.SetLayoutBounds(slots[i].Header, new Rect(0, 0, active.ViewportWidth, HeaderHeight));
         }
 
-        RebuildAll(pageSurface.StartOfPage(DateOnly.FromDateTime(DisplayDate)));
+        var firstLayout = !initialised;
+
+        // For the agenda, re-derive the page from DisplayDate only once, on first layout. After that
+        // the page is wherever navigation put it; re-anchoring it to DisplayDate here would reset the
+        // loaded range under a live scroll — DisplayDate tracks the viewport as the reader scrolls, so
+        // every size change would collapse the range the reader just grew, shifting headings. The
+        // other surfaces derive their page from DisplayDate on every application.
+        var page = ViewMode is SchedulerViewMode.Agenda && initialised
+            ? slots[1].PageStart
+            : pageSurface.StartOfPage(DateOnly.FromDateTime(DisplayDate));
+        RebuildAll(page);
         initialised = true;
+
+        if (firstLayout && ViewMode is SchedulerViewMode.Agenda)
+            ScrollAgendaToDate(DateOnly.FromDateTime(DisplayDate));
     }
 
     private void ApplyTimelineChrome()
     {
+        headerGrid.IsVisible = true;
+        pagerScroll.IsScrollEnabled = true;
+
         geometry.HourHeight = HourHeight;
         geometry.VisibleDays = Math.Clamp(VisibleDays, 1, 7);
         geometry.StartHour = StartHour;
@@ -530,8 +703,318 @@ public partial class SchedulerView : ContentView
         headerSurface.HeightRequest = HeaderHeight;
     }
 
+    /// <summary>
+    /// Moves the agenda's window of realized rows to follow the scroll.
+    /// </summary>
+    /// <remarks>
+    /// Not routed through <c>QueueRepopulate</c>. Data-driven rebuilds are coalesced onto the next
+    /// tick because a burst of them should cost one pass; this is gesture-driven, and a pass arriving
+    /// a tick late is a screen of blank rows during a fling.
+    /// <para>
+    /// The gate is distance rather than time. A pass costs what is on screen, so running it every
+    /// frame is waste — but running it only every half-overscan means the rows are realized well
+    /// before they are reached.
+    /// </para>
+    /// </remarks>
+    internal void OnVerticalScrolled(object? sender, ScrolledEventArgs e)
+    {
+        if (ViewMode is not SchedulerViewMode.Agenda || !initialised)
+            return;
+
+        var direction = e.ScrollY - lastAgendaObservedTop;
+        lastAgendaObservedTop = e.ScrollY;
+        var reachedRequestedOffset = pendingAgendaScrollTarget is { } requested
+            && Math.Abs(e.ScrollY - requested) < 0.5;
+        var programmatic = agendaNavigationInProgress || reachedRequestedOffset;
+
+        if (reachedRequestedOffset)
+            EndAgendaNavigation();
+
+        // The platform has moved, so what it still owes a compensating shift has changed with it.
+        UpdateAgendaCompensation(e.ScrollY);
+
+        // DisplayDate is public viewport state, not realization state. Keep it current even when
+        // this scroll delta is too small to justify rebuilding the overscanned view window.
+        if (!programmatic)
+            SyncAgendaDisplayDate(e.ScrollY);
+
+        // Where the viewport is, separately from whether this event may act on it: the position is
+        // what arms and disarms both gates, and it does so whoever moved the scroll.
+        var nearEnd = e.ScrollY + agendaGeometry.ViewportHeight + agendaGeometry.Overscan
+            >= agendaGeometry.ContentHeight - agendaGeometry.Overscan;
+        var nearStart = e.ScrollY <= agendaGeometry.Overscan;
+
+        if (!nearEnd)
+            forwardGrowAwaitingData = false;
+
+        var growForward = nearEnd && !programmatic && direction > 0 && !forwardGrowAwaitingData;
+        var growBackward = nearStart && !programmatic && direction < 0;
+
+        // Only a viewport that has actually left the top cancels a deferred backward growth. A fling
+        // into the top settles by springing back, which arrives as a positive delta at an offset still
+        // within the overscan — the platform settling, not the reader moving away — and cancelling on
+        // it would drop the growth the fling had just asked for.
+        if (!nearStart)
+        {
+            backwardGrowPending = false;
+            agendaBackwardGrowTimer?.Stop();
+        }
+
+        if (!growForward && !growBackward
+            && Math.Abs(e.ScrollY - agendaGeometry.VisibleTop) < Math.Max(1, agendaGeometry.Overscan / 2))
+        {
+            return;
+        }
+
+        agendaGeometry.VisibleTop = e.ScrollY;
+
+        if (growForward)
+        {
+            forwardGrowAwaitingData = true;
+            agendaSurface.GrowForward(slots[CentreSlot].PageStart);
+
+            PopulateSlot(slots[CentreSlot], CentreSlot);
+            RaiseVisibleDatesChanged();
+            gridView.Invalidate();
+            return;
+        }
+
+        if (growBackward)
+        {
+            // Deferred: growing backward changes the offset, and writing it mid-fling is what stops
+            // the reader. Wait for the scroll to go quiet, then grow.
+            backwardGrowPending = true;
+            agendaBackwardGrowTimer?.Stop();
+            agendaBackwardGrowTimer?.Start();
+        }
+
+        // Realize the current window over the table as it stands (backward growth has not rebuilt it
+        // yet), so the scroll keeps rows under the reader without stalling on the deferred rebuild.
+        PopulateSlot(slots[CentreSlot], CentreSlot);
+        gridView.Invalidate();
+    }
+
+    /// <summary>Completes a deferred backward growth once the vertical scroll has been quiet.</summary>
+    private void OnAgendaBackwardGrowTicked(object? sender, EventArgs e)
+    {
+        agendaBackwardGrowTimer?.Stop();
+
+        if (!backwardGrowPending)
+            return;
+
+        backwardGrowPending = false;
+
+        // The reader may have moved away from the top while the timer was running, or left the mode.
+        if (ViewMode is not SchedulerViewMode.Agenda || !initialised)
+            return;
+
+        if (agendaGeometry.VisibleTop > agendaGeometry.Overscan)
+            return;
+
+        agendaSurface.GrowBackward(slots[CentreSlot].PageStart);
+
+        PopulateSlot(slots[CentreSlot], CentreSlot);
+        RaiseVisibleDatesChanged();
+        gridView.Invalidate();
+    }
+
+    /// <summary>Publishes the date at the agenda's viewport anchor without navigating back to it.</summary>
+    private void SyncAgendaDisplayDate(double visibleTop)
+    {
+        var date = agendaSurface.DateAt(visibleTop);
+
+        if (date is null || DateOnly.FromDateTime(DisplayDate) == date)
+            return;
+
+        suppressDisplayDateSync = true;
+
+        try
+        {
+            DisplayDate = date.Value.ToDateTime(TimeOnly.MinValue);
+        }
+        finally
+        {
+            suppressDisplayDateSync = false;
+        }
+    }
+
+    /// <summary>
+    /// Writes the surface's height through, once the rows have said what it is.
+    /// </summary>
+    /// <remarks>
+    /// ApplyGeometry sets this before laying anything out, which is all a timeline or a month needs —
+    /// their heights are formulas. An agenda's is not known until its rows exist, and changes again
+    /// as they measure, so it is written again here. Guarded: an unchanged write still costs a
+    /// layout pass, and this runs on the scroll path.
+    /// </remarks>
+    private void ApplyContentExtent()
+    {
+        var height = ActiveGeometry.ContentHeight;
+
+        if (Math.Abs(surface.HeightRequest - height) < 0.5)
+            return;
+
+        surface.HeightRequest = height;
+        AbsoluteLayout.SetLayoutBounds(gridView, new Rect(0, 0, ActiveGeometry.SurfaceWidth, height));
+    }
+
+    /// <summary>
+    /// Absorbs a change in the height of content above the viewport into the scroll offset.
+    /// </summary>
+    /// <remarks>
+    /// Without this, a row above the fold measuring taller than its estimate pushes everything the
+    /// reader is looking at downwards. The same operation is what growing the range backwards will
+    /// need, which is why it is a method rather than two lines inline.
+    /// <para>
+    /// The write goes through <c>ScrollToAsync</c>, which MAUI applies on a later pass — so this
+    /// corrects a visible jump rather than preventing one outright. It is deliberately not attempted
+    /// mid-gesture; settling at rest reads better than fighting the platform for the same frame.
+    /// </para>
+    /// </remarks>
+    private void ShiftContentAbove(double delta)
+    {
+        if (Math.Abs(delta) < 0.5)
+            return;
+
+        // Geometry is the source of truth during a correction. A programmatic navigation updates it
+        // before the platform has necessarily applied the requested offset, while an ordinary
+        // gesture keeps it equal to ScrollY through OnVerticalScrolled.
+        var target = Math.Max(0, agendaGeometry.VisibleTop + delta);
+        agendaGeometry.VisibleTop = target;
+        lastAgendaObservedTop = target;
+        pendingAgendaScrollTarget = target;
+
+        // Hold the content where it is until the platform has caught up, and give the settle timer
+        // the job of letting go if it never does — a translation left behind would be a permanent
+        // visual offset, which is worse than the jump it prevents.
+        agendaCompensationTarget = target;
+        UpdateAgendaCompensation(verticalScroll.ScrollY);
+
+        agendaNavigationSettleTimer?.Stop();
+        agendaNavigationSettleTimer?.Start();
+
+        _ = verticalScroll.ScrollToAsync(0, target, false);
+    }
+
+    /// <summary>
+    /// Translates the surface by whatever the platform still owes a compensating shift.
+    /// </summary>
+    /// <remarks>
+    /// Set from the scroll event, so the translation is released in the same frame the platform
+    /// reports the offset it was standing in for.
+    /// </remarks>
+    private void UpdateAgendaCompensation(double scrollY)
+    {
+        var owed = agendaCompensationTarget is { } target ? target - scrollY : 0;
+
+        if (Math.Abs(owed) < 0.5)
+        {
+            agendaCompensationTarget = null;
+            owed = 0;
+        }
+
+        if (Math.Abs(bodyGrid.TranslationY + owed) >= 0.5)
+            bodyGrid.TranslationY = -owed;
+    }
+
+    /// <summary>Drops any held translation, for a deliberate move or a change of surface.</summary>
+    private void ReleaseAgendaCompensation()
+    {
+        agendaCompensationTarget = null;
+
+        if (Math.Abs(bodyGrid.TranslationY) >= 0.5)
+            bodyGrid.TranslationY = 0;
+    }
+
+    /// <summary>Places the agenda's first meaningful row on or after a date at the top.</summary>
+    private void ScrollAgendaToDate(DateOnly date)
+    {
+        agendaNavigationInProgress = true;
+
+        // A navigation moves the reader on purpose; there is nothing to hold still for it.
+        ReleaseAgendaCompensation();
+
+        // ItemsSource can change synchronously while VisibleDatesChanged is being delivered. Refresh
+        // a dirty table before resolving the offset so navigation uses the data the host just sent.
+        PopulateSlot(slots[CentreSlot], CentreSlot);
+
+        var maximum = Math.Max(0, agendaGeometry.ContentHeight - agendaGeometry.ViewportHeight);
+        var target = Math.Clamp(agendaSurface.OffsetFor(date), 0, maximum);
+
+        agendaGeometry.VisibleTop = target;
+        lastAgendaObservedTop = target;
+        pendingAgendaScrollTarget = target;
+        _ = verticalScroll.ScrollToAsync(0, target, false);
+
+        PopulateSlot(slots[CentreSlot], CentreSlot);
+
+        // The offset is not the platform's yet. Where it applied the request outright there is
+        // nothing left to wait for; otherwise stay in navigation until one of the offsets it reports
+        // is the one asked for, or the settle window closes.
+        if (Math.Abs(verticalScroll.ScrollY - target) < 0.5)
+        {
+            EndAgendaNavigation();
+        }
+        else
+        {
+            agendaNavigationSettleTimer?.Stop();
+            agendaNavigationSettleTimer?.Start();
+        }
+
+        gridView.Invalidate();
+    }
+
+    /// <summary>Hands scroll events back to the reader, the requested offset having arrived or not.</summary>
+    private void EndAgendaNavigation()
+    {
+        agendaNavigationInProgress = false;
+        pendingAgendaScrollTarget = null;
+        agendaNavigationSettleTimer?.Stop();
+    }
+
+    /// <summary>Closes the settle window when the platform never reported the offset asked for.</summary>
+    private void OnAgendaNavigationSettled(object? sender, EventArgs e)
+    {
+        EndAgendaNavigation();
+        ReleaseAgendaCompensation();
+
+        // Wherever it actually stopped is where the reader is now. Left at the offset that was asked
+        // for, the next event's direction would be measured against somewhere the list never went —
+        // which is the same misreading, one gesture later.
+        lastAgendaObservedTop = verticalScroll.ScrollY;
+    }
+
+    private DataTemplate ActiveSectionTemplate =>
+        AgendaSectionTemplate ?? new DataTemplate(() => new AgendaSectionView());
+
+    /// <summary>
+    /// An agenda has no strip of day columns and no gutter of hours, and does not page sideways.
+    /// </summary>
+    /// <remarks>
+    /// The header grid is collapsed whole rather than zeroed piecemeal: an empty label in an
+    /// auto-sized row is not reliably nothing on both platforms. The pager is left in place but told
+    /// not to scroll, since the surface is now exactly one page wide and there is nowhere to go.
+    /// </remarks>
+    private void ApplyAgendaChrome()
+    {
+        agendaGeometry.EstimatedRowHeight = AgendaEstimatedRowHeight;
+        agendaGeometry.DayGutterWidth = AgendaDayGutterWidth;
+
+        gridView.Drawable = agendaDrawable;
+
+        gutter.Hide();
+        headerCorner.WidthRequest = 0;
+        headerCorner.Text = string.Empty;
+        headerGrid.IsVisible = false;
+
+        pagerScroll.IsScrollEnabled = false;
+    }
+
     private void ApplyMonthChrome()
     {
+        headerGrid.IsVisible = true;
+        pagerScroll.IsScrollEnabled = true;
+
         monthDrawable.OverflowFormat = MonthOverflowFormat;
 
         gridView.Drawable = monthDrawable;
@@ -588,6 +1071,18 @@ public partial class SchedulerView : ContentView
             DragTimeIndicatorBackgroundColor,
             DragTimeIndicatorTextColor);
 
+        agendaDrawable.CurrentDayBackgroundColor = CurrentDayBackgroundColor;
+        agendaDrawable.ShowCurrentDayHighlight = ShowCurrentDayHighlight;
+
+        foreach (var slot in slots)
+        {
+            foreach (var view in slot.SectionViews)
+            {
+                if (view is AgendaSectionView section)
+                    section.UpdateAppearance(PrimaryTextColor, SecondaryTextColor);
+            }
+        }
+
         cellSelection.UpdateAppearance(
             CellSelectionBackgroundColor,
             CellSelectionBorderColor,
@@ -608,9 +1103,9 @@ public partial class SchedulerView : ContentView
     /// Swaps the surface, and everything that belongs to the one being left behind.
     /// </summary>
     /// <remarks>
-    /// The two modes do not share a template or a geometry, so every placed view goes back to the
-    /// pool and the pool itself is emptied — a chip and an appointment box are different templates,
-    /// and a spare built from one is no use to the other.
+    /// The modes do not share a template or a geometry, so every placed view goes back to the pool
+    /// and the pool itself is emptied — a chip, an appointment box and an agenda row are different
+    /// templates, and a spare built from one is no use to another.
     /// </remarks>
     private void ChangeViewMode(SchedulerViewMode mode)
     {
@@ -620,6 +1115,19 @@ public partial class SchedulerView : ContentView
             ReleaseSlot(slot);
 
         pool.Clear();
+
+        foreach (var slot in slots)
+            ReleaseSectionViews(slot);
+
+        sectionPool.Clear();
+        sectionPool.Template = ActiveSectionTemplate;
+        agendaSurface.Invalidate(clearMeasurements: true);
+        lastAgendaRowWidth = double.NaN;
+        forwardGrowAwaitingData = false;
+        backwardGrowPending = false;
+        agendaBackwardGrowTimer?.Stop();
+        EndAgendaNavigation();
+        ReleaseAgendaCompensation();
 
         if (dragOverlayView is not null)
         {
@@ -631,6 +1139,7 @@ public partial class SchedulerView : ContentView
         {
             SchedulerViewMode.Month => monthSurface,
             SchedulerViewMode.Timeline => timelineSurface,
+            SchedulerViewMode.Agenda => agendaSurface,
             _ => throw new NotSupportedException($"{mode} has no surface."),
         };
         pool.Template = ActiveTemplate;
@@ -641,6 +1150,9 @@ public partial class SchedulerView : ContentView
         ActiveGeometry.ViewportWidth = Math.Max(0, allocatedWidth - ActiveGutterWidth);
 
         ApplyGeometry();
+
+        if (mode is SchedulerViewMode.Agenda && initialised)
+            ScrollAgendaToDate(DateOnly.FromDateTime(DisplayDate));
     }
 
     private string TimeZoneAbbreviation()
@@ -651,4 +1163,12 @@ public partial class SchedulerView : ContentView
             ? $"GMT{sign}{Math.Abs(offset.Hours)}"
             : $"GMT{sign}{Math.Abs(offset.Hours)}:{Math.Abs(offset.Minutes):00}";
     }
+
+    private readonly record struct VisibleDatesReportKey(
+        SchedulerViewMode Mode,
+        DateOnly VisibleFirst,
+        DateOnly VisibleLast,
+        int VisibleCount,
+        DateOnly PrefetchFirst,
+        DateOnly PrefetchLast);
 }

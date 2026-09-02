@@ -24,7 +24,7 @@ public sealed class KnobsPanel : ContentView
         countCaption = Knobs.Caption(string.Empty);
 
         countPresets = new Segmented<int>(
-            "Appointments",
+            "Appointments / month",
             [("0", 0), ("25", 25), ("100", 100), ("500", 500), ("2 000", 2000), ("5 000", 5000)],
             source.Count,
             source.SetCount);
@@ -37,7 +37,11 @@ public sealed class KnobsPanel : ContentView
 
         var viewModes = new Segmented<SchedulerViewMode>(
             "ViewMode",
-            [("Timeline", SchedulerViewMode.Timeline), ("Month", SchedulerViewMode.Month)],
+            [
+                ("Timeline", SchedulerViewMode.Timeline),
+                ("Month", SchedulerViewMode.Month),
+                ("Agenda", SchedulerViewMode.Agenda)
+            ],
             scheduler.ViewMode,
             mode => scheduler.ViewMode = mode);
 
@@ -125,6 +129,17 @@ public sealed class KnobsPanel : ContentView
                 new Segmented<int>("MinorGridLineMinutes",
                     [("15", 15), ("30", 30), ("60 (none)", 60)],
                     scheduler.MinorGridLineMinutes, minutes => scheduler.MinorGridLineMinutes = minutes),
+                new Segmented<double>("AgendaEstimatedRowHeight", [("40", 40), ("64", 64), ("120", 120)],
+                    scheduler.AgendaEstimatedRowHeight, h => scheduler.AgendaEstimatedRowHeight = h),
+                Knobs.Caption("Only an estimate — a row is measured when it is built, and the list corrects itself."),
+                Knobs.Toggle("AgendaRowHeight (the row's own height)", scheduler.AgendaRowHeight is not null,
+                    on => scheduler.AgendaRowHeight = on ? AgendaRow.RowHeight : null),
+                Knobs.Caption("Known height skips measurement and correction. Leave it off for rows whose content determines their height."),
+                new Segmented<double>("AgendaDayGutterWidth", [("0", 0), ("56", 56), ("80", 80)],
+                    scheduler.AgendaDayGutterWidth, w => scheduler.AgendaDayGutterWidth = w),
+                new Segmented<string>("AgendaEmptyText",
+                    [("Default", "No appointments"), ("Quiet", "Nothing planned")],
+                    scheduler.AgendaEmptyText, text => scheduler.AgendaEmptyText = text),
                 new Segmented<string>("Scheduler colors",
                     [("Light", "light"), ("Dark", "dark"), ("Paper", "paper")],
                     "light", ApplySchedulerColors),
@@ -168,9 +183,9 @@ public sealed class KnobsPanel : ContentView
 
     private void RestateCount()
     {
-        var perDay = source.Count / (double)SampleDataGenerator.WindowDays;
         countCaption.Text =
-            $"{source.Count:N0} appointments spread over {SampleDataGenerator.WindowDays} days centred on today — about {perDay:F1} a day.";
+            $"{source.Count:N0} appointments per month; {source.LoadedAppointmentCount:N0} currently loaded "
+            + $"across {source.LoadedMonthCount:N0} month(s).";
         countPresets.Show(source.Count);
     }
 

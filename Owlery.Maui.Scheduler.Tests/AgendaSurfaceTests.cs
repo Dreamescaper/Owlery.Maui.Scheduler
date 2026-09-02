@@ -45,11 +45,47 @@ public class AgendaSurfaceTests
             Assert.That(surface.NextPage(Page), Is.EqualTo(new DateOnly(2026, 9, 1)));
             Assert.That(surface.PreviousPage(Page), Is.EqualTo(new DateOnly(2026, 7, 1)));
 
-            // Three days before August and two past the end of it.
-            Assert.That(surface.DatesOn(Page)[0], Is.EqualTo(new DateOnly(2026, 7, 29)));
-            Assert.That(surface.DatesOn(Page)[^1], Is.EqualTo(new DateOnly(2026, 9, 2)));
-            Assert.That(surface.PageContains(Page, new DateOnly(2026, 7, 29)), Is.True);
-            Assert.That(surface.PageContains(Page, new DateOnly(2026, 7, 28)), Is.False);
+            // The range is whole months: three days before August round down to the whole month, and
+            // two past the end of it round up to the whole next month.
+            Assert.That(surface.DatesOn(Page)[0], Is.EqualTo(new DateOnly(2026, 7, 1)));
+            Assert.That(surface.DatesOn(Page)[^1], Is.EqualTo(new DateOnly(2026, 9, 30)));
+            Assert.That(surface.PageContains(Page, new DateOnly(2026, 7, 1)), Is.True);
+            Assert.That(surface.PageContains(Page, new DateOnly(2026, 6, 30)), Is.False);
+        });
+    }
+
+    [Test]
+    public void The_loaded_range_can_extend_in_both_directions()
+    {
+        var geometry = Geometry();
+        var surface = new AgendaSurface(geometry);
+
+        surface.Layout([], Page);
+        var initial = surface.DatesOn(Page);
+
+        surface.GrowForward(Page);
+        var forward = surface.DatesOn(Page);
+
+        surface.GrowBackward(Page);
+        var both = surface.DatesOn(Page);
+
+        // Growing is a request: it widens what the host is asked for without laying anything out, so
+        // nothing has moved yet.
+        var shiftBeforeTheHostAnswered = surface.TakeContentShift();
+
+        // The host answers, and only now does the wider range become the one on screen.
+        surface.AdoptRequestedRange();
+        surface.Layout([], Page);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(forward[^1], Is.EqualTo(initial[^1].AddMonths(1)));
+            Assert.That(both[0], Is.EqualTo(initial[0].AddMonths(-1)));
+            Assert.That(both[^1], Is.EqualTo(forward[^1]));
+            Assert.That(shiftBeforeTheHostAnswered, Is.Zero,
+                "asking for a month moves nothing on its own");
+            Assert.That(surface.TakeContentShift(), Is.GreaterThan(0),
+                "prepending the answered month moves the old first row down");
         });
     }
 
@@ -121,7 +157,7 @@ public class AgendaSurfaceTests
     }
 
     [Test]
-    public void A_month_heading_reaches_the_edges_and_a_row_does_not()
+    public void A_month_and_a_row_share_the_same_left_edge_past_the_gutter()
     {
         var geometry = Geometry();
         var surface = new AgendaSurface(geometry);
@@ -130,12 +166,14 @@ public class AgendaSurfaceTests
 
         var month = surface.SectionsFor(Page).First(s => s.Section.Kind is SchedulerAgendaSectionKind.Month);
         var row = surface.BoundsFor(placements[0]);
+        var expectedX = geometry.DayGutterWidth + AgendaGeometry.RowInset;
 
         Assert.Multiple(() =>
         {
-            Assert.That(month.Bounds.X, Is.EqualTo(0));
-            Assert.That(month.Bounds.Width, Is.EqualTo(geometry.ViewportWidth));
-            Assert.That(row.X, Is.EqualTo(geometry.DayGutterWidth + AgendaGeometry.RowInset));
+            // The month heading lines up with the rows it introduces rather than reaching the edge.
+            Assert.That(month.Bounds.X, Is.EqualTo(expectedX));
+            Assert.That(month.Bounds.Width, Is.EqualTo(geometry.ViewportWidth - geometry.DayGutterWidth - AgendaGeometry.RowInset * 2));
+            Assert.That(row.X, Is.EqualTo(expectedX));
         });
     }
 
@@ -152,13 +190,15 @@ public class AgendaSurfaceTests
         var below = rows[target.Index + 1];
         var heightBefore = geometry.ContentHeight;
 
-        var shift = surface.ApplyMeasuredHeights([(target, RowHeight + 30)]);
+        var correction = surface.ApplyMeasuredHeights([(target, RowHeight + 30)]);
 
         Assert.Multiple(() =>
         {
-            Assert.That(shift, Is.Zero, "a row the reader can see needs no compensation");
+            Assert.That(correction.ShiftAbove, Is.Zero, "a row the reader can see needs no compensation");
+            Assert.That(correction.LayoutChanged, Is.True);
             Assert.That(target.Measured, Is.True);
-            Assert.That(below.Top, Is.EqualTo(target.Bottom));
+            // Each day's rows are one a day here, so the row below is the next day's, separated by the gap.
+            Assert.That(below.Top, Is.EqualTo(target.Bottom + geometry.DayGap));
             Assert.That(geometry.ContentHeight, Is.EqualTo(heightBefore + 30));
         });
     }
@@ -175,9 +215,76 @@ public class AgendaSurfaceTests
         geometry.VisibleTop = 600;
         var above = surface.Rows.First(r => r.Kind is AgendaRowKind.Appointment);
 
-        var shift = surface.ApplyMeasuredHeights([(above, RowHeight + 25)]);
+        var correction = surface.ApplyMeasuredHeights([(above, RowHeight + 25)]);
 
-        Assert.That(shift, Is.EqualTo(25), "content above the reader grew, so the offset must absorb it");
+        Assert.That(correction.ShiftAbove, Is.EqualTo(25),
+            "content above the reader grew, so the offset must absorb it");
+    }
+
+    [Test]
+    public void A_measurement_matching_the_estimate_marks_the_row_without_reflowing()
+    {
+        var geometry = Geometry();
+        var surface = new AgendaSurface(geometry);
+
+        surface.Layout(Daily(3), Page);
+        var row = surface.Rows.First(candidate => candidate.Kind is AgendaRowKind.Appointment);
+        var rowBelow = surface.Rows[row.Index + 1];
+        var topBelow = rowBelow.Top;
+
+        var correction = surface.ApplyMeasuredHeights([(row, RowHeight)]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.Measured, Is.True);
+            Assert.That(rowBelow.Top, Is.EqualTo(topBelow));
+            Assert.That(correction.LayoutChanged, Is.False);
+            Assert.That(correction.ShiftAbove, Is.Zero);
+        });
+    }
+
+    [Test]
+    public void A_measured_height_survives_a_table_rebuild_by_appointment_key()
+    {
+        var geometry = Geometry();
+        var surface = new AgendaSurface(geometry);
+        var firstItem = TestAppointment.At(Day(3), "10:00", 1, "same");
+
+        surface.Layout([firstItem], Page);
+        var firstRow = surface.Rows.Single(row => row.Kind is AgendaRowKind.Appointment);
+        surface.ApplyMeasuredHeights([(firstRow, RowHeight + 27)]);
+
+        surface.Invalidate();
+        surface.Layout([TestAppointment.At(Day(3), "10:00", 1, "same")], Page);
+        var rebuilt = surface.Rows.Single(row => row.Kind is AgendaRowKind.Appointment);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rebuilt.Measured, Is.True);
+            Assert.That(rebuilt.Height, Is.EqualTo(RowHeight + 27));
+        });
+    }
+
+    [Test]
+    public void Clearing_measurements_makes_a_rebuilt_row_use_the_estimate_again()
+    {
+        var geometry = Geometry();
+        var surface = new AgendaSurface(geometry);
+        var item = TestAppointment.At(Day(3), "10:00", 1, "same");
+
+        surface.Layout([item], Page);
+        var row = surface.Rows.Single(candidate => candidate.Kind is AgendaRowKind.Appointment);
+        surface.ApplyMeasuredHeights([(row, RowHeight + 27)]);
+
+        surface.Invalidate(clearMeasurements: true);
+        surface.Layout([item], Page);
+        var rebuilt = surface.Rows.Single(candidate => candidate.Kind is AgendaRowKind.Appointment);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rebuilt.Measured, Is.False);
+            Assert.That(rebuilt.Height, Is.EqualTo(RowHeight));
+        });
     }
 
     [Test]
@@ -209,5 +316,20 @@ public class AgendaSurfaceTests
             Assert.That(slot!.Value.Duration, Is.EqualTo(TimeSpan.FromDays(1)));
             Assert.That(surface.BoundsFor(slot.Value, Page), Is.EqualTo(Rect.Zero), "nothing is drawn for it");
         });
+    }
+
+    [Test]
+    public void A_date_offset_prefers_its_first_appointment()
+    {
+        var geometry = Geometry();
+        var surface = new AgendaSurface(geometry);
+
+        surface.Layout(Daily(5), Page);
+
+        var date = new DateOnly(2026, 8, 5);
+        var expected = surface.Rows.First(row =>
+            row.Kind is AgendaRowKind.Appointment && row.Date == date);
+
+        Assert.That(surface.OffsetFor(date), Is.EqualTo(expected.Top));
     }
 }

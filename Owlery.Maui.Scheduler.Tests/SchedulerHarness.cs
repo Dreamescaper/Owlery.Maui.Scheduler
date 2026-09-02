@@ -9,6 +9,11 @@ namespace Owlery.Maui.Scheduler.Tests;
 /// <summary>An appointment view the tests can pick out of the surface and track by identity.</summary>
 internal sealed class TestAppointmentView : ContentView
 {
+    /// <summary>What this view measures, so the agenda's row heights are exercised rather than zero.</summary>
+    public const double MeasuredHeight = 40;
+
+    public TestAppointmentView() => Content = new BoxView { HeightRequest = MeasuredHeight };
+
     public int BindingChanges { get; private set; }
 
     protected override void OnBindingContextChanged()
@@ -61,7 +66,8 @@ internal sealed class SchedulerHarness
     private IGraphicsView surfaceView => surfaceGraphicsView;
     private readonly Layout surface;
     private readonly Border dragIndicator;
-    private readonly AbsoluteLayout headerStrip;
+    /// <summary>The day-column strip, or null on a surface that has none.</summary>
+    private readonly AbsoluteLayout? headerStrip;
     private readonly IGraphicsView gutterInput;
 
     private readonly int visibleDays;
@@ -71,7 +77,8 @@ internal sealed class SchedulerHarness
         DateTime displayDate,
         IEnumerable<ISchedulerAppointment>? items = null,
         int visibleDays = 7,
-        SchedulerViewMode viewMode = SchedulerViewMode.Timeline)
+        SchedulerViewMode viewMode = SchedulerViewMode.Timeline,
+        Action<SchedulerView>? configure = null)
     {
         this.visibleDays = visibleDays;
         this.viewMode = viewMode;
@@ -89,6 +96,8 @@ internal sealed class SchedulerHarness
             DisplayDate = displayDate,
             ItemsSource = items
         };
+
+        configure?.Invoke(Scheduler);
 
         Scheduler.VisibleDatesChanged += (_, e) => VisibleDatesReports.Add(e);
         Scheduler.CellTapped += (_, e) => CellTaps.Add(e);
@@ -125,10 +134,11 @@ internal sealed class SchedulerHarness
         // Both are found through something already identified rather than by size: the strip and the
         // scrolling surface are the same width, so a width test would pick whichever came first.
         gutterInput = Descendants((Element)dragIndicator.Parent).OfType<GraphicsView>().First();
-        headerStrip = (AbsoluteLayout)Descendants(Scheduler)
+        // An agenda has no day-column strip at all, so there is no grid of columns to find it by.
+        headerStrip = Descendants(Scheduler)
             .OfType<Grid>()
-            .First(grid => grid.Parent is AbsoluteLayout && grid.ColumnDefinitions.Count > 0)
-            .Parent;
+            .FirstOrDefault(grid => grid.Parent is AbsoluteLayout && grid.ColumnDefinitions.Count > 0)
+            ?.Parent as AbsoluteLayout;
     }
 
     /// <summary>The appointment views currently showing, in the order the surface holds them.</summary>
@@ -141,7 +151,73 @@ internal sealed class SchedulerHarness
         .FirstOrDefault(view => view is Border && view.IsVisible);
 
     /// <summary>How far apart the three rendered pages sit. A month has no gutter to give up.</summary>
-    public double PageStride => viewMode is SchedulerViewMode.Month ? ViewWidth : PageWidth;
+    /// <remarks>An agenda does not page at all, so its pages sit on top of each other.</remarks>
+    public double PageStride => viewMode switch
+    {
+        SchedulerViewMode.Month => ViewWidth,
+        SchedulerViewMode.Agenda => 0,
+        _ => PageWidth
+    };
+
+    /// <summary>The height the scrolling surface asks for, which is the agenda's content height.</summary>
+    public double SurfaceRequestedHeight => ((VisualElement)surface).HeightRequest;
+
+    /// <summary>The agenda's current vertical offset.</summary>
+    public double AgendaScrollY => timelineScroll.ScrollY;
+
+    /// <summary>How far the content is held while the platform catches up with a compensated offset.</summary>
+    /// <remarks>
+    /// The vertical scroll view's own content, which is the element the control translates — a
+    /// transform on the pager's content view is discarded by its handler.
+    /// </remarks>
+    public double SurfaceTranslationY => ((VisualElement)timelineScroll.Content).TranslationY;
+
+    /// <summary>
+    /// Where a view actually appears to the reader, rather than where it sits in the content.
+    /// </summary>
+    /// <remarks>
+    /// Its position in the surface, less the offset the platform has applied, plus whatever the
+    /// control is holding the surface by while it waits for the rest. This is the number a glitch
+    /// shows up in: content can be reflowed and the scroll compensated and still be visually still.
+    /// </remarks>
+    public double VisualTopOf(View view) => BoundsOf(view).Y + SurfaceTranslationY - AgendaScrollY;
+
+    /// <summary>The agenda's headings and day markers, whatever kind they are.</summary>
+    public IReadOnlyList<View> AgendaSections =>
+    [
+        .. surface.OfType<View>().Where(view =>
+            view.IsVisible && view.BindingContext is SchedulerAgendaSection)
+    ];
+
+    /// <summary>The headings of one kind, in the order they appear down the list.</summary>
+    public IReadOnlyList<SchedulerAgendaSection> SectionsOfKind(SchedulerAgendaSectionKind kind) =>
+    [
+        .. AgendaSections
+            .Select(view => (SchedulerAgendaSection)view.BindingContext)
+            .Where(section => section.Kind == kind)
+            .OrderBy(section => section.Date)
+    ];
+
+    /// <summary>All label text inside a view, including the built-in agenda section variants.</summary>
+    public IReadOnlyList<string> TextWithin(View view) =>
+    [
+        .. Descendants(view)
+            .OfType<Label>()
+            .Where(label => label.IsVisible && !string.IsNullOrEmpty(label.Text))
+            .Select(label => label.Text)
+    ];
+
+    /// <summary>
+    /// Scrolls the vertical surface, as a gesture would.
+    /// </summary>
+    /// <remarks>
+    /// <c>SetScrolledPosition</c> is MAUI's handler-to-virtual-view path and raises <c>Scrolled</c>,
+    /// just as the platform handler does after a gesture.
+    /// </remarks>
+    public void ScrollVerticallyTo(double y)
+    {
+        timelineScroll.SetScrolledPosition(0, y);
+    }
 
     /// <summary>The appointments on the page currently on screen, ignoring the two either side.</summary>
     public IReadOnlyList<TestAppointmentView> CentrePageAppointments =>
@@ -376,6 +452,12 @@ internal sealed class SchedulerHarness
 
     public void FireLongPressTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(350));
 
+    /// <summary>Completes a deferred backward growth, once the agenda's scroll has gone quiet.</summary>
+    public void FireAgendaBackwardGrowTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(200));
+
+    /// <summary>Closes the window in which the agenda treats scroll events as its own navigation.</summary>
+    public void FireAgendaNavigationSettleTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(250));
+
     /// <summary>Where a day's header sits along the three-page strip.</summary>
     public double HeaderXAt(int slotIndex, int dayIndex) =>
         slotIndex * PageStride + (dayIndex + 0.5) * (PageStride / visibleDays);
@@ -386,7 +468,7 @@ internal sealed class SchedulerHarness
 
     /// <summary>Taps a day header, addressed by the page and column it belongs to.</summary>
     public void TapHeader(int slotIndex, int dayIndex) =>
-        SendTap(headerStrip, new Point(HeaderXAt(slotIndex, dayIndex), Scheduler.HeaderHeight / 2));
+        SendTap(headerStrip!, new Point(HeaderXAt(slotIndex, dayIndex), Scheduler.HeaderHeight / 2));
 
     /// <summary>Taps the hour gutter level with a time.</summary>
     public void TapGutter(TimeSpan time) => TapGutterAt(GutterYAt(time));
@@ -440,10 +522,30 @@ internal sealed class SchedulerHarness
     /// Stands in for the platform scroll view: applies the requested offset and reports the scroll
     /// as finished, so awaited programmatic scrolls complete.
     /// </summary>
+    /// <summary>
+    /// Makes the vertical scroll view behave the way iOS's does: a requested offset is not applied.
+    /// </summary>
+    /// <remarks>
+    /// The default shim applies <c>ScrollToAsync</c> at once, which no platform does — the handler
+    /// applies it on a later pass, and reports the offsets it passes through on the way. With this
+    /// set, the request is recorded in <see cref="LastVerticalScrollRequest"/> and the test delivers
+    /// those offsets itself with <see cref="ScrollVerticallyTo"/>.
+    /// </remarks>
+    public bool DeferVerticalScrollRequests { get; set; }
+
+    /// <summary>The offset last asked for, whether or not it was applied.</summary>
+    public double LastVerticalScrollRequest { get; private set; }
+
     private void ShimScrolling(ScrollView scrollView)
     {
         scrollView.ScrollToRequested += (_, e) =>
         {
+            if (scrollView.Orientation == ScrollOrientation.Vertical)
+                LastVerticalScrollRequest = e.ScrollY;
+
+            if (DeferVerticalScrollRequests && scrollView.Orientation == ScrollOrientation.Vertical)
+                return;
+
             scrollView.SetScrolledPosition(e.ScrollX, e.ScrollY);
             scrollView.SendScrollFinished();
         };

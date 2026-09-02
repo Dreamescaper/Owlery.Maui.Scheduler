@@ -12,19 +12,18 @@ internal interface IAppointmentPlacement
 }
 
 /// <summary>
-/// What a page holds and how it is measured — the part that differs between a timeline of hours and
-/// a calendar month.
+/// What a page holds and how it is measured — the part that differs between a timeline of hours, a
+/// calendar month and a vertical agenda.
 /// </summary>
 /// <remarks>
-/// The ring buffer, the view pool and the reconciliation in <c>PopulateSlot</c> are all indifferent
-/// to which of those a page is; they need to know how to step from one page to the next, what a page
-/// contains, and where to put things. That is exactly this interface, and every member of it is
-/// arithmetic, so both implementations are testable without the MAUI test host.
+/// The view pool and the reconciliation in <c>PopulateSlot</c> are indifferent to which surface made
+/// a placement. Paging surfaces additionally use the page-navigation members; an agenda gives them a
+/// stable month identity while collapsing horizontal page spacing to zero. The seam stays testable
+/// without the MAUI host.
 /// <para>
 /// Note what is *not* here. Dragging is not, because it belongs to the timeline alone. Nor is
-/// building the visual tree: a month has no gutter and does not scroll vertically, so the two
-/// differ in structure rather than in a value, and structure is settled once when the mode changes
-/// instead of on every page.
+/// building the visual tree: the three modes differ in chrome and scrolling structure, which is
+/// settled once when the mode changes instead of on every placement.
 /// </para>
 /// </remarks>
 internal interface ISchedulerSurface
@@ -61,4 +60,15 @@ internal interface ISchedulerSurface
     /// read straight after laying the page out — which is what <c>PopulateSlot</c> does.
     /// </remarks>
     IReadOnlyList<int> OverflowFor(DateOnly pageStart);
+
+    /// <summary>
+    /// Non-appointment chrome produced by the last layout of a page. Empty on a surface whose
+    /// structure is entirely drawn or fixed outside the appointment layer.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="OverflowFor"/>, this belongs to the layout pass and must be read immediately
+    /// after it. Keeping it on the seam lets the host reconcile chrome without learning which
+    /// concrete surface produced it.
+    /// </remarks>
+    IReadOnlyList<AgendaSectionPlacement> SectionsFor(DateOnly pageStart);
 }

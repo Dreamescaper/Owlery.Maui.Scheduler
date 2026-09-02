@@ -1,6 +1,6 @@
 # Owlery.Maui.Scheduler — API reference
 
-A week-view scheduler control for .NET MAUI. This document covers the public surface. For *what it
+A scheduler control for .NET MAUI. This document covers the public surface. For *what it
 does*, see the [functional requirements](requirements/README.md); for *why* it is built the way it is,
 see [DESIGN.md](DESIGN.md).
 
@@ -17,6 +17,7 @@ Namespace: `Owlery.Maui.Scheduler`
   - [Data and templates](#data-and-templates)
   - [Time window and layout](#time-window-and-layout)
   - [Month layout](#month-layout)
+  - [Agenda layout](#agenda-layout)
   - [Interaction](#interaction)
   - [Appearance and state](#appearance-and-state)
   - [Events](#events)
@@ -79,13 +80,13 @@ Every property below is backed by a `BindableProperty` named `<PropertyName>Prop
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `ViewMode` | `SchedulerViewMode` | `Timeline` | Whether the control shows columns of hours or a calendar month. |
+| `ViewMode` | `SchedulerViewMode` | `Timeline` | Whether the control shows columns of hours, a calendar month, or a grouped agenda. |
 
 ```csharp
-public enum SchedulerViewMode { Timeline, Month }
+public enum SchedulerViewMode { Timeline, Month, Agenda }
 ```
 
-The two are different surfaces rather than two settings of one, so a fair amount does not carry over.
+The three are different surfaces rather than settings of one, so a fair amount does not carry over.
 In `Month`:
 
 - `VisibleDays`, `StartHour`, `EndHour`, `HourHeight` and `TimeGutterWidth` are ignored. There is no
@@ -103,6 +104,19 @@ The grid is always six rows, so a short month beginning on `FirstDayOfWeek` show
 next one. Leading and trailing days from the neighbouring months are drawn muted but behave normally:
 they hold appointments and can be tapped.
 
+In `Agenda`:
+
+- One continuous vertical list replaces the horizontal pager, day-header strip and hour gutter.
+- Full-width month headings are always present. Non-empty weeks get an inset heading, empty days are
+  omitted, and each non-empty day gets one marker in the leading gutter.
+- Appointment rows are content-sized and virtualized. A row is estimated until it first appears,
+  then measured; views outside the viewport buffer return to the same pool used by the other modes.
+- Approaching either vertical edge extends the loaded range by another month. Prepending keeps the
+  row under the reader fixed while the new range and any later-arriving data are inserted above it.
+- Dragging and selected-cell chrome are not offered. `HeaderTapped` and `TimeGutterTapped` are silent.
+- `VisibleDatesChanged.VisibleDates` is the whole loaded agenda range, not only the pixels currently
+  in the viewport; every date in that range is reachable by vertical scrolling.
+
 ### Data and templates
 
 | Property | Type | Default | Description |
@@ -110,6 +124,8 @@ they hold appointments and can be tapped.
 | `ItemsSource` | `IEnumerable<ISchedulerAppointment>?` | `null` | Every appointment the host has loaded, across as many weeks as it likes. The control selects what belongs to each rendered week. Honours `INotifyCollectionChanged`; assigning a new collection instance also refreshes. |
 | `AppointmentTemplate` | `DataTemplate?` | `null` | Template for one appointment box. Its binding context is the `ISchedulerAppointment`. The grid still draws without it, but no appointments appear. |
 | `MonthAppointmentTemplate` | `DataTemplate?` | `null` | Template for one appointment chip in a month cell. Falls back to `AppointmentTemplate` when not set — which renders, but rarely reads well: a chip is one line about 16 units tall, not a box sized by its duration. |
+| `AgendaAppointmentTemplate` | `DataTemplate?` | `null` | Template for one content-sized agenda row. Falls back to `AppointmentTemplate` when not set. |
+| `AgendaSectionTemplate` | `DataTemplate?` | `null` | One template for month, week and day chrome, bound to `SchedulerAgendaSection`. A built-in section view is used when unset. |
 | `CellSelectionTemplate` | `DataTemplate?` | `null` | Optional template for the selected-cell affordance, bound to the selected `SchedulerTimeSlot`. In a month it is stretched across the whole day cell. When `null` the control draws a bordered **+** box. |
 
 > Views created from `AppointmentTemplate` are **pooled and rebound**, never rebuilt. A template must
@@ -158,7 +174,7 @@ they hold appointments and can be tapped.
 | `StartHour` | `int` | `8` | First hour shown on the timeline. |
 | `EndHour` | `int` | `23` | Last hour shown. Content height is `(EndHour - StartHour) * HourHeight`. |
 | `HourHeight` | `double` | `50` | Height in device-independent pixels of one hour row. |
-| `VisibleDays` | `int` | `7` | How many days a page shows. `7` is a week, `3` a three-day view, `1` a single day; `5` gives a working week. Changing it animates the columns to their new width. Ignored while `ViewMode` is `Month`. |
+| `VisibleDays` | `int` | `7` | How many days a timeline page shows. `7` is a week, `3` a three-day view, `1` a single day; `5` gives a working week. Changing it animates the columns to their new width. Ignored outside `Timeline`. |
 | `FirstDayOfWeek` | `DayOfWeek` | `Monday` | Which day starts the week. Only applies when `VisibleDays` is 7 — shorter pages start on `DisplayDate` instead, which is what puts today in the leading column. |
 | `TimeGutterWidth` | `double` | `52` | Width of the fixed left column holding the hour labels. |
 | `HeaderHeight` | `double` | `52` | Height of the day-name/day-number strip above the grid. |
@@ -176,7 +192,7 @@ per-frame state — set them once rather than animating them.
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `ShowNonWorkingDaysShading` | `bool` | `true` | Whether days absent from `WorkingDays` have a distinct background in timeline and month views. |
-| `ShowCurrentDayHighlight` | `bool` | `true` | Whether today's background and day number are emphasised. Does not control the current-time indicator. |
+| `ShowCurrentDayHighlight` | `bool` | `true` | Whether today's background and day number are emphasised. In an agenda the background runs through today's appointment rows. Does not control the current-time indicator. |
 | `ShowNonWorkingHoursShading` | `bool` | `false` | Whether time before and after the working interval is shaded on working days. Ignored in month view. |
 | `WorkingDays` | `IReadOnlyCollection<DayOfWeek>` | Monday–Friday | Days regarded as working. Replace the collection to report a change; in-place mutations are not observed. An empty collection makes every day non-working, and `null` restores the default week rather than throwing later from inside a draw. |
 | `WorkingHoursStart` | `TimeOnly` | `09:00` | Beginning of the same-day working interval. |
@@ -214,11 +230,49 @@ Only meaningful while `ViewMode` is `Month`.
 |---|---|---|---|
 | `MonthOverflowFormat` | `string` | `"+{0} more"` | Composed with the number of appointments a day could not show. Cell capacity comes from the control's height; when a day has more than fits, the last line becomes this marker, so one *fewer* appointment is shown than would physically fit and `{0}` counts the one the marker displaced. |
 
+### Agenda layout
+
+Only meaningful while `ViewMode` is `Agenda`.
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `AgendaEstimatedRowHeight` | `double` | `64` | Estimated row height before the row first appears. The measured height is cached by appointment `Key`; a close estimate keeps the initial scrollbar extent accurate and minimizes correction. |
+| `AgendaRowHeight` | `Func<ISchedulerAppointment, double>?` | `null` | Authoritative row-height function. When set, the agenda lays every appointment row out at the returned height and skips view measurement and correction passes. The value is clamped to the minimum row height, and a non-finite result falls back to `AgendaEstimatedRowHeight`. Because the height is fixed the row's content is arranged within it: too short clips, too long leaves white space. Default (`null`): row is measured on first realisation and reflowed, which on a live scroll reads as the content wobbling for a frame. Use the default when height depends on width, wrapping, font scale or other view state. **Setting this is highly recommended for an agenda — see below.** |
+| `AgendaDayGutterWidth` | `double` | `56` | Width of the leading gutter holding one marker beside each non-empty day. |
+| `AgendaEmptyText` | `string` | `"No appointments"` | Text shown beneath the built-in heading of a month with no appointments. A custom `AgendaSectionTemplate` owns its empty presentation. |
+
+**Setting `AgendaRowHeight` is highly recommended for an agenda.** Unlike the timeline and month
+surfaces, an agenda row's height is not arithmetic — it is whatever the host's template renders, so by
+default the control estimates it and then measures and corrects each row the first time it appears.
+That correction runs on the scroll path, and because MAUI applies the offset change on a later pass
+than the gesture that caused it, the reader can see the row content wobble up and down for a frame or
+two (worst at a slow scrolling pace). A host that can state the height from the appointment alone
+avoids the entire measure-and-correct pass. This is especially worthwhile when the template is
+dynamically sized — rows that grow or shrink with their content invoke a fresh correction for each
+distinct height. When the template's height is genuinely fixed or can be computed, supply a
+`Func<ISchedulerAppointment, double>`; when it depends on width, wrapping, font scale or localization,
+keep the measured default (see DESIGN §14).
+
+`AgendaSectionTemplate` receives this binding context:
+
+```csharp
+public enum SchedulerAgendaSectionKind { Month, Week, Day }
+
+public sealed record SchedulerAgendaSection(
+    DateTime Date,
+    SchedulerAgendaSectionKind Kind,
+    int AppointmentCount);
+```
+
+Use one template and switch pre-built variants on `Kind`; a `DataTemplateSelector` is rejected for
+the same pooling reason as appointment templates. `AppointmentCount` is the number of appointments
+in that day, week or month within the loaded range.
+
 ### Interaction
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `DisplayDate` | `DateTime` | `DateTime.Today` | Any date inside the week to show. **Two-way**: after a swipe the control writes back the start of the new centre week, so a bound field follows the user. Setting a date in the week already displayed is a no-op; setting one in the week either side slides across to it, the way a swipe would. |
+| `DisplayDate` | `DateTime` | `DateTime.Today` | A date identifying the period to show. **Two-way**: after horizontal navigation the control writes back the start of the new centre period; while an agenda scrolls, it writes back the date at the viewport anchor. An agenda uses the month containing an externally assigned date as its range identity and scrolls to the first appointment on or after the exact date. |
 | `SelectedSlot` | `SchedulerTimeSlot?` | `null` | The currently selected empty cell, or `null`. **Two-way**: set by the control when empty space is tapped, and settable by the host to move or clear the affordance. |
 | `SlotMinutes` | `int` | `15` | How long a slot is: the timeline is divided into slots of this length, and a tap anywhere inside one selects the whole of it. This is the `Duration` reported by `CellTapped`, not just a rounding — the start falls **down** to the containing slot and never past the point touched. Also the granularity of `TimeGutterTapped.Time`. A month cell ignores it and reports a whole day. |
 | `DragSnapMinutes` | `int` | `15` | Granularity a dragged appointment lands on, rounded to the **nearest** boundary so a drop goes where it looks like it is going. Independent of `SlotMinutes`: offering whole hours to book does not mean an existing lesson cannot be nudged by a quarter. |
@@ -242,7 +296,7 @@ implement tap-to-arm-then-tap-to-confirm; that is host policy.
 | `SecondaryTextColor` | `Color` | `#6E6E6E` | Weekday names, time-zone text, gutter labels and month overflow text. |
 | `NonWorkingDaysBackgroundColor` | `Color` | `#FAFAFA` | Background of a shaded non-working day. |
 | `NonWorkingHoursBackgroundColor` | `Color` | `#FAFAFA` | Background of shaded time outside the working interval. |
-| `CurrentDayBackgroundColor` | `Color` | `#F3E8FC` | Background used when today's highlight is enabled. |
+| `CurrentDayBackgroundColor` | `Color` | `#F3E8FC` | Background used when today's highlight is enabled, including today's agenda rows. |
 | `CurrentDayTextColor` | `Color` | `#4458C8` | Emphasised day-number colour for today. |
 | `CurrentTimeIndicatorColor` | `Color` | `#FD4225` | Current-time line and dot. |
 | `AdjacentMonthBackgroundColor` | `Color` | `#F5F5F5` | Background of leading and trailing month cells. |
@@ -283,15 +337,16 @@ rebind appointment views.
 | `AppointmentDragStarting` | `SchedulerAppointmentDragStartingEventArgs` | A long press has been held on an appointment, before it lifts. **Cancellable.** |
 | `AppointmentDropTargetChanged` | `SchedulerAppointmentDropTargetChangedEventArgs` | A drag comes to rest on a different boundary. Not a movement event — silent while the finger travels within one boundary, and silent when the appointment is first picked up. |
 | `AppointmentDropped` | `SchedulerAppointmentDroppedEventArgs` | A dragged appointment is released. **Cancellable.** |
-| `HeaderTapped` | `SchedulerHeaderTappedEventArgs` | The header above a day column is tapped. Silent in `Month`. |
-| `TimeGutterTapped` | `SchedulerTimeGutterTappedEventArgs` | The hour gutter is tapped. A month has no gutter, so it never raises this. |
-| `VisibleDatesChanged` | `SchedulerVisibleDatesChangedEventArgs` | The centre week changes, including on first layout. This is the data-loading hook. |
+| `HeaderTapped` | `SchedulerHeaderTappedEventArgs` | The header above a timeline day column is tapped. Silent outside `Timeline`. |
+| `TimeGutterTapped` | `SchedulerTimeGutterTappedEventArgs` | The timeline hour gutter is tapped. Silent outside `Timeline`. |
+| `VisibleDatesChanged` | `SchedulerVisibleDatesChangedEventArgs` | The visible period changes, including on first layout and when an agenda extends at either edge. This is the data-loading hook. |
 
 ### Methods
 
 | Method | Description |
 |---|---|
-| `void ScrollToTime(TimeSpan time)` | Scrolls the timeline so `time` sits near the top of the viewport. The control calls this itself on load to open near the current time. Does nothing while `ViewMode` is `Month`. |
+| `void ScrollToTime(TimeSpan time)` | Scrolls the timeline so `time` sits near the top of the viewport. The control calls this itself on load to open near the current time. Does nothing outside `Timeline`. |
+| `void ScrollToDate(DateTime date)` | Brings a date into view. On a timeline or month this changes `DisplayDate`; in an agenda it also scrolls the first appointment on or after that date to the top. |
 
 ---
 
@@ -392,8 +447,9 @@ raises it too, since the drop target genuinely moved.
 |---|---|---|
 | `Date` | `DateTime` | Midnight on the day whose header was tapped, in `TimeZone`. |
 
-Not raised while `ViewMode` is `Month`: a month's header names weekdays, and one column stands for six
-dates rather than one. Tap a month *cell* instead — `CellTapped` reports the whole day.
+Raised only while `ViewMode` is `Timeline`. A month's header names weekdays rather than dates, while
+an agenda names days in its leading gutter. Tap a month cell or agenda space instead — `CellTapped`
+reports the whole day.
 
 A natural use is drilling in from a week to a single day:
 
@@ -422,12 +478,13 @@ starts one interval before `EndHour`.
 
 | Member | Type | Description |
 |---|---|---|
-| `VisibleDates` | `IReadOnlyList<DateTime>` | The days the user is looking at — as many as `VisibleDays`. |
-| `PrefetchFrom` | `DateTime` | Start of the first rendered week. |
-| `PrefetchTo` | `DateTime` | End of the last rendered week. |
+| `VisibleDates` | `IReadOnlyList<DateTime>` | The dates the active surface exposes: `VisibleDays` on a timeline, 42 on a month, and the whole loaded range in an agenda. |
+| `PrefetchFrom` | `DateTime` | Beginning of the range the host should have loaded. |
+| `PrefetchTo` | `DateTime` | End of the range the host should have loaded. |
 
-Three pages are rendered at all times, whatever `VisibleDays` is. Loading `PrefetchFrom`–`PrefetchTo`
-rather than just `VisibleDates` is what keeps the next swipe from showing an empty page.
+Timeline and month surfaces render three pages. Loading `PrefetchFrom`–`PrefetchTo` rather than just
+`VisibleDates` is what keeps the next swipe from showing an empty page. An agenda has one vertical
+surface, so all three values describe its current loaded range.
 
 ---
 
@@ -440,7 +497,13 @@ The control has no Blazor dependency. A wrapper is generated by
 [assembly: GenerateComponent(typeof(SchedulerView),
     MakeItemsGeneric = false,
     PropertyChangedEvents = [nameof(SchedulerView.DisplayDate), nameof(SchedulerView.SelectedSlot)],
-    GenericProperties = [$"{nameof(SchedulerView.AppointmentTemplate)}:Owlery.Maui.Scheduler.ISchedulerAppointment"])]
+    GenericProperties =
+    [
+        $"{nameof(SchedulerView.AppointmentTemplate)}:Owlery.Maui.Scheduler.ISchedulerAppointment",
+        $"{nameof(SchedulerView.MonthAppointmentTemplate)}:Owlery.Maui.Scheduler.ISchedulerAppointment",
+        $"{nameof(SchedulerView.AgendaAppointmentTemplate)}:Owlery.Maui.Scheduler.ISchedulerAppointment",
+        $"{nameof(SchedulerView.AgendaSectionTemplate)}:Owlery.Maui.Scheduler.SchedulerAgendaSection"
+    ])]
 ```
 
 Names differ on the Blazor side:
@@ -448,6 +511,8 @@ Names differ on the Blazor side:
 | MAUI member | Blazor parameter |
 |---|---|
 | `AppointmentTemplate` (`DataTemplate`) | `AppointmentTemplate` (`RenderFragment<ISchedulerAppointment>`) |
+| `AgendaAppointmentTemplate` (`DataTemplate`) | Generated generic template parameter for `ISchedulerAppointment` when included in the host's generator configuration. |
+| `AgendaSectionTemplate` (`DataTemplate`) | Generated generic template parameter for `SchedulerAgendaSection` when included in the host's generator configuration. |
 | `CellSelectionTemplate` (`DataTemplate`) | `CellSelectionTemplate` (`RenderFragment`, no context) |
 | `DisplayDate` | `DisplayDate` + `DisplayDateChanged` → `@bind-DisplayDate` |
 | `SelectedSlot` | `SelectedSlot` + `SelectedSlotChanged` → `@bind-SelectedSlot` |
@@ -515,6 +580,5 @@ puts it back under one.
 keeps showing it at half opacity. Both that copy and the one under the finger come from
 `AppointmentTemplate`, so nothing extra is needed to support it.
 
-**Not supported.** Day, month and agenda views; all-day and multi-day appointments; resizing an
-appointment by its edges; theme switching. See
-[DESIGN.md §14](DESIGN.md).
+**Not supported.** Multi-week grids; all-day and multi-day appointment spans; resizing an appointment
+by its edges. See [DESIGN.md §14](DESIGN.md).
