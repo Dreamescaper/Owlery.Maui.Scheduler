@@ -1,14 +1,11 @@
 namespace Owlery.Maui.Scheduler.Sample.Data;
 
 /// <summary>
-/// Builds a deterministic set of appointments around today, so the count knob produces the same
-/// calendar every time until the seed is changed.
+/// Builds one deterministic month of appointments, so extending the scheduler's requested range can
+/// add data without replacing appointments that were already loaded.
 /// </summary>
 public static class SampleDataGenerator
 {
-    /// <summary>How wide a window the generated appointments cover, centred on today.</summary>
-    public const int WindowDays = 84;
-
     private static readonly string[] Subjects =
     [
         "Piano", "Guitar", "Violin", "Maths", "Physics", "English", "Spanish",
@@ -24,22 +21,26 @@ public static class SampleDataGenerator
     private static readonly int[] Durations = [15, 30, 30, 45, 60, 60, 90, 120];
 
     /// <summary>
-    /// Spreads <paramref name="count"/> appointments over <see cref="WindowDays"/> days centred on
-    /// <paramref name="today"/>, clustered into normal teaching hours so overlaps happen naturally.
+    /// Spreads <paramref name="count"/> appointments over one calendar month, clustered into normal
+    /// teaching hours so overlaps happen naturally.
     /// </summary>
-    public static List<SampleAppointment> Generate(int count, int seed, DateTime today)
+    public static List<SampleAppointment> GenerateMonth(int count, int seed, DateOnly month)
     {
         var appointments = new List<SampleAppointment>(count);
-        var random = new Random(seed);
-        var firstDay = today.Date.AddDays(-WindowDays / 2);
+        var monthStart = new DateOnly(month.Year, month.Month, 1);
+        var days = DateTime.DaysInMonth(monthStart.Year, monthStart.Month);
+        var monthOrdinal = (monthStart.Year - 2000) * 12 + monthStart.Month - 1;
+        var monthSeed = unchecked(seed * 1_000_003 + monthStart.Year * 397 + monthStart.Month * 17);
+        var random = new Random(monthSeed);
 
-        for (var id = 0; id < count; id++)
+        for (var index = 0; index < count; index++)
         {
-            var day = firstDay.AddDays(random.Next(WindowDays));
+            var day = monthStart.AddDays(random.Next(days)).ToDateTime(TimeOnly.MinValue);
             var minutes = (random.Next(8, 21) * 60) + (random.Next(4) * 15);
             var duration = TimeSpan.FromMinutes(Durations[random.Next(Durations.Length)]);
             var subject = Subjects[random.Next(Subjects.Length)];
             var person = People[random.Next(People.Length)];
+            var id = checked(monthOrdinal * 10_000 + index);
 
             // Every tenth item refuses to be dragged, so the cancellable drag event has something
             // to demonstrate without the host having to hand-pick an appointment.
@@ -49,7 +50,7 @@ public static class SampleDataGenerator
                 duration,
                 subject,
                 person,
-                palette: id % SamplePalette.Count,
+                palette: Math.Abs(id % SamplePalette.Count),
                 isLocked: random.Next(10) == 0));
         }
 

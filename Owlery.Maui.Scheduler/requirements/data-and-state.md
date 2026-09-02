@@ -7,9 +7,8 @@ What the scheduler needs from the host, and how it behaves while waiting.
 **DAT-1** The scheduler holds no data of its own and fetches nothing. The host supplies appointments;
 the view decides what to show from them.
 
-**DAT-2** The host may supply appointments covering any span of time. The view selects the ones
-belonging to the week on screen, so the host is free to keep a wider set loaded rather than one week
-at a time.
+**DAT-2** The host may supply appointments covering any span of time. The active surface selects the
+ones belonging to its rendered dates, so the host is free to keep a wider set loaded.
 
 **DAT-3** The view never modifies what it is given. Any change resulting from an interaction is the
 host's to make.
@@ -28,6 +27,11 @@ distinguish "showing" from "ready to show" can.
 
 **DAT-7** Reports are raised for genuine changes of week. Scrolling within a week does not ask for
 data again.
+
+**DAT-7a** An agenda is the exception to the visible-week shape in DAT-4–DAT-6. It reports its whole
+loaded range as both visible and prefetched, because every loaded day is reachable by vertical
+scrolling without a horizontal page transition. Approaching either edge extends that range and raises
+another report so the host can load the added month.
 
 ## While loading
 

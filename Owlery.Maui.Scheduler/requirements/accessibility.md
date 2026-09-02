@@ -9,6 +9,9 @@ day, and its start and end times.
 
 **ACC-3** Day headers are readable by screen readers, so the structure of the week can be established.
 
+**ACC-3a** Agenda month, week and day sections are readable by screen readers, so the grouped list can
+be navigated without relying on its visual indentation.
+
 **ACC-4** The selected time slot is exposed as an element and announced with its day and time.
 
 **ACC-5** The empty grid is **not** exposed cell by cell. A week of slots is several

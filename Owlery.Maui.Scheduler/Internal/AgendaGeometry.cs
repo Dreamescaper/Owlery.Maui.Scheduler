@@ -28,9 +28,31 @@ internal sealed class AgendaGeometry : PageGeometry
     /// <summary>What a row is assumed to be worth before it has measured.</summary>
     public double EstimatedRowHeight { get; set; } = 64;
 
+    /// <summary>
+    /// The least a row may be, however little it measures.
+    /// </summary>
+    /// <remarks>
+    /// The agenda's counterpart to <see cref="TimelineSurface.MinimumAppointmentHeight"/>, and there
+    /// for the same reason: a row that collapsed to nothing would be invisible and impossible to
+    /// touch. It matters more here, because a row's height comes from a host's template rather than
+    /// from arithmetic — a template that renders nothing while its data loads would otherwise take
+    /// the whole list down with it.
+    /// </remarks>
+    public double MinimumRowHeight { get; set; } = 24;
+
     public double MonthSectionHeight { get; set; } = 56;
 
     public double WeekSectionHeight { get; set; } = 28;
+
+    /// <summary>
+    /// Whitespace between one day's rows and the next, in place of a dividing line.
+    /// </summary>
+    /// <remarks>
+    /// Days read as groups by the gap between them rather than by a drawn separator. The gap is owned
+    /// by the day that precedes it, so a day that never empties and the one that follows are separated
+    /// by this much, and an empty day costs nothing.
+    /// </remarks>
+    public double DayGap { get; set; } = 8;
 
     /// <summary>Days shown before the anchor page, and after the month it names.</summary>
     public int LeadDays { get; set; } = 7;
@@ -67,28 +89,43 @@ internal sealed class AgendaGeometry : PageGeometry
 
     public void SetContentHeight(double height) => contentHeight = Math.Max(0, height);
 
-    /// <summary>The first date the agenda covers for a page.</summary>
-    public DateOnly RangeStart(DateOnly pageStart) => pageStart.AddDays(-LeadDays);
+    /// <summary>The first day of the whole month containing a date.</summary>
+    public static DateOnly FirstOfMonth(DateOnly date) => new(date.Year, date.Month, 1);
 
-    /// <summary>The last date the agenda covers for a page — the anchor month, plus a tail.</summary>
-    public DateOnly RangeEnd(DateOnly pageStart) => pageStart.AddMonths(1).AddDays(TrailDays - 1);
+    /// <summary>The last day of the whole month containing a date.</summary>
+    public static DateOnly LastOfMonth(DateOnly date) => FirstOfMonth(date).AddMonths(1).AddDays(-1);
 
-    /// <summary>Where a row sits across the surface, past the gutter its day marker occupies.</summary>
-    public Rect RowBounds(AgendaRow row) => new(
-        DayGutterWidth + RowInset,
-        row.Top,
-        Math.Max(1, ViewportWidth - DayGutterWidth - RowInset * 2),
-        row.Height);
+    /// <summary>
+    /// The first date the agenda covers for a page — the first of the whole month at the range's edge.
+    /// </summary>
+    /// <remarks>
+    /// Always a whole month, never a mid-month slice. A partial month would show its tail under a
+    /// heading and then, when the host answered, the whole month under the same heading — the same
+    /// month header with different events. Rounding the edge up to the month keeps every month whole.
+    /// </remarks>
+    public DateOnly RangeStart(DateOnly pageStart) => FirstOfMonth(pageStart.AddDays(-LeadDays));
 
-    /// <summary>A month heading reaches both edges; nothing else does.</summary>
-    public Rect MonthBounds(AgendaRow row) => new(0, row.Top, Math.Max(1, ViewportWidth), row.Height);
+    /// <summary>The last date the agenda covers — the last day of the whole month at the range's edge.</summary>
+    public DateOnly RangeEnd(DateOnly pageStart) => LastOfMonth(pageStart.AddMonths(1).AddDays(TrailDays - 1));
 
-    /// <summary>A week heading lines up with the rows beneath it rather than with the gutter.</summary>
-    public Rect WeekBounds(AgendaRow row) => new(
-        DayGutterWidth + RowInset,
-        row.Top,
-        Math.Max(1, ViewportWidth - DayGutterWidth - RowInset * 2),
-        row.Height);
+    /// <summary>
+    /// How wide anything in the list column is: the viewport, less the gutter and the insets.
+    /// </summary>
+    /// <remarks>
+    /// Named rather than inlined because it is also the width a row is measured at, and a change to
+    /// it is the one thing that makes a cached measurement wrong.
+    /// </remarks>
+    public double RowWidth => Math.Max(1, ViewportWidth - DayGutterWidth - RowInset * 2);
+
+    /// <summary>
+    /// Where anything in the list column sits — an appointment row and both headings alike.
+    /// </summary>
+    /// <remarks>
+    /// One rectangle for all three because they share a column: a month heading is inset past the
+    /// gutter exactly as its rows are, so the heading and the rows beneath it line up on the left.
+    /// The day marker is the only thing that is different, and it is what the column is inset past.
+    /// </remarks>
+    public Rect RowBounds(AgendaRow row) => new(DayGutterWidth + RowInset, row.Top, RowWidth, row.Height);
 
     /// <summary>The gutter cell beside a day's first row.</summary>
     public Rect DayMarkerBounds(AgendaRow row) => new(0, row.Top, DayGutterWidth, row.Height);

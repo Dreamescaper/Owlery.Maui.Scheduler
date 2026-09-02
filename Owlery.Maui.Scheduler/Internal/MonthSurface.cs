@@ -39,6 +39,8 @@ internal sealed class MonthSurface(MonthGeometry geometry) : ISchedulerSurface
 
     public IReadOnlyList<int> OverflowFor(DateOnly pageStart) => cachedPage == pageStart ? cachedOverflow : [];
 
+    public IReadOnlyList<AgendaSectionPlacement> SectionsFor(DateOnly pageStart) => [];
+
     public Rect BoundsFor(IAppointmentPlacement placement)
     {
         var chip = (MonthPlacement)placement;

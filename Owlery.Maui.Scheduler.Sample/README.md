@@ -52,7 +52,7 @@ has exactly one package reference, and this is the host's tooling.
 | Chrome | Does |
 |---|---|
 | `‹` `Today` `›` | Writes `DisplayDate` — by `VisibleDays`, or by a month in `Month` mode. |
-| `−` *count* `+` | Steps the number of generated appointments through 0, 10, 25, 50, 100, 250, 500, 1 000, 2 500, 5 000. |
+| `−` *count* `+` | Steps the number of generated appointments **per month** through 0, 10, 25, 50, 100, 250, 500, 1 000, 2 500, 5 000. |
 | **Knobs** | Opens the drawer. Every row writes straight to the property it is named after, and follows it back when something else changes it — tapping a day header drops `VisibleDays` to 1, and the knob says so. |
 | The bottom strip | The last three events the control raised, with what it reported. |
 
@@ -63,15 +63,17 @@ hardest to picture from the documentation.
 
 ## The data
 
-`SampleDataGenerator` spreads the chosen number of appointments over 84 days centred on today, at
-teaching hours, so overlaps happen on their own. It is deterministic: the same count gives the same
-calendar until **Regenerate** picks a new seed.
+`SampleDataGenerator` spreads the chosen number of appointments through every calendar month the
+control requests, at teaching hours, so overlaps happen on their own. It is deterministic: the same
+count gives the same month until **Regenerate** picks a new seed. When the agenda grows at either end,
+its wider `VisibleDatesChanged` range causes the source to generate the added month while preserving
+the appointment instances in months that were already loaded.
 
 Every tenth appointment is marked locked and drawn with a padlock, which is what *Cancel drags of
 locked items* refuses to pick up.
 
-Swiping outside the 84-day window shows empty pages. That is the generator's edge, not the control's —
-a real host loads what `VisibleDatesChanged` asks for.
+Paging or scrolling beyond the current range loads the newly requested months, which is the same host
+response a real app would make to `VisibleDatesChanged`.
 
 ## Worth reading if you are writing a template
 
@@ -83,3 +85,11 @@ appointment keeps drawing the first one it ever saw.
 `AppointmentBox` also shows the other half of that rule — it subscribes to `SizeChanged` **once**, in
 the constructor, to drop the time line and shrink the title in a box only twelve units tall. Subscribing
 per binding would leave one live handler per appointment the view had ever shown.
+
+`AgendaRow` supplies its own height through the optimized contract: the sample hands
+`SchedulerView.AgendaRowHeight` a static method (`AgendaRow.RowHeight`) that states the height from the
+appointment alone. That avoids the estimate→measurement correction pass, which otherwise shows up as the
+card wobbling a frame or two on an upward scroll (see `DESIGN.md` §14). The tradeoff is size, not
+smoothness: the value is authoritative and fixed, so a row is a consistent amount off rather than
+resized to its text. The **AgendaRowHeight** knob toggles between that known height and letting the row
+be measured — most visible with the 2,000- and 5,000-per-month data presets during a fast fling.

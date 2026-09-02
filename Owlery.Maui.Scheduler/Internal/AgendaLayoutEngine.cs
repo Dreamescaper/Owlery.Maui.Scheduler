@@ -76,15 +76,33 @@ internal static class AgendaLayoutEngine
         DayOfWeek firstDayOfWeek,
         double estimatedRowHeight,
         double monthSectionHeight,
-        double weekSectionHeight)
+        double weekSectionHeight,
+        double dayGap)
     {
         var byDay = BucketByDay(items, rangeStart, rangeEnd);
 
         var rows = new List<AgendaRow>();
         var top = 0.0;
+        var gapPending = false;
 
         var month = default(DateOnly?);
         var week = default(DateOnly?);
+
+        void Add(AgendaRow row)
+        {
+            // A new group following a day is owed the space between them. Consumed here, before the
+            // first row of the next day's content — heading or appointment —, so it is never added
+            // twice and empty days in between cost nothing.
+            if (gapPending)
+            {
+                top += dayGap;
+                gapPending = false;
+            }
+
+            row.Top = top;
+            rows.Add(row);
+            top += row.Height;
+        }
 
         for (var date = rangeStart; date <= rangeEnd; date = date.AddDays(1))
         {
@@ -94,37 +112,58 @@ internal static class AgendaLayoutEngine
             if (month != monthStart)
             {
                 month = monthStart;
-                rows.Add(Section(AgendaRowKind.MonthSection, monthStart, ref top, monthSectionHeight));
+                Add(new AgendaRow
+                {
+                    Kind = AgendaRowKind.MonthSection,
+                    Date = monthStart,
+                    DayCount = CountAppointments(byDay, monthStart, monthStart.AddMonths(1).AddDays(-1)),
+                    Height = monthSectionHeight,
+                    Measured = true
+                });
             }
 
             if (!byDay.TryGetValue(date, out var appointments))
                 continue;
 
-            // A week heading only earns its place once something in that week does. Tracking the
-            // week across the loop rather than per day is what stops a week that straddles a month
-            // boundary being announced twice.
+            // A week heading describes a whole week, so only a week lying entirely inside the loaded
+            // range earns one. A week straddling the range's edge has days the control has not loaded
+            // — Monday and Tuesday before the range, say — and would advertise them, then have the
+            // content shift up when they arrive. Tracking the week across the loop rather than per day
+            // is what stops a week that straddles a month boundary being announced twice. (A week is
+            // still skipped when it has nothing in it, by the check above.)
             var weekStart = StartOfWeek(date, firstDayOfWeek);
             if (week != weekStart)
             {
                 week = weekStart;
-                rows.Add(Section(AgendaRowKind.WeekSection, weekStart, ref top, weekSectionHeight));
+
+                if (weekStart >= rangeStart && weekStart.AddDays(6) <= rangeEnd)
+                {
+                    Add(new AgendaRow
+                    {
+                        Kind = AgendaRowKind.WeekSection,
+                        Date = weekStart,
+                        DayCount = CountAppointments(byDay, weekStart, weekStart.AddDays(6)),
+                        Height = weekSectionHeight,
+                        Measured = true
+                    });
+                }
             }
 
             for (var i = 0; i < appointments.Count; i++)
             {
-                rows.Add(new AgendaRow
+                Add(new AgendaRow
                 {
                     Kind = AgendaRowKind.Appointment,
                     Date = date,
                     Appointment = appointments[i],
                     StartsDay = i == 0,
                     DayCount = appointments.Count,
-                    Top = top,
                     Height = estimatedRowHeight
                 });
-
-                top += estimatedRowHeight;
             }
+
+            // The day's rows are done; the next day's group is owed this much space between them.
+            gapPending = true;
         }
 
         for (var i = 0; i < rows.Count; i++)
@@ -137,17 +176,38 @@ internal static class AgendaLayoutEngine
     /// Rewrites every offset from <paramref name="from"/> down, after a row changed height.
     /// </summary>
     /// <returns>The new total height.</returns>
-    public static double Reflow(IReadOnlyList<AgendaRow> rows, int from)
+    public static double Reflow(IReadOnlyList<AgendaRow> rows, int from, double dayGap)
     {
         var top = from > 0 ? rows[from - 1].Bottom : 0;
+
+        // The row before the reflow point may have closed a day, and the gap that followed it is
+        // still owed to what comes next.
+        if (from > 0 && ClosesDay(rows, from - 1))
+            top += dayGap;
 
         for (var i = from; i < rows.Count; i++)
         {
             rows[i].Top = top;
             top += rows[i].Height;
+
+            if (ClosesDay(rows, i))
+                top += dayGap;
         }
 
         return top;
+    }
+
+    /// <summary>Whether a row is the last the day has, and so is followed by the day gap.</summary>
+    private static bool ClosesDay(IReadOnlyList<AgendaRow> rows, int index)
+    {
+        if (rows[index].Kind is not AgendaRowKind.Appointment)
+            return false;
+
+        var next = index + 1;
+
+        return next < rows.Count
+            && (rows[next].Kind is not AgendaRowKind.Appointment
+            || rows[next].Date != rows[index].Date);
     }
 
     /// <summary>The first row whose bottom edge is past <paramref name="y"/>, or the row count.</summary>
@@ -173,12 +233,20 @@ internal static class AgendaLayoutEngine
         return low;
     }
 
-    private static AgendaRow Section(AgendaRowKind kind, DateOnly date, ref double top, double height)
+    private static int CountAppointments(
+        IReadOnlyDictionary<DateOnly, List<ISchedulerAppointment>> byDay,
+        DateOnly from,
+        DateOnly to)
     {
-        var row = new AgendaRow { Kind = kind, Date = date, Top = top, Height = height, Measured = true };
-        top += height;
+        var count = 0;
 
-        return row;
+        for (var date = from; date <= to; date = date.AddDays(1))
+        {
+            if (byDay.TryGetValue(date, out var appointments))
+                count += appointments.Count;
+        }
+
+        return count;
     }
 
     /// <summary>
