@@ -136,6 +136,10 @@ public partial class SchedulerView : ContentView
     private bool repopulateQueued;
     private bool constructed;
 
+    /// <summary>Whatever <see cref="ItemsSource"/> we currently hold a subscription to, if any.</summary>
+    private INotifyCollectionChanged? subscribedItems;
+    private bool unloaded;
+
     /// <summary>How deep the current populate pass has re-run itself after a height correction.</summary>
     private int agendaMeasurePasses;
     private double lastAgendaObservedTop;
@@ -437,6 +441,12 @@ public partial class SchedulerView : ContentView
 
     private void OnLoaded(object? sender, EventArgs e)
     {
+        unloaded = false;
+        SyncItemsSubscription();
+
+        // The collection may have been changed while we were detached from it.
+        QueueRepopulate();
+
         ConfigurePlatformScrolling();
 
         currentTimeTimer = Dispatcher.CreateTimer();
@@ -460,6 +470,9 @@ public partial class SchedulerView : ContentView
 
     private void OnUnloaded(object? sender, EventArgs e)
     {
+        unloaded = true;
+        SyncItemsSubscription();
+
         currentTimeTimer?.Stop();
         currentTimeTimer = null;
         longPressTimer?.Stop();

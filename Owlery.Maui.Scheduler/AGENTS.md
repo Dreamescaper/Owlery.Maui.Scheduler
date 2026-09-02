@@ -126,6 +126,16 @@ cited design section first; `docs/design/README.md` maps every § to its file.
   no time-zone conversion. Do not add any.
 - **Cancellable events are read synchronously.** `Cancel` is checked the moment the handler returns,
   so it cannot be set after an `await`.
+- **The control refers to `INotifyCollectionChanged`, never a concrete collection type** (§9).
+  `ItemsSource` stays `IEnumerable<ISchedulerAppointment>`; `SchedulerAppointmentCollection<T>` is a
+  convenience for hosts, not a dependency of the control. `INotifyCollectionChanged` is optional: a
+  host may hand over a plain enumerable and get the same rendering, minus live mutation. Do not add a
+  cast or a `using` of the collection type anywhere in the control.
+- **The `ItemsSource` subscription lives as long as the view is loaded, not as long as the property**
+  (§9). It is dropped on `Unloaded` and taken again on `Loaded`, because hosts are told to keep one
+  long-lived collection and a subscription is a reference from that collection back to the view.
+  `SyncItemsSubscription` is the single place that attaches or detaches; do not subscribe anywhere
+  else.
 
 ## Blazor Bindings
 
@@ -139,6 +149,8 @@ cited design section first; `docs/design/README.md` maps every § to its file.
   consumer gets — `GenerateDocumentationFile` is on for that reason.
 - Regenerating is a downstream step, never a design input. What the generator makes convenient has no
   bearing on what the public surface should be — see *What This Project Is*.
+- `SchedulerAppointmentCollection<T>` is part of the public surface too, so adding to it is a
+  consumer-side regeneration like any other member.
 
 ## File Layout
 
@@ -191,9 +203,10 @@ Everything here was learned by measuring this control, usually after guessing wr
   `ItemsSource` changes into one rebuild on the next tick. The repopulate calls a drag makes are how
   the gesture puts the pages back and must stay synchronous.
 - **Watch for work that scales with the host's data rather than the screen.** Each `PopulateSlot` runs
-  the layout over the whole `ItemsSource`, and `Resolve` scans it per interaction. Fine today; the
-  thing to check when a range widens, as it did when month view took prefetch from three weeks to four
-  months.
+  the layout over the whole `ItemsSource`, and `Resolve` scans it per interaction. Measured at up to
+  60,000 loaded appointments and left alone deliberately — the off-page rejection is the cheap half of
+  the scan, so a date index buys about a quarter of a repopulate; §15 has the numbers and the
+  reasoning. Re-measure rather than re-argue if a range widens again.
 - **Cache anything that crosses into Java.** `Context.Resources.DisplayMetrics.Density` was being read
   on every scroll frame.
 

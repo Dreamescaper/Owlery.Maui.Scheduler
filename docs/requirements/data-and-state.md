@@ -65,3 +65,21 @@ time in the calendar's declared time zone.
 
 **DAT-16** The view performs no time-zone conversion. Converting to and from whatever the host stores
 happens at the host's boundary, in one place.
+
+## Changing the collection
+
+**DAT-17** A host may update an already-assigned appointment collection in place, and the view observes
+the change and repaints. The host does not have to assign a new collection instance every time its data
+changes.
+
+**DAT-18** Observing in-place changes is optional. A host may also assign a fresh collection instance,
+which refreshes the view just the same. Either style is supported; neither is required.
+
+**DAT-19** The host is not expected to trim the collection for periods the view is not showing. The view
+selects the visible period itself, so a host may keep the whole loaded range — including the months
+either side of the visible one — in the collection at once.
+
+**DAT-20** A host that mutates in bulk should do so with a range operation, so a bulk change costs one
+change notification rather than one per item. The view reads the changed collection as a whole, so the
+single event is sufficient for it; the event still reports which items were added, removed or replaced,
+for any other consumer of the same collection.

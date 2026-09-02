@@ -30,9 +30,10 @@ not 10.0.20, not 10.0.90, not 11.0 preview. An explicit attribute wins over any 
 lookup, so this stays correct in the meantime; it only stops being necessary.
 
 **Open for discussion:** whether an in-place change to `WorkingDays` should be observed, the way
-`ItemsSource` honours `INotifyCollectionChanged`. Only replacement is honoured today. That is not a
-settled decision — it stands until someone weighs it properly, and the API may change if observation
-turns out to read better.
+`ItemsSource` honours `INotifyCollectionChanged` (§9). `WorkingDays` honours only replacement today —
+mutating the assigned collection changes nothing until it is assigned again. That is not a settled
+decision; it stands until someone weighs it properly, and the API may change if observation turns out
+to read better.
 
 Colours are individual bindable properties rather than a nested palette. That lets ordinary MAUI
 styles and `AppThemeBinding` provide themes, keeps each value discoverable, and avoids subscribing to

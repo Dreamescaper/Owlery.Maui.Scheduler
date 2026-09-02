@@ -8,7 +8,44 @@ The control does not fetch anything. It exposes:
 
 - `ItemsSource` — a flat collection of `ISchedulerAppointment`, covering as wide a range as the host
   likes. The control picks out what belongs to the active surface. `INotifyCollectionChanged` is
-  honoured; assigning a new collection instance also works, and is what the page does.
+  honoured, so the host can keep one collection and change it in place; assigning a new collection
+  instance also works, and is what the page does today. The control filters the visible period itself,
+  so the host keeps the whole loaded range and never trims it for periods that scrolled off screen.
+  A bulk change is best made through a range operation — `SchedulerAppointmentCollection<T>` adds
+  them, because the framework's `ObservableCollection` deliberately does not
+  (<https://github.com/dotnet/runtime/issues/18087>) — so a month of appointments changed costs one
+  notification instead of one per item. The control treats any change notification as "re-read the
+  collection and repopulate the window", coalescing bursts into one rebuild, so a range method's
+  single event is all it needs.
+
+  Those range events carry their payload — `Add`, `Remove` or `Replace` with the items and the index
+  — even though the control does not read it. The collection is public, so it is not only the
+  scheduler's consumer: the same instance may be bound to a list elsewhere, and a notification that
+  says what changed is worth more there than one that says only "something did". Where a single
+  notification cannot describe the change faithfully the action is `Reset`, and there are exactly two
+  such cases, both a limit of `NotifyCollectionChangedEventArgs` rather than a choice: a multi-item
+  `Add`/`Remove` states one starting index for a run, so a scattered removal cannot be expressed, and
+  neither can a replacement of a different length than the range it replaces, which is a removal and
+  an addition at once. Reporting `Reset` there is the honest answer; a payload with an index the
+  items were never at is not.
+
+  Per-item incremental *rendering* remains out of scope, and the payload does not open it up.
+  Appointments in a day are packed into overlap clusters (§10), so one added item changes the width
+  and position of everything it overlaps, transitively — and the agenda is a measured row table where
+  an inserted row shifts every row below it. There is no such thing as redrawing only the item that
+  arrived. What would look like the saving is already taken: `PopulateSlot` reconciles by
+  `ISchedulerAppointment.Key`, reusing views rather than rebuilding them, and rebinding writes only
+  the values that actually differ, so an untouched appointment costs a lookup and two comparisons.
+  Deriving the delta from identity rather than trusting an event's payload is also what lets it
+  survive a host rebuilding its collection mid-gesture.
+
+  The subscription lasts as long as the view is loaded, not as long as the property is set: it is
+  dropped on `Unloaded` and taken again on `Loaded`. Telling hosts to keep one long-lived collection
+  means the collection routinely outlives the view drawing it, and a subscription is a reference from
+  the collection back to the view — so a view that never let go would be held alive by data it no
+  longer draws, for as long as the host holds it. Nothing is lost by letting go: the collection is
+  read afresh on every repopulate, so a change made while the view was away arrives with the rebuild
+  that follows its reload.
 - `VisibleDatesChanged` — raised whenever the active period changes, carrying the dates the surface
   exposes plus its prefetch range. A timeline reports its day columns and three pages, a month its 42
   cells and neighbouring grids, and an agenda its whole loaded vertical range.

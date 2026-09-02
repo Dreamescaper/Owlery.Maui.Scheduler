@@ -18,9 +18,9 @@ public sealed class SampleAppointment(int id, DateTime start, TimeSpan duration,
 
     public int Id => id;
 
-    public DateTime Start { get; private set; } = start;
+    public DateTime Start { get; } = start;
 
-    public TimeSpan Duration { get; private set; } = duration;
+    public TimeSpan Duration { get; } = duration;
 
     public DateTime End => Start + Duration;
 
@@ -39,8 +39,16 @@ public sealed class SampleAppointment(int id, DateTime start, TimeSpan duration,
     public bool IsLocked => isLocked;
 
     /// <summary>
-    /// Moves the appointment, keeping its length. The control does not mutate the host's model on a
-    /// drop; it reports the drop and waits for the host to re-emit <c>ItemsSource</c>.
+    /// Returns a new appointment at <paramref name="newStart"/>, keeping its identity, length and
+    /// stable fields.
     /// </summary>
-    public void MoveTo(DateTime newStart) => Start = newStart;
+    /// <remarks>
+    /// A move is a change, and a changed appointment must arrive as a new instance rather than being
+    /// mutated in place — mutating one changes nothing the control can see until it re-reads the
+    /// collection, which is the one habit <c>docs/API.md</c> warns about. Because <see cref="Key"/>
+    /// is unchanged, the control reconciles the new instance onto the same view instead of building a
+    /// fresh one.
+    /// </remarks>
+    public SampleAppointment MovedTo(DateTime newStart) =>
+        new(Id, newStart, Duration, subject, Person, Palette, IsLocked);
 }

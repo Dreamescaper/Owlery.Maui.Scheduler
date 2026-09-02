@@ -59,6 +59,7 @@ internal sealed class SchedulerHarness
     /// <summary>Every scroll the control asked the pager for, in order.</summary>
     public List<(double ScrollX, bool Animated)> PagerScrolls { get; } = [];
 
+    private readonly ContentPage page;
     private readonly PagingScrollView pagerScroll;
     private readonly ScrollView timelineScroll;
     private readonly List<Action> pendingScrollCompletions = [];
@@ -108,7 +109,7 @@ internal sealed class SchedulerHarness
         Scheduler.TimeGutterTapped += (_, e) => GutterTaps.Add(e);
         Scheduler.AppointmentDropTargetChanged += (_, e) => DropTargetChanges.Add(e);
 
-        application.Windows[0].Page = new ContentPage { Content = Scheduler };
+        application.Windows[0].Page = page = new ContentPage { Content = Scheduler };
 
         foreach (var scrollView in Descendants(Scheduler).OfType<ScrollView>())
             ShimScrolling(scrollView);
@@ -214,6 +215,19 @@ internal sealed class SchedulerHarness
     /// <c>SetScrolledPosition</c> is MAUI's handler-to-virtual-view path and raises <c>Scrolled</c>,
     /// just as the platform handler does after a gesture.
     /// </remarks>
+    /// <summary>
+    /// Takes the control off its page and puts it back, which is what a host navigating away and
+    /// back does — and the only way to reach <c>Loaded</c>/<c>Unloaded</c> without a platform.
+    /// </summary>
+    /// <remarks>
+    /// Leaving the visual tree is the real event, not a simulated one: MAUI raises <c>Unloaded</c>
+    /// and <c>IsLoaded</c> goes false, exactly as on a device. Nothing else about the control is
+    /// reset, so the same harness keeps working across the round trip.
+    /// </remarks>
+    public void DetachFromWindow() => page.Content = null;
+
+    public void ReattachToWindow() => page.Content = Scheduler;
+
     public void ScrollVerticallyTo(double y)
     {
         timelineScroll.SetScrolledPosition(0, y);

@@ -735,14 +735,43 @@ public partial class SchedulerView
     {
         var view = (SchedulerView)bindable;
 
-        if (oldValue is INotifyCollectionChanged oldCollection)
-            oldCollection.CollectionChanged -= view.OnItemsCollectionChanged;
-
-        if (newValue is INotifyCollectionChanged newCollection)
-            newCollection.CollectionChanged += view.OnItemsCollectionChanged;
-
+        view.SyncItemsSubscription();
         view.agendaSurface.Invalidate();
         view.QueueRepopulate();
+    }
+
+    /// <summary>
+    /// Subscribes to the current <see cref="ItemsSource"/>'s change notifications, or to nothing
+    /// while the view is unloaded.
+    /// </summary>
+    /// <remarks>
+    /// A subscription is a reference from the host's collection back to this view, and hosts are
+    /// told to keep one long-lived collection and change it in place rather than re-assigning — so
+    /// the collection routinely outlives the view showing it, and a view that never let go would be
+    /// held alive by data it no longer draws. That is why the subscription follows
+    /// <c>Loaded</c>/<c>Unloaded</c> rather than lasting as long as the property does. Nothing is
+    /// lost by detaching: the collection is read afresh on every repopulate, so a change made while
+    /// the view was away is picked up by the rebuild that follows its reload.
+    /// <para>
+    /// Idempotent, and safe to call for its own sake — MAUI raises <c>Loaded</c> and <c>Unloaded</c>
+    /// more than once on some platforms, and re-assigning the same collection must not subscribe to
+    /// it twice.
+    /// </para>
+    /// </remarks>
+    private void SyncItemsSubscription()
+    {
+        var target = unloaded ? null : ItemsSource as INotifyCollectionChanged;
+
+        if (ReferenceEquals(target, subscribedItems))
+            return;
+
+        if (subscribedItems is not null)
+            subscribedItems.CollectionChanged -= OnItemsCollectionChanged;
+
+        subscribedItems = target;
+
+        if (subscribedItems is not null)
+            subscribedItems.CollectionChanged += OnItemsCollectionChanged;
     }
 
     private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)

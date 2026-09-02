@@ -35,6 +35,32 @@ scroll update. Reconciliation remained the managed hotspot; the roughly 17 ms fr
 overlapping jank results show that rendering/frame scheduling, not row measurement, sets perceived
 smoothness in this workload.
 
+The cost of laying out from the whole `ItemsSource` has been measured, headlessly, to answer whether
+the per-slot scan should be replaced by a date index now that hosts are told to keep everything loaded
+(§9). On an M-series Mac in Release, per call, fastest of forty:
+
+| Items loaded | On the week page | Timeline layout | …pre-filtered to the page | Month grid | …pre-filtered | Agenda, 6-month range |
+|---|---|---|---|---|---|---|
+| 4,800 (200/mo × 24) | 36 | 0.036 ms | 0.008 ms | 0.058 ms | 0.036 ms | 0.222 ms |
+| 12,000 (1,000/mo × 12) | 217 | 0.077 ms | 0.039 ms | 0.147 ms | 0.132 ms | 0.720 ms |
+| 60,000 (5,000/mo × 12) | 1,117 | 0.306 ms | 0.196 ms | 0.821 ms | 0.713 ms | 1.630 ms |
+
+A whole repopulate — three slots laid out, then every view on the page reconciled, rebound and
+positioned — cost 0.27 ms at 4,800 items, 1.00 ms at 12,000 and 4.75 ms at 60,000, of which the layout
+was 58%, 38% and 38% respectively.
+
+**The index was not built, and the measurement is why.** Pre-filtering to the page is the ceiling of
+what a date index could deliver, and it removes a third to a half of the layout — a quarter of a
+repopulate at worst, on an operation that is coalesced to one per tick and never runs during a drag.
+The reason the saving is small is that the rejection is the cheap half: two subtractions and a
+comparison per off-page item. What costs is bucketing, sorting and cluster-packing the items that are
+genuinely on the page, and at 5,000 a month a single week page holds 1,117 of them — work no index can
+remove, for a page no one would want to look at. Revisit only if a real host reports a problem, and
+note that at that scale the view reconciliation, not the scan, is the larger share.
+
+Not covered by this: it is a desktop measurement, not a device one. A phone would be some multiple
+slower, and that multiple has not been measured.
+
 Rendering, paging, week rotation, overlap layout, the current-time line and appointment semantics have
 also been checked on the iOS simulator through DevFlow.
 

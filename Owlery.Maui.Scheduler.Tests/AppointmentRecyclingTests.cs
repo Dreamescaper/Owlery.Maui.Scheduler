@@ -117,6 +117,43 @@ public class AppointmentRecyclingTests
     }
 
     [Test]
+    public void An_unloaded_view_stops_watching_the_collection()
+    {
+        // A host is told to keep one long-lived collection and change it in place, so the collection
+        // outlives the view drawing it — and the subscription is a reference from the collection back
+        // to the view. Held past Unloaded, it keeps a discarded view alive for as long as the host
+        // holds its data.
+        var items = new ObservableCollection<ISchedulerAppointment>();
+        var harness = new SchedulerHarness(Week, items);
+
+        harness.DetachFromWindow();
+        harness.Dispatcher.DeferDispatch = true;
+
+        items.Add(TestAppointment.At(Week.AddDays(1), "10:00", 1));
+
+        Assert.That(harness.Dispatcher.PendingDispatches, Is.Empty, "nothing is listening while unloaded");
+    }
+
+    [Test]
+    public void A_reloaded_view_watches_again_and_catches_up_on_what_it_missed()
+    {
+        // Detaching is only safe because nothing is lost by it: the collection is read afresh on
+        // every repopulate, so whatever changed while the view was away arrives with the reload.
+        var items = new ObservableCollection<ISchedulerAppointment>();
+        var harness = new SchedulerHarness(Week, items);
+
+        harness.DetachFromWindow();
+        items.Add(TestAppointment.At(Week.AddDays(1), "10:00", 1));
+        harness.ReattachToWindow();
+
+        Assert.That(harness.CentrePageAppointments, Has.Count.EqualTo(1), "the change made while away");
+
+        items.Add(TestAppointment.At(Week.AddDays(2), "12:00", 1));
+
+        Assert.That(harness.CentrePageAppointments, Has.Count.EqualTo(2), "and it is watching again");
+    }
+
+    [Test]
     public void A_duplicate_key_on_one_page_does_not_strand_a_view()
     {
         // Two appointments sharing a key within a period is out of contract, but the reconciliation

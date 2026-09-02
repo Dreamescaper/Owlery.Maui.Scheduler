@@ -110,6 +110,41 @@ public class SchedulerViewTests
     }
 
     [Test]
+    public void Mutating_a_subscribed_collection_repaints_without_reassigning()
+    {
+        // The host keeps one collection and appends to it; the control observes the change and
+        // repaints rather than demanding a fresh ItemsSource.
+        var appointments = new SchedulerAppointmentCollection<TestAppointment>();
+        var harness = new SchedulerHarness(Monday, appointments);
+
+        appointments.AddRange(ThreeAppointments());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.CentrePageAppointments, Has.Count.EqualTo(3));
+            Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(3));
+        });
+    }
+
+    [Test]
+    public void Range_adding_only_an_off_screen_month_does_not_show_it()
+    {
+        // The control picks out what belongs to the active surface, so the host never has to prune
+        // far-off data out of its collection. Adding a month outside the loaded window repaints but
+        // puts nothing on the centre page.
+        var appointments = new SchedulerAppointmentCollection<TestAppointment>();
+        var harness = new SchedulerHarness(Monday, appointments);
+
+        appointments.AddRange([TestAppointment.At(Monday.AddMonths(3), "09:00", 1, "off-screen")]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.CentrePageAppointments, Is.Empty);
+            Assert.That(harness.VisibleAppointments, Is.Empty);
+        });
+    }
+
+    [Test]
     public void Surplus_views_are_hidden_and_reused_rather_than_discarded()
     {
         var harness = new SchedulerHarness(Monday, ThreeAppointments());

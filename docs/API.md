@@ -23,6 +23,9 @@ Namespace: `Owlery.Maui.Scheduler`
   - [Events](#events)
   - [Methods](#methods)
 - [Contracts](#contracts)
+  - [`ISchedulerAppointment`](#ischedulerappointment)
+  - [`SchedulerTimeSlot`](#schedulertimeslot)
+  - [`SchedulerAppointmentCollection<T>`](#schedulerappointmentcollectiont)
 - [Event argument types](#event-argument-types)
 - [Using it from Blazor](#using-it-from-blazor)
 - [Behaviour worth knowing](#behaviour-worth-knowing)
@@ -121,7 +124,7 @@ In `Agenda`:
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `ItemsSource` | `IEnumerable<ISchedulerAppointment>?` | `null` | Every appointment the host has loaded, across as many weeks as it likes. The control selects what belongs to each rendered week. Honours `INotifyCollectionChanged`; assigning a new collection instance also refreshes. |
+| `ItemsSource` | `IEnumerable<ISchedulerAppointment>?` | `null` | Every appointment the host has loaded, across as many weeks as it likes. The control selects what belongs to each rendered week. Honours `INotifyCollectionChanged` — an in-place change refreshes, as does assigning a new collection instance. The control filters the visible period itself, so keep the whole loaded range in one collection and change it in place; `SchedulerAppointmentCollection<T>` adds the range methods for doing that in one event. |
 | `AppointmentTemplate` | `DataTemplate?` | `null` | Template for one appointment box. Its binding context is the `ISchedulerAppointment`. The grid still draws without it, but no appointments appear. |
 | `MonthAppointmentTemplate` | `DataTemplate?` | `null` | Template for one appointment chip in a month cell. Falls back to `AppointmentTemplate` when not set — which renders, but rarely reads well: a chip is one line about 16 units tall, not a box sized by its duration. |
 | `AgendaAppointmentTemplate` | `DataTemplate?` | `null` | Template for one content-sized agenda row. Falls back to `AppointmentTemplate` when not set. |
@@ -395,6 +398,58 @@ public readonly record struct SchedulerTimeSlot(DateTime Start, TimeSpan Duratio
 | `End` | `DateTime` | `Start + Duration`. |
 | `Date` | `DateOnly` | Calendar day the slot falls on. |
 
+### `SchedulerAppointmentCollection<T>`
+
+An observable appointments collection with range methods, so a host can mutate its data in bulk.
+Optional: it is a convenience for keeping one collection and changing it in place, not a requirement.
+`ItemsSource` accepts any `IEnumerable<ISchedulerAppointment>`, with or without change notification.
+`T` is your own appointment type — any class implementing `ISchedulerAppointment`.
+
+```csharp
+public class SchedulerAppointmentCollection<T> : ObservableCollection<T>
+    where T : class, ISchedulerAppointment
+{
+    public SchedulerAppointmentCollection();
+    public SchedulerAppointmentCollection(IEnumerable<T> items);
+
+    public void AddRange(IEnumerable<T> items);
+    public void RemoveRange(IEnumerable<T> items);
+    public void RemoveRange(int index, int count);
+    public void ReplaceRange(int index, int count, IEnumerable<T> items);
+}
+```
+
+| Member | Raises one | Carrying |
+|---|---|---|
+| `AddRange` | `Add` | the appended items, from the index the first landed on |
+| `RemoveRange(IEnumerable<T>)` | `Remove`, or `Reset` when the items did not sit together | the removed items and where the run began |
+| `RemoveRange(int, int)` | `Remove` | the removed items and `index` |
+| `ReplaceRange(int, int, IEnumerable<T>)` | `Replace`, or `Add`/`Remove` when one side is empty, or `Reset` when the lengths differ | the new and old items and `index` |
+
+The framework's `ObservableCollection<T>` deliberately has no range methods
+(see <https://github.com/dotnet/runtime/issues/18087>), so adding a month of appointments means one
+event per appointment, and a host loading several months pays hundreds of events. This collection's
+range methods change a whole range and raise a single event for it. Keep everything you have loaded
+in one instance and append with `AddRange` rather than rebuilding and re-assigning `ItemsSource`. To
+reload everything at once, `ReplaceRange(0, Count, everything)` is the one-event way to do it.
+
+**The event says what changed.** Each range method reports the precise action, with `NewItems`,
+`OldItems` and the starting index, for every change a single notification can describe. Some cannot
+be described by one: `NotifyCollectionChangedEventArgs` states a multi-item add or remove as a run of
+items from a single index, so a scattered removal — or a replacement of a different length than the
+range it replaces — has no faithful single-event form. Those report `Reset`, meaning "re-read the
+collection", rather than a payload that would put items in the wrong place. Handle `Reset` whatever
+you do with the payloads; a plain `Clear()` raises one too.
+
+The scheduler itself reads no payload — it repopulates on any change and coalesces bursts, which is
+why a `Reset` costs it nothing. The payloads are for your other consumers: the same collection bound
+to a list elsewhere, or your own diagnostics.
+
+Null sources throw `ArgumentNullException`, a range that changes nothing raises nothing, and an
+out-of-range `index`/`count` throws as `List<T>` would. `RemoveRange(IEnumerable<T>)` matches items
+with `EqualityComparer<T>.Default`, **not** by `ISchedulerAppointment.Key` — so pass the instance
+that is in the collection, not the new one you built to replace it.
+
 ---
 
 ## Event argument types
@@ -552,6 +607,17 @@ Regenerate with `dotnet generate-maui-blazor-components` after changing the cont
 ---
 
 ## Behaviour worth knowing
+
+**Keep everything loaded; the control filters.** `ItemsSource` may hold any span the host likes — the
+control picks out what belongs to each rendered week, month or agenda window. Do not trim the collection
+when a period scrolls off screen: keep the whole loaded range in one collection and change it in place.
+`SchedulerAppointmentCollection<T>` is the easiest way to do a bulk change in one event; the framework's
+`ObservableCollection<T>` has no range methods, so without it a bulk change is one event per item.
+
+The control watches your collection only while it is loaded — it unsubscribes on `Unloaded` and
+subscribes again on `Loaded`, so a collection that outlives the view does not keep the view alive.
+Nothing is missed by that: the collection is read again on reload, so changes made while the view was
+off screen show up when it comes back.
 
 **Time zones are yours to handle.** Every `DateTime` crossing this API — `ISchedulerAppointment.Start`,
 `SchedulerTimeSlot.Start`, `AppointmentDropped.DropStart`, `VisibleDatesChanged` — is wall-clock in
