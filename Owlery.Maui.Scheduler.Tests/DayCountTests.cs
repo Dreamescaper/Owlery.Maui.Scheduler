@@ -45,7 +45,7 @@ public class DayCountTests
         // starting on the day asked for is what puts today in the leading column.
         var harness = new SchedulerHarness(Wednesday, OneEachDay(), days);
 
-        Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0], Is.EqualTo(Wednesday));
+        Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0].WallClock, Is.EqualTo(Wednesday));
     }
 
     [Test]
@@ -53,7 +53,7 @@ public class DayCountTests
     {
         var harness = new SchedulerHarness(Wednesday, OneEachDay());
 
-        Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0], Is.EqualTo(Monday));
+        Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0].WallClock, Is.EqualTo(Monday));
     }
 
     [TestCase(1)]
@@ -78,8 +78,8 @@ public class DayCountTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(report.PrefetchFrom, Is.EqualTo(Monday.AddDays(-days)));
-            Assert.That(report.PrefetchTo.Date, Is.EqualTo(Monday.AddDays(days * 2 - 1)));
+            Assert.That(report.PrefetchFrom.WallClock, Is.EqualTo(Monday.AddDays(-days)));
+            Assert.That(report.PrefetchTo.WallClock.Date, Is.EqualTo(Monday.AddDays(days * 2 - 1)));
         });
     }
 
@@ -90,7 +90,7 @@ public class DayCountTests
 
         harness.Tap(harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:00")));
 
-        Assert.That(harness.CellTaps[0].Slot.Start, Is.EqualTo(Monday.AddDays(2).AddHours(10)));
+        Assert.That(harness.CellTaps[0].Slot.Start.WallClock, Is.EqualTo(Monday.AddDays(2).AddHours(10)));
     }
 
     [Test]
@@ -102,7 +102,7 @@ public class DayCountTests
         var from = harness.PointAt(CentreSlot, 0, TimeSpan.Parse("10:30"));
         harness.LongPressDrag(from.X, from.Y, from.X + harness.ColumnWidth, from.Y);
 
-        Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(1).AddHours(10)));
+        Assert.That(harness.Drops[0].DropStart.WallClock, Is.EqualTo(Monday.AddDays(1).AddHours(10)));
     }
 
     [Test]
@@ -110,11 +110,11 @@ public class DayCountTests
     {
         var harness = new SchedulerHarness(Wednesday, OneEachDay(), 3);
 
-        Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0], Is.EqualTo(Wednesday));
+        Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0].WallClock, Is.EqualTo(Wednesday));
 
         harness.Scheduler.VisibleDays = 7;
 
-        var dates = harness.VisibleDatesReports.Last().VisibleDates;
+        var dates = harness.VisibleDatesReports.Last().VisibleDates.Select(date => date.WallClock).ToList();
 
         Assert.Multiple(() =>
         {

@@ -14,7 +14,7 @@ public class MonthLayoutEngineTests
     private sealed record LaidOut(IReadOnlyList<MonthPlacement> Placements, IReadOnlyList<int> OverflowByCell);
 
     private static LaidOut Layout(params ISchedulerAppointment[] appointments)
-        => Typed(MonthLayoutEngine.Layout(appointments, GridStart, LinesPerCell));
+        => Typed(MonthLayoutEngine.Layout(appointments, GridStart, LinesPerCell, TimeZoneInfo.Local));
 
     private static LaidOut Typed(MonthPageLayout layout)
         => new([.. layout.Placements.Cast<MonthPlacement>()], layout.OverflowByCell);
@@ -125,7 +125,8 @@ public class MonthLayoutEngineTests
                 TestAppointment.At(Cell(5), "13:00", 1, "middle")
             ],
             GridStart,
-            linesPerCell: 2));
+            linesPerCell: 2,
+            TimeZoneInfo.Local));
 
         Assert.Multiple(() =>
         {
@@ -140,7 +141,8 @@ public class MonthLayoutEngineTests
         var result = Typed(MonthLayoutEngine.Layout(
             [TestAppointment.At(Cell(5), "09:00", 1), TestAppointment.At(Cell(5), "11:00", 1)],
             GridStart,
-            linesPerCell: 0));
+            linesPerCell: 0,
+            TimeZoneInfo.Local));
 
         Assert.Multiple(() =>
         {

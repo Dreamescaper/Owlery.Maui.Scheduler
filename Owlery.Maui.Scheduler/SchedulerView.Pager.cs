@@ -239,9 +239,9 @@ public partial class SchedulerView
         lastVisibleDatesReport = key;
 
         VisibleDatesChanged?.Invoke(this, new SchedulerVisibleDatesChangedEventArgs(
-            visible,
-            first.ToDateTime(TimeOnly.MinValue),
-            last.ToDateTime(TimeOnly.MaxValue)));
+            [.. visible.Select(Moment)],
+            Moment(first.ToDateTime(TimeOnly.MinValue)),
+            Moment(last.ToDateTime(TimeOnly.MaxValue))));
     }
 
     private void SyncDisplayDate()

@@ -171,8 +171,8 @@ public class SchedulerAgendaViewTests
         Assert.Multiple(() =>
         {
             Assert.That(report.VisibleDates, Has.Count.GreaterThan(31));
-            Assert.That(report.PrefetchFrom.Date, Is.EqualTo(report.VisibleDates[0].Date));
-            Assert.That(report.PrefetchTo.Date, Is.EqualTo(report.VisibleDates[^1].Date));
+            Assert.That(report.PrefetchFrom.WallClock.Date, Is.EqualTo(report.VisibleDates[0].WallClock.Date));
+            Assert.That(report.PrefetchTo.WallClock.Date, Is.EqualTo(report.VisibleDates[^1].WallClock.Date));
         });
     }
 
@@ -350,8 +350,8 @@ public class SchedulerAgendaViewTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(after.PrefetchFrom, Is.EqualTo(before.PrefetchFrom));
-            Assert.That(after.PrefetchTo, Is.GreaterThan(before.PrefetchTo));
+            Assert.That(after.PrefetchFrom.WallClock, Is.EqualTo(before.PrefetchFrom.WallClock));
+            Assert.That(after.PrefetchTo.WallClock, Is.GreaterThan(before.PrefetchTo.WallClock));
             Assert.That(after.VisibleDates.Count, Is.GreaterThan(before.VisibleDates.Count));
         });
     }
@@ -370,8 +370,8 @@ public class SchedulerAgendaViewTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(after.PrefetchFrom, Is.LessThan(before.PrefetchFrom));
-            Assert.That(after.PrefetchTo, Is.EqualTo(before.PrefetchTo));
+            Assert.That(after.PrefetchFrom.WallClock, Is.LessThan(before.PrefetchFrom.WallClock));
+            Assert.That(after.PrefetchTo.WallClock, Is.EqualTo(before.PrefetchTo.WallClock));
 
             // Asking for the month lays nothing out, so the reader is exactly where they were. The
             // offset moves when the host answers, which is what the sibling test covers.
@@ -486,8 +486,8 @@ public class SchedulerAgendaViewTests
         Assert.Multiple(() =>
         {
             Assert.That(harness.VisibleDatesReports, Has.Count.EqualTo(reportsBefore + 1));
-            Assert.That(after.PrefetchTo, Is.GreaterThan(before.PrefetchTo));
-            Assert.That((after.PrefetchTo - before.PrefetchTo).TotalDays, Is.LessThanOrEqualTo(31));
+            Assert.That(after.PrefetchTo.WallClock, Is.GreaterThan(before.PrefetchTo.WallClock));
+            Assert.That((after.PrefetchTo.WallClock - before.PrefetchTo.WallClock).TotalDays, Is.LessThanOrEqualTo(31));
         });
     }
 
@@ -505,7 +505,7 @@ public class SchedulerAgendaViewTests
         harness.Scheduler.ItemsSource = items.ToList();
         harness.ScrollVerticallyTo(harness.SurfaceRequestedHeight + 1);
 
-        Assert.That(harness.VisibleDatesReports.Last().PrefetchTo, Is.GreaterThan(afterFirst.PrefetchTo));
+        Assert.That(harness.VisibleDatesReports.Last().PrefetchTo.WallClock, Is.GreaterThan(afterFirst.PrefetchTo.WallClock));
     }
 
     /// <summary>
@@ -524,7 +524,7 @@ public class SchedulerAgendaViewTests
         harness.ScrollVerticallyTo(4);
         harness.FireAgendaBackwardGrowTimer();
 
-        Assert.That(harness.VisibleDatesReports.Last().PrefetchFrom, Is.LessThan(before.PrefetchFrom));
+        Assert.That(harness.VisibleDatesReports.Last().PrefetchFrom.WallClock, Is.LessThan(before.PrefetchFrom.WallClock));
     }
 
     /// <summary>Leaving the top really does cancel it, which is the half that must keep working.</summary>
@@ -541,7 +541,7 @@ public class SchedulerAgendaViewTests
         harness.ScrollVerticallyTo(2000);
         harness.FireAgendaBackwardGrowTimer();
 
-        Assert.That(harness.VisibleDatesReports.Last().PrefetchFrom, Is.EqualTo(before.PrefetchFrom));
+        Assert.That(harness.VisibleDatesReports.Last().PrefetchFrom.WallClock, Is.EqualTo(before.PrefetchFrom.WallClock));
     }
 
     /// <summary>
@@ -626,7 +626,7 @@ public class SchedulerAgendaViewTests
         harness.ScrollVerticallyTo(83);
         harness.FireAgendaBackwardGrowTimer();
 
-        Assert.That(harness.VisibleDatesReports.Last().PrefetchFrom, Is.EqualTo(before.PrefetchFrom),
+        Assert.That(harness.VisibleDatesReports.Last().PrefetchFrom.WallClock, Is.EqualTo(before.PrefetchFrom.WallClock),
             "the platform settling toward a requested offset is not a reader at the top");
     }
 
@@ -648,7 +648,7 @@ public class SchedulerAgendaViewTests
         harness.ScrollVerticallyTo(0);
         harness.FireAgendaBackwardGrowTimer();
 
-        Assert.That(harness.VisibleDatesReports.Last().PrefetchFrom, Is.LessThan(before.PrefetchFrom),
+        Assert.That(harness.VisibleDatesReports.Last().PrefetchFrom.WallClock, Is.LessThan(before.PrefetchFrom.WallClock),
             "after the settle window the agenda follows the reader again");
     }
 

@@ -136,6 +136,15 @@ public partial class SchedulerView : ContentView
     private bool repopulateQueued;
     private bool constructed;
 
+    /// <summary>What each view's accessibility description was last built from.</summary>
+    /// <remarks>
+    /// Cached as values rather than compared against the previously bound appointment, because the
+    /// times that go into a description are resolved into the view's zone: the same appointment
+    /// describes itself differently after <see cref="TimeZone"/> changes, and an instance comparison
+    /// cannot see that.
+    /// </remarks>
+    private readonly Dictionary<View, (DateTime Start, DateTime End, string? Subject)> describedByView = [];
+
     /// <summary>Whatever <see cref="ItemsSource"/> we currently hold a subscription to, if any.</summary>
     private INotifyCollectionChanged? subscribedItems;
     private bool unloaded;
@@ -500,6 +509,9 @@ public partial class SchedulerView : ContentView
 
     private DateTime NowInZone() => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZone);
 
+    /// <summary>Wraps a grid position for reporting, so a host can read it either way it needs to.</summary>
+    private SchedulerMoment Moment(DateTime wallClock) => new(wallClock, TimeZone);
+
     protected override void OnSizeAllocated(double width, double height)
     {
         base.OnSizeAllocated(width, height);
@@ -634,6 +646,7 @@ public partial class SchedulerView : ContentView
         var active = ActiveGeometry;
 
         active.FirstDayOfWeek = FirstDayOfWeek;
+        active.TimeZone = TimeZone;
         active.Now = NowInZone();
         active.ViewportHeight = Math.Max(0, allocatedHeight - ActiveHeaderHeight);
 

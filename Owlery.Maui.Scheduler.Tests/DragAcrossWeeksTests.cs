@@ -67,7 +67,7 @@ public class DragAcrossWeeksTests
         {
             Assert.That(harness.Drops, Has.Count.EqualTo(1));
             // Sunday of the following week, keeping the time the drag was holding.
-            Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(13).AddHours(10)));
+            Assert.That(harness.Drops[0].DropStart.WallClock, Is.EqualTo(Monday.AddDays(13).AddHours(10)));
         });
     }
 
@@ -279,7 +279,7 @@ public class DragAcrossWeeksTests
         {
             Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(Monday));
             // Still reschedulable, just never out of the week it started in.
-            Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(6).AddHours(10)));
+            Assert.That(harness.Drops[0].DropStart.WallClock, Is.EqualTo(Monday.AddDays(6).AddHours(10)));
         });
     }
 
@@ -346,7 +346,7 @@ public class DragAcrossWeeksTests
             // Handing back the object the drag started with would leave a handler mutating an orphan.
             Assert.That(harness.Drops[0].Appointment, Is.SameAs(replacement));
             Assert.That(harness.Drops[0].Appointment, Is.Not.SameAs(pickedUp));
-            Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(13).AddHours(10)));
+            Assert.That(harness.Drops[0].DropStart.WallClock, Is.EqualTo(Monday.AddDays(13).AddHours(10)));
         });
     }
 
@@ -380,7 +380,7 @@ public class DragAcrossWeeksTests
         Assert.Multiple(() =>
         {
             Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(Monday));
-            Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(2).AddHours(12)));
+            Assert.That(harness.Drops[0].DropStart.WallClock, Is.EqualTo(Monday.AddDays(2).AddHours(12)));
         });
     }
 }

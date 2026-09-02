@@ -33,21 +33,26 @@ internal sealed record MonthPageLayout(
 /// </remarks>
 internal static class MonthLayoutEngine
 {
+    /// <summary>An appointment with its times already resolved into the view's zone.</summary>
+    private readonly record struct Resolved(ISchedulerAppointment Appointment, DateTime Start, DateTime End);
+
     public static MonthPageLayout Layout(
         IEnumerable<ISchedulerAppointment> appointments,
         DateOnly gridStart,
-        int linesPerCell)
+        int linesPerCell,
+        TimeZoneInfo view)
     {
-        var buckets = new List<ISchedulerAppointment>?[MonthGeometry.CellCount];
+        var buckets = new List<Resolved>?[MonthGeometry.CellCount];
 
         foreach (var appointment in appointments)
         {
-            var cell = DateOnly.FromDateTime(appointment.Start).DayNumber - gridStart.DayNumber;
+            var start = appointment.StartIn(view);
+            var cell = DateOnly.FromDateTime(start).DayNumber - gridStart.DayNumber;
 
             if (cell < 0 || cell >= MonthGeometry.CellCount)
                 continue;
 
-            (buckets[cell] ??= []).Add(appointment);
+            (buckets[cell] ??= []).Add(new Resolved(appointment, start, appointment.EndIn(view)));
         }
 
         var placements = new List<IAppointmentPlacement>();
@@ -66,6 +71,7 @@ internal static class MonthLayoutEngine
             var ordered = bucket
                 .OrderBy(a => a.Start)
                 .ThenByDescending(a => a.End - a.Start)
+                .Select(a => a.Appointment)
                 .ToList();
 
             // Everything fits, or the last line goes to the marker and one fewer appointment shows.

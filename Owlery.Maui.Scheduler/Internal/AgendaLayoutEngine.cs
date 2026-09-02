@@ -77,9 +77,10 @@ internal static class AgendaLayoutEngine
         double estimatedRowHeight,
         double monthSectionHeight,
         double weekSectionHeight,
-        double dayGap)
+        double dayGap,
+        TimeZoneInfo view)
     {
-        var byDay = BucketByDay(items, rangeStart, rangeEnd);
+        var byDay = BucketByDay(items, rangeStart, rangeEnd, view);
 
         var rows = new List<AgendaRow>();
         var top = 0.0;
@@ -261,13 +262,16 @@ internal static class AgendaLayoutEngine
     private static Dictionary<DateOnly, List<ISchedulerAppointment>> BucketByDay(
         IEnumerable<ISchedulerAppointment> items,
         DateOnly rangeStart,
-        DateOnly rangeEnd)
+        DateOnly rangeEnd,
+        TimeZoneInfo view)
     {
         var byDay = new Dictionary<DateOnly, List<ISchedulerAppointment>>();
+        var resolved = new Dictionary<ISchedulerAppointment, (DateTime Start, DateTime End)>();
 
         foreach (var item in items)
         {
-            var date = DateOnly.FromDateTime(item.Start);
+            var start = item.StartIn(view);
+            var date = DateOnly.FromDateTime(start);
 
             if (date < rangeStart || date > rangeEnd)
                 continue;
@@ -276,6 +280,7 @@ internal static class AgendaLayoutEngine
                 byDay[date] = day = [];
 
             day.Add(item);
+            resolved[item] = (start, item.EndIn(view));
         }
 
         // OrderBy, not List.Sort: the framework's sort is not stable, and appointments starting at
@@ -284,8 +289,8 @@ internal static class AgendaLayoutEngine
         foreach (var date in byDay.Keys.ToList())
         {
             byDay[date] = [.. byDay[date]
-                .OrderBy(static a => a.Start)
-                .ThenByDescending(static a => a.End - a.Start)];
+                .OrderBy(a => resolved[a].Start)
+                .ThenByDescending(a => resolved[a].End - resolved[a].Start)];
         }
 
         return byDay;

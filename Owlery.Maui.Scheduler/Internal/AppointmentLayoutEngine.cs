@@ -18,15 +18,24 @@ internal sealed record PositionedAppointment(
 /// </summary>
 internal static class AppointmentLayoutEngine
 {
+    /// <summary>An appointment with its times already resolved into the view's zone.</summary>
+    /// <remarks>
+    /// Resolved once, at the point an appointment is bucketed, and carried from there. The engine
+    /// reads each appointment's times four times over a pass, and for anything but a floating one
+    /// each read would otherwise be a trip through the time-zone database.
+    /// </remarks>
+    private readonly record struct Resolved(ISchedulerAppointment Appointment, DateTime Start, DateTime End);
+
     public static List<IAppointmentPlacement> Layout(
         IEnumerable<ISchedulerAppointment> appointments,
         DateOnly pageStart,
         int dayCount,
         int startHour,
-        int endHour)
+        int endHour,
+        TimeZoneInfo view)
     {
         var result = new List<IAppointmentPlacement>();
-        var dayBuckets = new List<ISchedulerAppointment>[dayCount];
+        var dayBuckets = new List<Resolved>[dayCount];
 
         // Shared by every cluster of every day in this call.
         var columnEnds = new List<double>();
@@ -37,24 +46,27 @@ internal static class AppointmentLayoutEngine
 
         foreach (var appointment in appointments)
         {
-            var dayIndex = DayIndexOf(appointment, pageStart, dayCount);
-            if (dayIndex < 0)
+            var start = appointment.StartIn(view);
+            var dayIndex = DateOnly.FromDateTime(start).DayNumber - pageStart.DayNumber;
+
+            if (dayIndex < 0 || dayIndex >= dayCount)
                 continue;
 
+            var end = appointment.EndIn(view);
             var day = pageStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue);
 
             // Tested against the appointment's own times, before any clamping. Clamping first would
             // pull an appointment that finishes before the window opens up to the window start and
             // give it a minimum-height box there, so a 02:00 item would appear at 08:00.
-            var rawStart = (appointment.Start - day).TotalMinutes;
-            var rawEnd = Math.Max((appointment.End - day).TotalMinutes, rawStart + MinimumMinutes);
+            var rawStart = (start - day).TotalMinutes;
+            var rawEnd = Math.Max((end - day).TotalMinutes, rawStart + MinimumMinutes);
 
             if (rawEnd <= windowStart || rawStart >= windowEnd)
                 continue;
 
             // Anything that survives is clipped to the window in LayoutDay. An appointment running
             // past midnight is clipped to its own day; multi-day rendering is out of scope.
-            (dayBuckets[dayIndex] ??= []).Add(appointment);
+            (dayBuckets[dayIndex] ??= []).Add(new Resolved(appointment, start, end));
         }
 
         for (var dayIndex = 0; dayIndex < dayCount; dayIndex++)
@@ -66,11 +78,11 @@ internal static class AppointmentLayoutEngine
             var day = pageStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue);
 
             var spans = bucket
-                .Select(a =>
+                .Select(resolved =>
                 {
-                    var start = Math.Max((a.Start - day).TotalMinutes, windowStart);
-                    var end = Math.Min(Math.Max((a.End - day).TotalMinutes, start + MinimumMinutes), windowEnd);
-                    return (Appointment: a, Start: start, End: end);
+                    var start = Math.Max((resolved.Start - day).TotalMinutes, windowStart);
+                    var end = Math.Min(Math.Max((resolved.End - day).TotalMinutes, start + MinimumMinutes), windowEnd);
+                    return (Appointment: resolved.Appointment, Start: start, End: end);
                 })
                 .OrderBy(s => s.Start)
                 .ThenByDescending(s => s.End - s.Start)
@@ -171,9 +183,4 @@ internal static class AppointmentLayoutEngine
         }
     }
 
-    private static int DayIndexOf(ISchedulerAppointment appointment, DateOnly pageStart, int dayCount)
-    {
-        var index = DateOnly.FromDateTime(appointment.Start).DayNumber - pageStart.DayNumber;
-        return index >= 0 && index < dayCount ? index : -1;
-    }
 }

@@ -108,7 +108,7 @@ public class DisplayDateTests
         Assert.Multiple(() =>
         {
             Assert.That(harness.VisibleDatesReports, Has.Count.GreaterThan(reportsBefore));
-            Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0], Is.EqualTo(Monday.AddDays(7)));
+            Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0].WallClock, Is.EqualTo(Monday.AddDays(7)));
         });
     }
 

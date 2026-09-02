@@ -338,7 +338,9 @@ public class SchedulerAppearanceTests
         var dragText = Color.FromArgb("#506070");
         var busy = Color.FromArgb("#607080");
 
-        harness.Scheduler.SelectedSlot = new SchedulerTimeSlot(new DateTime(2026, 8, 24, 10, 0, 0), TimeSpan.FromMinutes(15));
+        harness.Scheduler.SelectedSlot = new SchedulerTimeSlot(
+            new SchedulerMoment(new DateTime(2026, 8, 24, 10, 0, 0), harness.Scheduler.TimeZone),
+            TimeSpan.FromMinutes(15));
         harness.Scheduler.CellSelectionBackgroundColor = selectionBackground;
         harness.Scheduler.CellSelectionBorderColor = selectionBorder;
         harness.Scheduler.CellSelectionTextColor = selectionText;
@@ -365,7 +367,9 @@ public class SchedulerAppearanceTests
         var harness = new SchedulerHarness(new DateTime(2026, 8, 24));
         var custom = Color.FromArgb("#ABCDEF");
         harness.Scheduler.CellSelectionTemplate = new DataTemplate(() => new Border { BackgroundColor = custom });
-        harness.Scheduler.SelectedSlot = new SchedulerTimeSlot(new DateTime(2026, 8, 24, 10, 0, 0), TimeSpan.FromMinutes(15));
+        harness.Scheduler.SelectedSlot = new SchedulerTimeSlot(
+            new SchedulerMoment(new DateTime(2026, 8, 24, 10, 0, 0), harness.Scheduler.TimeZone),
+            TimeSpan.FromMinutes(15));
 
         harness.Scheduler.CellSelectionBackgroundColor = Color.FromArgb("#010203");
 

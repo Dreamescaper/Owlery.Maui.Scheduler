@@ -159,8 +159,8 @@ public class SchedulerMonthViewTests
         Assert.Multiple(() =>
         {
             Assert.That(report.VisibleDates, Has.Count.EqualTo(MonthGeometry.CellCount));
-            Assert.That(report.VisibleDates[0].Date, Is.EqualTo(new DateTime(2026, 7, 27)));
-            Assert.That(report.VisibleDates[^1].Date, Is.EqualTo(new DateTime(2026, 9, 6)));
+            Assert.That(report.VisibleDates[0].WallClock.Date, Is.EqualTo(new DateTime(2026, 7, 27)));
+            Assert.That(report.VisibleDates[^1].WallClock.Date, Is.EqualTo(new DateTime(2026, 9, 6)));
         });
     }
 
@@ -173,8 +173,8 @@ public class SchedulerMonthViewTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(report.PrefetchFrom.Date, Is.EqualTo(new DateTime(2026, 6, 29)));
-            Assert.That(report.PrefetchTo.Date, Is.EqualTo(new DateTime(2026, 10, 11)));
+            Assert.That(report.PrefetchFrom.WallClock.Date, Is.EqualTo(new DateTime(2026, 6, 29)));
+            Assert.That(report.PrefetchTo.WallClock.Date, Is.EqualTo(new DateTime(2026, 10, 11)));
         });
     }
 
@@ -188,7 +188,7 @@ public class SchedulerMonthViewTests
         Assert.That(harness.CellTaps, Has.Count.EqualTo(1));
         Assert.Multiple(() =>
         {
-            Assert.That(harness.CellTaps[0].Slot.Start, Is.EqualTo(new DateTime(2026, 8, 15)));
+            Assert.That(harness.CellTaps[0].Slot.Start.WallClock, Is.EqualTo(new DateTime(2026, 8, 15)));
             Assert.That(harness.CellTaps[0].Slot.Duration, Is.EqualTo(TimeSpan.FromDays(1)));
         });
     }
@@ -200,7 +200,7 @@ public class SchedulerMonthViewTests
 
         harness.Tap(harness.MonthCellAt(1, 0));
 
-        Assert.That(harness.CellTaps[0].Slot.Start, Is.EqualTo(new DateTime(2026, 7, 27)));
+        Assert.That(harness.CellTaps[0].Slot.Start.WallClock, Is.EqualTo(new DateTime(2026, 7, 27)));
     }
 
     [Test]
@@ -223,7 +223,7 @@ public class SchedulerMonthViewTests
 
         harness.Tap(harness.MonthCellAt(1, FirstOfAugust));
 
-        Assert.That(harness.Scheduler.SelectedSlot?.Start, Is.EqualTo(new DateTime(2026, 8, 1)));
+        Assert.That(harness.Scheduler.SelectedSlot?.Start.WallClock, Is.EqualTo(new DateTime(2026, 8, 1)));
     }
 
     [Test]
@@ -271,7 +271,7 @@ public class SchedulerMonthViewTests
         {
             Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(1));
             Assert.That(report.VisibleDates, Has.Count.EqualTo(MonthGeometry.CellCount));
-            Assert.That(report.VisibleDates[0].Date, Is.EqualTo(new DateTime(2026, 7, 27)));
+            Assert.That(report.VisibleDates[0].WallClock.Date, Is.EqualTo(new DateTime(2026, 7, 27)));
         });
     }
 
@@ -290,7 +290,7 @@ public class SchedulerMonthViewTests
         {
             Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(1));
             Assert.That(report.VisibleDates, Has.Count.EqualTo(7));
-            Assert.That(report.VisibleDates[0].Date, Is.EqualTo(new DateTime(2026, 8, 10)));
+            Assert.That(report.VisibleDates[0].WallClock.Date, Is.EqualTo(new DateTime(2026, 8, 10)));
         });
     }
 

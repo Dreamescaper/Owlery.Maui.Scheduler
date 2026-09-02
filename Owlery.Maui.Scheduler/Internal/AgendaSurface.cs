@@ -186,7 +186,8 @@ internal sealed class AgendaSurface(AgendaGeometry geometry) : ISchedulerSurface
                 geometry.EstimatedRowHeight,
                 geometry.MonthSectionHeight,
                 geometry.WeekSectionHeight,
-                geometry.DayGap);
+                geometry.DayGap,
+                geometry.TimeZone);
 
             var firstMeasured = int.MaxValue;
 
@@ -357,7 +358,7 @@ internal sealed class AgendaSurface(AgendaGeometry geometry) : ISchedulerSurface
 
         var date = rows[index].Date;
 
-        return new SchedulerTimeSlot(ToDateTime(date), TimeSpan.FromDays(1));
+        return new SchedulerTimeSlot(new SchedulerMoment(ToDateTime(date), geometry.TimeZone), TimeSpan.FromDays(1));
     }
 
     /// <summary>Nothing is hidden: a row is either in the list or outside the range.</summary>

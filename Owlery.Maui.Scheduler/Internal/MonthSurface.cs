@@ -29,7 +29,8 @@ internal sealed class MonthSurface(MonthGeometry geometry) : ISchedulerSurface
 
     public IReadOnlyList<IAppointmentPlacement> Layout(IEnumerable<ISchedulerAppointment> items, DateOnly pageStart)
     {
-        var layout = MonthLayoutEngine.Layout(items, geometry.GridStart(pageStart), geometry.LinesPerCell);
+        var layout = MonthLayoutEngine.Layout(
+            items, geometry.GridStart(pageStart), geometry.LinesPerCell, geometry.TimeZone);
 
         cachedPage = pageStart;
         cachedOverflow = layout.OverflowByCell;
@@ -57,7 +58,7 @@ internal sealed class MonthSurface(MonthGeometry geometry) : ISchedulerSurface
     /// <summary>A selected day is marked across its whole cell — there is no finer target in a month.</summary>
     public Rect BoundsFor(SchedulerTimeSlot slot, DateOnly pageStart)
     {
-        var cellIndex = geometry.CellIndexOf(pageStart, DateOnly.FromDateTime(slot.Start));
+        var cellIndex = geometry.CellIndexOf(pageStart, DateOnly.FromDateTime(slot.Start.WallClock));
 
         return cellIndex < 0 ? Rect.Zero : geometry.CellBounds(cellIndex);
     }
@@ -83,6 +84,8 @@ internal sealed class MonthSurface(MonthGeometry geometry) : ISchedulerSurface
 
         var date = geometry.GridStart(pages[slotIndex].PageStart).AddDays(row * MonthGeometry.Columns + column);
 
-        return new SchedulerTimeSlot(date.ToDateTime(TimeOnly.MinValue), TimeSpan.FromDays(1));
+        return new SchedulerTimeSlot(
+            new SchedulerMoment(date.ToDateTime(TimeOnly.MinValue), geometry.TimeZone),
+            TimeSpan.FromDays(1));
     }
 }

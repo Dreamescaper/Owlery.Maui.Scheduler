@@ -57,6 +57,46 @@ The control does not fetch anything. It exposes:
   reloads the window; the contract's documentation says so plainly, and a `record` with `with` makes
   the alternative a single line. Identity is `Key`, so a replaced instance lands on the view already
   showing it (§6).
+- **Time zones.** `TimeZone` is the zone the calendar is displayed in: the axis appointments are
+  placed on, and the clock behind *today* and the current-time line. It is not a claim about what the
+  host's data means — that is the appointment's own business, and it says so two ways. `DateTimeKind`
+  decides first: `Utc` and `Local` already carry a complete instant, so they are converted and the
+  appointment's own zone is ignored beside them. `Unspecified` carries no instant, so
+  `ISchedulerAppointment.TimeZone` speaks: `null` means floating and the time is drawn exactly as
+  given, and a zone means the time is wall-clock there and is converted. `AppointmentTime.In` is the
+  only place any of this is decided.
+
+  The appointment's zone says what its times *mean*, never where to draw them. The grid has one time
+  axis: if a per-item zone moved placement, an itinerary departing 14:00 Tokyo and arriving 18:00
+  London would draw the departure four hours before the arrival on a London grid, when it is seven.
+  Placement is always by resolved position. A host wanting to label an appointment in its own zone
+  renders that in its template, which binds to the host's own type and can already say anything.
+
+  Two readings have no honest answer and are given one anyway rather than throwing: a reading its
+  zone skipped is moved forward by the gap, and a reading that happens twice is taken as its first
+  occurrence. Throwing inside a layout pass over tens of thousands of items is not an option, and the
+  same rule resolves `SchedulerMoment.ToDateTimeUtc`, so the question is answered identically from
+  either direction.
+
+  The floating and same-zone short-circuits are a design point, not an optimisation to be tidied away.
+  §15 has the numbers: reading appointments as instants costs about 4× the layout, and as wall-clock
+  in another zone about 16×, per slot, three slots per rebuild, over a range hosts are told to keep
+  wholly loaded.
+
+  There is no DST-aware geometry: every day is a uniform `StartHour`–`EndHour` band. Four things
+  follow, all confined to two days a year in the view's zone, and all accepted. On the fall-back day
+  01:00–02:00 occurs twice and is drawn once, so two appointments an hour apart stack. On the
+  spring-forward day the grid draws an hour that does not exist, so a tap there names a reading its
+  zone never had — hence the resolution rule above. An appointment spanning a transition is drawn an
+  hour short or long. And one unusable band appears in spring. Making the geometry DST-aware is
+  additive to all of this if it ever earns its place.
+- **What the control reports back** is `SchedulerMoment`: a wall-clock reading plus the zone the
+  calendar keeps. A fixed representation could not serve both kinds of host — wall-clock taxes a host
+  whose backend stores instants, an instant taxes a host that never wanted to know what a zone is, and
+  the control cannot infer which it is talking to, because a tap on empty space has no appointment to
+  take a hint from. Carrying both and letting the caller ask needs no configuration and has no default
+  that is wrong for half of them. Deliberately no implicit conversion to `DateTime`: the type exists
+  so that "which of the two is this?" cannot be answered by accident.
 - `VisibleDatesChanged` — raised whenever the active period changes, carrying the dates the surface
   exposes plus its prefetch range. A timeline reports its day columns and three pages, a month its 42
   cells and neighbouring grids, and an agenda its whole loaded vertical range.

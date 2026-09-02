@@ -79,7 +79,7 @@ internal sealed class CellSelectionOverlay(
             return;
         }
 
-        var pageIndex = PageIndexFor(DateOnly.FromDateTime(slot.Start), pages, surface);
+        var pageIndex = PageIndexFor(DateOnly.FromDateTime(slot.Start.WallClock), pages, surface);
 
         if (pageIndex < 0)
         {
@@ -100,7 +100,7 @@ internal sealed class CellSelectionOverlay(
         var culture = CultureInfo.CurrentUICulture;
         SemanticProperties.SetDescription(
             view,
-            $"{slot.Start.ToString("D", culture)} {slot.Start.ToString(timeFormat, culture)}");
+            $"{slot.Start.WallClock.ToString("D", culture)} {slot.Start.WallClock.ToString(timeFormat, culture)}");
     }
 
     /// <summary>Which rendered page holds a date, or -1 when none of them do.</summary>

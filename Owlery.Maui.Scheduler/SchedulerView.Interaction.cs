@@ -131,7 +131,7 @@ public partial class SchedulerView
         if (timelineSurface.DateAt(point.X, slots) is not { } date)
             return;
 
-        HeaderTapped.Invoke(this, new SchedulerHeaderTappedEventArgs(date.ToDateTime(TimeOnly.MinValue)));
+        HeaderTapped.Invoke(this, new SchedulerHeaderTappedEventArgs(Moment(date.ToDateTime(TimeOnly.MinValue))));
     }
 
     /// <summary>Reports the time the hour gutter was tapped at, snapped like a cell tap.</summary>
@@ -261,7 +261,11 @@ public partial class SchedulerView
         }
 
         dragOverlayView.BindingContext = floatingAppointment;
-        SetAppointmentSemantics(dragOverlayView, floatingAppointment);
+        SetAppointmentSemantics(
+            dragOverlayView,
+            floatingAppointment.StartIn(TimeZone),
+            floatingAppointment.EndIn(TimeZone),
+            floatingAppointment.Subject);
         dragOverlayView.Opacity = LiftedOpacity;
         dragOverlayView.IsVisible = true;
 
@@ -454,7 +458,7 @@ public partial class SchedulerView
 
         AppointmentDropTargetChanged.Invoke(
             this,
-            new SchedulerAppointmentDropTargetChangedEventArgs(Resolve(floatingAppointment), dragDropStart));
+            new SchedulerAppointmentDropTargetChangedEventArgs(Resolve(floatingAppointment), Moment(dragDropStart)));
     }
 
     /// <summary>
@@ -677,7 +681,7 @@ public partial class SchedulerView
             return;
         }
 
-        var args = new SchedulerAppointmentDroppedEventArgs(Resolve(appointment), dragDropStart);
+        var args = new SchedulerAppointmentDroppedEventArgs(Resolve(appointment), Moment(dragDropStart));
         AppointmentDropped?.Invoke(this, args);
 
         if (args.Cancel)

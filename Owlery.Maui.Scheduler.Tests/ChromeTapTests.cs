@@ -21,7 +21,7 @@ public class ChromeTapTests
 
         harness.TapHeader(CentreSlot, 2);
 
-        Assert.That(harness.HeaderTaps.Single().Date, Is.EqualTo(Monday.AddDays(2)));
+        Assert.That(harness.HeaderTaps.Single().Date.WallClock, Is.EqualTo(Monday.AddDays(2)));
     }
 
     [Test]
@@ -32,7 +32,7 @@ public class ChromeTapTests
 
         harness.TapHeader(CentreSlot, 4);
 
-        Assert.That(harness.HeaderTaps.Single().Date.TimeOfDay, Is.EqualTo(TimeSpan.Zero));
+        Assert.That(harness.HeaderTaps.Single().Date.WallClock.TimeOfDay, Is.EqualTo(TimeSpan.Zero));
     }
 
     [Test]
@@ -44,7 +44,7 @@ public class ChromeTapTests
 
         harness.TapHeader(2, 0);
 
-        Assert.That(harness.HeaderTaps.Single().Date, Is.EqualTo(Monday.AddDays(7)));
+        Assert.That(harness.HeaderTaps.Single().Date.WallClock, Is.EqualTo(Monday.AddDays(7)));
     }
 
     [Test]
@@ -55,7 +55,7 @@ public class ChromeTapTests
 
         harness.TapHeader(CentreSlot, 2);
 
-        Assert.That(harness.HeaderTaps.Single().Date, Is.EqualTo(Monday.AddDays(2)));
+        Assert.That(harness.HeaderTaps.Single().Date.WallClock, Is.EqualTo(Monday.AddDays(2)));
     }
 
     [Test]
@@ -66,7 +66,7 @@ public class ChromeTapTests
         harness.SwipeToPage(2);
         harness.TapHeader(CentreSlot, 0);
 
-        Assert.That(harness.HeaderTaps.Single().Date, Is.EqualTo(Monday.AddDays(7)));
+        Assert.That(harness.HeaderTaps.Single().Date.WallClock, Is.EqualTo(Monday.AddDays(7)));
     }
 
     [Test]

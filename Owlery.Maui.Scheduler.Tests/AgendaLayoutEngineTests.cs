@@ -20,11 +20,11 @@ public class AgendaLayoutEngineTests
 
     private static AgendaPageLayout Layout(DateOnly from, DateOnly to, params ISchedulerAppointment[] appointments)
         => AgendaLayoutEngine.Layout(
-            appointments, from, to, DayOfWeek.Monday, RowHeight, MonthHeight, WeekHeight, DayGap);
+            appointments, from, to, DayOfWeek.Monday, RowHeight, MonthHeight, WeekHeight, DayGap, TimeZoneInfo.Local);
 
     private static AgendaPageLayout GappedLayout(double dayGap, params ISchedulerAppointment[] appointments)
         => AgendaLayoutEngine.Layout(
-            appointments, RangeStart, RangeEnd, DayOfWeek.Monday, RowHeight, MonthHeight, WeekHeight, dayGap);
+            appointments, RangeStart, RangeEnd, DayOfWeek.Monday, RowHeight, MonthHeight, WeekHeight, dayGap, TimeZoneInfo.Local);
 
     private static DateTime Day(int month, int day) => new(2026, month, day);
 

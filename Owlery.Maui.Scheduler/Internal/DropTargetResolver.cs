@@ -48,7 +48,11 @@ internal static class DropTargetResolver
             geometry.WindowStartMinutes,
             Math.Max(geometry.WindowStartMinutes, geometry.WindowEndMinutes - (appointmentHeight / geometry.HourHeight * 60)));
 
-        var start = pageStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
+        // Unspecified on purpose, not by accident of the arithmetic: this is a position on the grid,
+        // and it becomes an instant only when a host asks SchedulerMoment to resolve it.
+        var start = DateTime.SpecifyKind(
+            pageStart.AddDays(dayIndex).ToDateTime(TimeOnly.MinValue).AddMinutes(snapped),
+            DateTimeKind.Unspecified);
 
         return new DropTarget(dayIndex, snapped, start);
     }

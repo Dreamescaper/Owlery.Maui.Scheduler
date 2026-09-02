@@ -202,6 +202,59 @@ public class SchedulerAppointmentCollectionTests
     }
 
     [Test]
+    public void Replace_swaps_one_instance_in_place_and_raises_one_Replace()
+    {
+        // The move-an-appointment case: a change is a new instance, and it takes the old one's place
+        // rather than being appended, so the collection does not reshuffle under a view.
+        Seed(3);
+        var original = collection[1];
+        var moved = At("moved", TimeSpan.FromHours(14), TimeSpan.FromHours(15));
+
+        var swapped = collection.Replace(original, moved);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(swapped, Is.True);
+            Assert.That(collection.Select(a => a.Subject), Is.EqualTo(new[] { "a0", "moved", "a2" }));
+            Assert.That(TheEvent.Action, Is.EqualTo(NotifyCollectionChangedAction.Replace));
+            Assert.That(TheEvent.NewItems, Is.EqualTo(new[] { moved }));
+            Assert.That(TheEvent.OldItems, Is.EqualTo(new[] { original }));
+            Assert.That(TheEvent.NewStartingIndex, Is.EqualTo(1));
+            Assert.That(propertyNames, Is.EqualTo(new[] { "Item[]" }), "the count did not move");
+        });
+    }
+
+    [Test]
+    public void Replace_of_something_absent_changes_nothing_and_says_so()
+    {
+        Seed(2);
+
+        var swapped = collection.Replace(
+            At("absent", TimeSpan.FromHours(9), TimeSpan.FromHours(10)),
+            At("moved", TimeSpan.FromHours(14), TimeSpan.FromHours(15)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(swapped, Is.False);
+            Assert.That(collection.Select(a => a.Subject), Is.EqualTo(new[] { "a0", "a1" }));
+            Assert.That(events, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void Replace_of_null_throws()
+    {
+        Seed(1);
+        var real = collection[0];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => collection.Replace(null!, real), Throws.ArgumentNullException);
+            Assert.That(() => collection.Replace(real, null!), Throws.ArgumentNullException);
+        });
+    }
+
+    [Test]
     public void ReplaceRange_of_equal_length_raises_one_Replace_carrying_both_sides()
     {
         Seed(4);

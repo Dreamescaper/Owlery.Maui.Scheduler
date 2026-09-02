@@ -48,10 +48,10 @@ public class SchedulerViewTests
         Assert.Multiple(() =>
         {
             Assert.That(report.VisibleDates, Has.Count.EqualTo(7));
-            Assert.That(report.VisibleDates[0], Is.EqualTo(Monday));
-            Assert.That(report.VisibleDates[6], Is.EqualTo(Monday.AddDays(6)));
-            Assert.That(report.PrefetchFrom, Is.EqualTo(Monday.AddDays(-7)));
-            Assert.That(report.PrefetchTo.Date, Is.EqualTo(Monday.AddDays(13)));
+            Assert.That(report.VisibleDates[0].WallClock, Is.EqualTo(Monday));
+            Assert.That(report.VisibleDates[6].WallClock, Is.EqualTo(Monday.AddDays(6)));
+            Assert.That(report.PrefetchFrom.WallClock, Is.EqualTo(Monday.AddDays(-7)));
+            Assert.That(report.PrefetchTo.WallClock.Date, Is.EqualTo(Monday.AddDays(13)));
         });
     }
 
@@ -61,7 +61,7 @@ public class SchedulerViewTests
         var wednesday = Monday.AddDays(2);
         var harness = new SchedulerHarness(wednesday, ThreeAppointments());
 
-        Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0], Is.EqualTo(Monday));
+        Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0].WallClock, Is.EqualTo(Monday));
     }
 
     [Test]
@@ -199,8 +199,8 @@ public class SchedulerViewTests
         {
             Assert.That(harness.CellTaps, Has.Count.EqualTo(1));
             // Rounded down into the containing 15-minute slot.
-            Assert.That(harness.CellTaps[0].Slot.Start, Is.EqualTo(Monday.AddDays(2).AddHours(10)));
-            Assert.That(harness.Scheduler.SelectedSlot?.Start, Is.EqualTo(Monday.AddDays(2).AddHours(10)));
+            Assert.That(harness.CellTaps[0].Slot.Start.WallClock, Is.EqualTo(Monday.AddDays(2).AddHours(10)));
+            Assert.That(harness.Scheduler.SelectedSlot?.Start.WallClock, Is.EqualTo(Monday.AddDays(2).AddHours(10)));
         });
     }
 
@@ -233,7 +233,7 @@ public class SchedulerViewTests
         {
             Assert.That(harness.DragStarts, Has.Count.EqualTo(1));
             Assert.That(harness.Drops, Has.Count.EqualTo(1));
-            Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(2).AddHours(12)));
+            Assert.That(harness.Drops[0].DropStart.WallClock, Is.EqualTo(Monday.AddDays(2).AddHours(12)));
         });
     }
 
@@ -256,7 +256,7 @@ public class SchedulerViewTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(harness.DropTargetChanges.Select(snap => snap.DropStart), Is.EqualTo(new[]
+            Assert.That(harness.DropTargetChanges.Select(snap => snap.DropStart.WallClock), Is.EqualTo(new[]
             {
                 Monday.AddDays(2).AddHours(10).AddMinutes(15),
                 Monday.AddDays(2).AddHours(10).AddMinutes(30)
@@ -305,8 +305,8 @@ public class SchedulerViewTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(2).AddHours(11).AddMinutes(45)));
-            Assert.That(harness.Scheduler.SelectedSlot?.Start, Is.EqualTo(Monday.AddDays(4).AddHours(10)));
+            Assert.That(harness.Drops[0].DropStart.WallClock, Is.EqualTo(Monday.AddDays(2).AddHours(11).AddMinutes(45)));
+            Assert.That(harness.Scheduler.SelectedSlot?.Start.WallClock, Is.EqualTo(Monday.AddDays(4).AddHours(10)));
             Assert.That(harness.Scheduler.SelectedSlot?.Duration, Is.EqualTo(TimeSpan.FromHours(1)));
         });
     }
@@ -320,7 +320,7 @@ public class SchedulerViewTests
         var from = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
         harness.LongPressDrag(from.X, from.Y, from.X + SchedulerHarness.DayWidth, from.Y);
 
-        Assert.That(harness.Drops[0].DropStart, Is.EqualTo(Monday.AddDays(3).AddHours(10)));
+        Assert.That(harness.Drops[0].DropStart.WallClock, Is.EqualTo(Monday.AddDays(3).AddHours(10)));
     }
 
     [Test]
@@ -524,7 +524,7 @@ public class SchedulerViewTests
         {
             Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(Monday.AddDays(7)));
             Assert.That(harness.VisibleDatesReports, Has.Count.GreaterThan(reportsBefore));
-            Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0], Is.EqualTo(Monday.AddDays(7)));
+            Assert.That(harness.VisibleDatesReports.Last().VisibleDates[0].WallClock, Is.EqualTo(Monday.AddDays(7)));
         });
     }
 

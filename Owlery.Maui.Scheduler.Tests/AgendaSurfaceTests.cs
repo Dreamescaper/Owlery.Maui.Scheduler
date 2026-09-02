@@ -312,7 +312,7 @@ public class AgendaSurfaceTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(slot!.Value.Start, Is.EqualTo(row.Date.ToDateTime(TimeOnly.MinValue)));
+            Assert.That(slot!.Value.Start.WallClock, Is.EqualTo(row.Date.ToDateTime(TimeOnly.MinValue)));
             Assert.That(slot!.Value.Duration, Is.EqualTo(TimeSpan.FromDays(1)));
             Assert.That(surface.BoundsFor(slot.Value, Page), Is.EqualTo(Rect.Zero), "nothing is drawn for it");
         });

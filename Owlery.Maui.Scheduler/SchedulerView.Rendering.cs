@@ -446,16 +446,22 @@ public partial class SchedulerView
     {
         var appointment = position.Appointment;
 
-        appointmentsByView.TryGetValue(view, out var previous);
-
         if (!ReferenceEquals(view.BindingContext, appointment))
             view.BindingContext = appointment;
 
         // Only when the text would actually differ. Three date formats — one of them the long date
         // pattern — plus a semantic write is the largest per-appointment cost here, and a reload that
         // changed nothing used to pay it for every appointment on all three pages.
-        if (!DescribesTheSame(previous, appointment))
-            SetAppointmentSemantics(view, appointment);
+        var described = (
+            Start: appointment.StartIn(TimeZone),
+            End: appointment.EndIn(TimeZone),
+            appointment.Subject);
+
+        if (!describedByView.TryGetValue(view, out var previouslyDescribed) || previouslyDescribed != described)
+        {
+            SetAppointmentSemantics(view, described.Start, described.End, described.Subject);
+            describedByView[view] = described;
+        }
 
         appointmentsByView[view] = appointment;
         slotsByView[view] = slot;
@@ -463,28 +469,23 @@ public partial class SchedulerView
         PositionAppointmentView(view, position, slotIndex);
     }
 
-    /// <summary>Whether two appointments would produce the same accessibility description.</summary>
-    private static bool DescribesTheSame(ISchedulerAppointment? previous, ISchedulerAppointment current) =>
-        previous is not null
-        && previous.Start == current.Start
-        && previous.End == current.End
-        && previous.Subject == current.Subject;
-
-    private void SetAppointmentSemantics(View view, ISchedulerAppointment appointment)
+    /// <remarks>Times are the ones already resolved into <see cref="TimeZone"/>, not the host's raw values.</remarks>
+    private void SetAppointmentSemantics(View view, DateTime start, DateTime end, string? subject)
     {
         var culture = CultureInfo.CurrentUICulture;
-        var range = $"{appointment.Start.ToString(TimeFormat, culture)} - {appointment.End.ToString(TimeFormat, culture)}";
-        var day = appointment.Start.ToString("D", culture);
+        var range = $"{start.ToString(TimeFormat, culture)} - {end.ToString(TimeFormat, culture)}";
+        var day = start.ToString("D", culture);
 
-        SemanticProperties.SetDescription(view, string.IsNullOrEmpty(appointment.Subject)
+        SemanticProperties.SetDescription(view, string.IsNullOrEmpty(subject)
             ? $"{day}, {range}"
-            : $"{appointment.Subject}, {day}, {range}");
+            : $"{subject}, {day}, {range}");
     }
 
     /// <summary>Forgets a view and hands it back to the pool.</summary>
     private void Discard(View view)
     {
         appointmentsByView.Remove(view);
+        describedByView.Remove(view);
         slotsByView.Remove(view);
         pool.Return(view);
     }

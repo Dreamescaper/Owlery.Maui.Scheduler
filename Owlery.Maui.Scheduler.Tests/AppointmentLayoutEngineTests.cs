@@ -11,7 +11,7 @@ public class AppointmentLayoutEngineTests
 
     // The engine builds the interface list the control consumes; the tests want the concrete type.
     private static List<PositionedAppointment> Layout(params ISchedulerAppointment[] appointments)
-        => [.. AppointmentLayoutEngine.Layout(appointments, WeekStart, 7, StartHour, EndHour)
+        => [.. AppointmentLayoutEngine.Layout(appointments, WeekStart, 7, StartHour, EndHour, TimeZoneInfo.Local)
             .Cast<PositionedAppointment>()];
 
     private static DateTime Day(int offset) => WeekStart.AddDays(offset).ToDateTime(TimeOnly.MinValue);
@@ -153,8 +153,8 @@ public class AppointmentLayoutEngineTests
             TestAppointment.At(Day(2), "10:00", 1, "c")
         ];
 
-        var forwards = AppointmentLayoutEngine.Layout(appointments, WeekStart, 7, StartHour, EndHour);
-        var backwards = AppointmentLayoutEngine.Layout(appointments.Reverse(), WeekStart, 7, StartHour, EndHour);
+        var forwards = AppointmentLayoutEngine.Layout(appointments, WeekStart, 7, StartHour, EndHour, TimeZoneInfo.Local);
+        var backwards = AppointmentLayoutEngine.Layout(appointments.Reverse(), WeekStart, 7, StartHour, EndHour, TimeZoneInfo.Local);
 
         Assert.That(
             backwards.Select(p => ((TestAppointment)p.Appointment).Subject),

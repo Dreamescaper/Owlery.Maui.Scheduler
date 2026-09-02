@@ -63,8 +63,19 @@ with a blank week because of a transient problem.
 **DAT-15** Every time the host gives the view, and every time the view reports back, is a wall-clock
 time in the calendar's declared time zone.
 
-**DAT-16** The view performs no time-zone conversion. Converting to and from whatever the host stores
-happens at the host's boundary, in one place.
+**DAT-16** An appointment is placed according to what its times mean. A time that carries no zone
+information is drawn exactly as given, whatever zone the view is showing; a time that identifies a
+moment — because it is UTC, because it is this device's, or because the appointment names the zone its
+times are written in — is placed where that moment falls on the view's clock.
+
+**DAT-22** A clock reading its own zone never had, or had twice, still resolves. The view does not
+refuse to draw a day, and does not fail when asked what moment such a reading names: a reading a
+transition skipped is taken as the one the gap moved it to, and a reading that occurs twice is taken
+as its first occurrence.
+
+**DAT-23** What the view reports is a position on the calendar it is drawing, together with the zone
+that calendar keeps. A host reads it as a clock reading or asks it for the moment it names; neither
+host has to convert what the other one wanted.
 
 ## Changing the collection
 

@@ -244,9 +244,10 @@ public sealed class PlaygroundPage : ContentPage
 
     private void OnVisibleDatesChanged(object? sender, SchedulerVisibleDatesChangedEventArgs e)
     {
-        source.SetRange(e.PrefetchFrom, e.PrefetchTo);
-        title.Text = Describe(e.VisibleDates);
-        Log($"VisibleDatesChanged · {e.VisibleDates.Count} days, prefetch {e.PrefetchFrom:d MMM}–{e.PrefetchTo:d MMM}");
+        source.SetRange(e.PrefetchFrom.WallClock, e.PrefetchTo.WallClock);
+        title.Text = Describe([.. e.VisibleDates.Select(date => date.WallClock)]);
+        Log($"VisibleDatesChanged · {e.VisibleDates.Count} days, "
+            + $"prefetch {e.PrefetchFrom.WallClock:d MMM}–{e.PrefetchTo.WallClock:d MMM}");
     }
 
     private string Describe(IReadOnlyList<DateTime> dates)
@@ -285,9 +286,9 @@ public sealed class PlaygroundPage : ContentPage
     /// </remarks>
     private void OnHeaderTapped(object? sender, SchedulerHeaderTappedEventArgs e)
     {
-        Log($"HeaderTapped · {e.Date:ddd d MMM}");
+        Log($"HeaderTapped · {e.Date.WallClock:ddd d MMM}");
 
-        scheduler.DisplayDate = e.Date;
+        scheduler.DisplayDate = e.Date.WallClock;
         scheduler.VisibleDays = 1;
     }
 
@@ -327,9 +328,11 @@ public sealed class PlaygroundPage : ContentPage
 
         // The control leaves the appointment where it was dropped and does not touch the model. The
         // move only becomes real when the host writes it down and re-emits ItemsSource.
-        source.Move(appointment, e.DropStart);
+        // A wall-clock host: the playground's appointments are floating, so the grid position is the
+        // value. A host whose backend stores instants would call e.DropStart.ToDateTimeUtc() instead.
+        source.Move(appointment, e.DropStart.WallClock);
 
-        Log($"AppointmentDropped · {Name(e.Appointment)} → {e.DropStart:ddd d MMM HH:mm}");
+        Log($"AppointmentDropped · {Name(e.Appointment)} → {e.DropStart.WallClock:ddd d MMM HH:mm}");
     }
 
     private static string Name(ISchedulerAppointment appointment) =>

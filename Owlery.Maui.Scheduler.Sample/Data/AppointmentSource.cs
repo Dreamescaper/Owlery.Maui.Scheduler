@@ -22,6 +22,7 @@ public sealed class AppointmentSource(SchedulerView scheduler)
     private readonly Dictionary<DateOnly, List<SampleAppointment>> appointmentsByMonth = [];
     private readonly SchedulerAppointmentCollection<SampleAppointment> appointments = new();
     private bool published;
+    private bool timesAreUtc;
     private int seed = 1;
     private DateOnly? rangeStart;
     private DateOnly? rangeEnd;
@@ -55,6 +56,23 @@ public sealed class AppointmentSource(SchedulerView scheduler)
     }
 
     /// <summary>
+    /// Switches the generated appointments between floating wall-clock times and UTC instants.
+    /// </summary>
+    /// <remarks>
+    /// The two shapes a host can supply. Floating times are drawn exactly as written whatever
+    /// <c>TimeZone</c> is; UTC times name a moment, so changing the zone moves them. Nothing else
+    /// about the sample changes — which is the point.
+    /// </remarks>
+    public void SetTimesAreUtc(bool utc)
+    {
+        if (utc == timesAreUtc)
+            return;
+
+        timesAreUtc = utc;
+        Regenerate();
+    }
+
+    /// <summary>
     /// Regenerates every loaded month and swaps the whole flat collection for the result in one
     /// operation, so a full reseed is one change notification however many months are loaded.
     /// </summary>
@@ -67,7 +85,7 @@ public sealed class AppointmentSource(SchedulerView scheduler)
     public void Regenerate()
     {
         foreach (var month in appointmentsByMonth.Keys.ToArray())
-            appointmentsByMonth[month] = SampleDataGenerator.GenerateMonth(Count, seed, month);
+            appointmentsByMonth[month] = SampleDataGenerator.GenerateMonth(Count, seed, month, timesAreUtc);
 
         appointments.ReplaceRange(0, appointments.Count, Loaded());
 
@@ -110,7 +128,7 @@ public sealed class AppointmentSource(SchedulerView scheduler)
             if (appointmentsByMonth.ContainsKey(month))
                 continue;
 
-            var items = SampleDataGenerator.GenerateMonth(Count, seed, month);
+            var items = SampleDataGenerator.GenerateMonth(Count, seed, month, timesAreUtc);
             appointmentsByMonth[month] = items;
             appointments.AddRange(items);
         }

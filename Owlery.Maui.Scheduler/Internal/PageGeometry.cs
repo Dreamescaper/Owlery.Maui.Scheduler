@@ -33,6 +33,12 @@ internal abstract class PageGeometry
     /// <summary>Current wall-clock time in the control's time zone. Refreshed by the minute.</summary>
     public DateTime Now { get; set; } = DateTime.Now;
 
+    /// <summary>
+    /// The zone the calendar is displayed in: the axis appointments are placed on, and the clock
+    /// behind <see cref="Now"/>.
+    /// </summary>
+    public TimeZoneInfo TimeZone { get; set; } = TimeZoneInfo.Local;
+
     /// <summary>First day rendered by each physical slot, left to right.</summary>
     public DateOnly[] SlotStarts { get; } = new DateOnly[SlotCount];
 

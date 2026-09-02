@@ -24,6 +24,7 @@ Namespace: `Owlery.Maui.Scheduler`
   - [Methods](#methods)
 - [Contracts](#contracts)
   - [`ISchedulerAppointment`](#ischedulerappointment)
+  - [`SchedulerMoment`](#schedulermoment)
   - [`SchedulerTimeSlot`](#schedulertimeslot)
   - [`SchedulerAppointmentCollection<T>`](#schedulerappointmentcollectiont)
 - [Event argument types](#event-argument-types)
@@ -182,7 +183,7 @@ In `Agenda`:
 | `TimeGutterWidth` | `double` | `52` | Width of the fixed left column holding the hour labels. |
 | `HeaderHeight` | `double` | `52` | Height of the day-name/day-number strip above the grid. |
 | `TimeFormat` | `string` | `"HH:mm"` | Format string for hour-gutter labels and the drag time indicator. |
-| `TimeZone` | `TimeZoneInfo` | `TimeZoneInfo.Local` | The zone every `DateTime` crossing this API is expressed in. Used to place the current-time line and decide which column is today. |
+| `TimeZone` | `TimeZoneInfo` | `TimeZoneInfo.Local` | The zone the calendar is displayed in: the axis appointments are placed on, and the clock behind *today* and the current-time line. It does not decide what your data means — see [`ISchedulerAppointment`](#ischedulerappointment). |
 
 Appointments falling outside `StartHour`–`EndHour` are clipped to the visible window; an appointment
 running past midnight is clipped to its own day.
@@ -372,9 +373,37 @@ public interface ISchedulerAppointment
 | Member | Description |
 |---|---|
 | `Key` | Stable identity, compared with `Equals`. Any stable value will do — an id, a composite string. |
-| `Start` | Wall-clock start in `SchedulerView.TimeZone`. |
-| `End` | Wall-clock end. Items shorter than 15 minutes still get a tappable box. |
+| `Start` | Start of the appointment. How it is read is below. |
+| `End` | End. Items shorter than 15 minutes still get a tappable box. |
 | `Subject` | Short text used to build the accessibility description. May be `null`. |
+| `TimeZone` | `TimeZoneInfo?`, default `null`. The zone `Start` and `End` are written in, when their `Kind` does not already say. A default interface member, so existing implementations keep compiling. |
+
+**How your times are read.** `DateTimeKind` decides, and `TimeZone` speaks only when the kind is
+silent:
+
+| `Start.Kind` | `TimeZone` | Means | Drawn |
+|---|---|---|---|
+| `Unspecified` | `null` | floating | exactly as given, whatever the view's zone is |
+| `Unspecified` | set | wall-clock in that zone | converted to the view's zone |
+| `Utc` | — | an instant | converted; `TimeZone` is **ignored** |
+| `Local` | — | an instant on this device | converted; `TimeZone` is **ignored** |
+
+The first row is the default and the zero-configuration case: supply plain `DateTime`s and 10:00 is
+drawn at 10:00, always. The two ignoring rows are deliberate — a `Utc` or `Local` value already carries
+a complete instant, so a zone beside it is redundant or contradictory, and ignoring beats guessing.
+
+Your appointment's zone says what its times *mean*. It does not ask for the appointment to be drawn on
+that zone's clock: the grid has one time axis, and placing items on different ones would put them in
+the wrong order relative to each other. To label an appointment with its own zone, render that in your
+template — it binds to your type.
+
+Two clock readings have no honest answer, and are resolved rather than thrown: a reading its zone
+skipped is moved forward by the gap, and a reading that happens twice is taken as its first occurrence.
+
+**Cost.** Floating appointments, and any already in the view's zone, are drawn without touching the
+time-zone database. Reading them as instants costs roughly 4× the layout, and as wall-clock in another
+zone roughly 16× — per rendered page, over your whole loaded collection. Worth knowing before putting a
+zone on every appointment across a wide range; `docs/design/verification.md` has the numbers.
 
 Implement this on your own type and keep the domain object on it — that instance is the template's
 binding context, so the template can read whatever it needs.
@@ -410,17 +439,49 @@ nothing and an insert does not disturb its neighbours, and everything reported b
 in your *current* collection first. Two appointments sharing a key within one period is not meaningful;
 give recurring instances distinct keys.
 
-### `SchedulerTimeSlot`
+### `SchedulerMoment`
+
+Everything the control hands back — a tapped cell, a drop, a tapped header, the visible dates — is one
+of these rather than a bare `DateTime`.
 
 ```csharp
-public readonly record struct SchedulerTimeSlot(DateTime Start, TimeSpan Duration)
+public readonly record struct SchedulerMoment(DateTime WallClock, TimeZoneInfo Zone)
+{
+    public DateTime ToDateTimeUtc();
+    public DateTime ToDateTimeLocal();
+}
 ```
 
 | Member | Type | Description |
 |---|---|---|
-| `Start` | `DateTime` | Start of the slot. |
+| `WallClock` | `DateTime` | The reading on the calendar's own clock, always `Kind = Unspecified`. |
+| `Zone` | `TimeZoneInfo` | The zone that clock keeps — `SchedulerView.TimeZone`. |
+| `ToDateTimeUtc()` | `DateTime` | The instant it names, `Kind = Utc`. |
+| `ToDateTimeLocal()` | `DateTime` | The same instant on this device. |
+
+Two kinds of host want two different answers from the same value, and neither should have to convert
+for the other. If you think in wall-clock, read `WallClock` and you will never meet a time zone. If
+your backend stores instants, call `ToDateTimeUtc()`. There is no default that is wrong for half of
+you.
+
+There is deliberately **no implicit conversion** to `DateTime`. The whole point of the type is that
+"which of these two did I get?" cannot be answered by accident.
+
+`ToDateTimeUtc()` always answers, even for a reading the view's zone never had — the grid draws a
+uniform day, so it can offer 02:30 on a morning that went 02:00 → 03:00. Such a reading is moved
+forward by the gap, and a reading that occurs twice is taken as its first occurrence.
+
+### `SchedulerTimeSlot`
+
+```csharp
+public readonly record struct SchedulerTimeSlot(SchedulerMoment Start, TimeSpan Duration)
+```
+
+| Member | Type | Description |
+|---|---|---|
+| `Start` | `SchedulerMoment` | Start of the slot. |
 | `Duration` | `TimeSpan` | Slot length — `SlotMinutes` for a cell tapped on the timeline, one day for a cell tapped in a month. |
-| `End` | `DateTime` | `Start + Duration`. |
+| `End` | `SchedulerMoment` | `Start + Duration`. |
 | `Date` | `DateOnly` | Calendar day the slot falls on. |
 
 ### `SchedulerAppointmentCollection<T>`
@@ -506,7 +567,7 @@ offline app. It is raised synchronously.
 | Member | Type | Description |
 |---|---|---|
 | `Appointment` | `ISchedulerAppointment` | The appointment being dragged, resolved against the current `ItemsSource`. |
-| `DropStart` | `DateTime` | The boundary it has moved to, in `TimeZone`. Where it would land if released now; the drag may still move on or be cancelled. |
+| `DropStart` | `SchedulerMoment` | The boundary it has moved to. Where it would land if released now; the drag may still move on or be cancelled. |
 
 Raised once per boundary crossed, which makes it the hook for feedback a person should feel one step
 at a time — a short haptic tick is the obvious use. Do not treat it as a commitment: only
@@ -518,14 +579,14 @@ raises it too, since the drop target genuinely moved.
 | Member | Type | Description |
 |---|---|---|
 | `Appointment` | `ISchedulerAppointment` | The dropped appointment. |
-| `DropStart` | `DateTime` | Snapped start it was dropped on, in `TimeZone`. |
+| `DropStart` | `SchedulerMoment` | Snapped start it was dropped on. |
 | `Cancel` | `bool` (settable) | Set `true` to reject the drop and return the appointment to its old position. |
 
 ### `SchedulerHeaderTappedEventArgs`
 
 | Member | Type | Meaning |
 |---|---|---|
-| `Date` | `DateTime` | Midnight on the day whose header was tapped, in `TimeZone`. |
+| `Date` | `SchedulerMoment` | Midnight on the day whose header was tapped. |
 
 Raised only while `ViewMode` is `Timeline`. A month's header names weekdays rather than dates, while
 an agenda names days in its leading gutter. Tap a month cell or agenda space instead — `CellTapped`
@@ -558,9 +619,9 @@ starts one interval before `EndHour`.
 
 | Member | Type | Description |
 |---|---|---|
-| `VisibleDates` | `IReadOnlyList<DateTime>` | The dates the active surface exposes: `VisibleDays` on a timeline, 42 on a month, and the whole loaded range in an agenda. |
-| `PrefetchFrom` | `DateTime` | Beginning of the range the host should have loaded. |
-| `PrefetchTo` | `DateTime` | End of the range the host should have loaded. |
+| `VisibleDates` | `IReadOnlyList<SchedulerMoment>` | The dates the active surface exposes: `VisibleDays` on a timeline, 42 on a month, and the whole loaded range in an agenda. |
+| `PrefetchFrom` | `SchedulerMoment` | Beginning of the range the host should have loaded. |
+| `PrefetchTo` | `SchedulerMoment` | End of the range the host should have loaded. |
 
 Timeline and month surfaces render three pages. Loading `PrefetchFrom`–`PrefetchTo` rather than just
 `VisibleDates` is what keeps the next swipe from showing an empty page. An agenda has one vertical
@@ -649,10 +710,17 @@ and rebuilds from it — it never watches an appointment's properties, so mutati
 invisible to it. Replace the instance instead, keeping its `Key`. See
 [`ISchedulerAppointment`](#ischedulerappointment).
 
-**Time zones are yours to handle.** Every `DateTime` crossing this API — `ISchedulerAppointment.Start`,
-`SchedulerTimeSlot.Start`, `AppointmentDropped.DropStart`, `VisibleDatesChanged` — is wall-clock in
-`TimeZone`. The control never converts. Convert once, at the boundary where you build your
-`ISchedulerAppointment` items, and convert back when writing a drop result to storage.
+**You are never made to convert.** Supply plain `DateTime`s and nothing is converted — 10:00 is drawn
+at 10:00 and reported back as 10:00. Supply UTC and it is placed where that instant falls on the view's
+clock, and `SchedulerMoment.ToDateTimeUtc()` gives you UTC back. Neither host has to do the other one's
+conversion; see [`ISchedulerAppointment`](#ischedulerappointment) and
+[`SchedulerMoment`](#schedulermoment).
+
+**The grid is not daylight-saving aware.** Every day is a uniform `StartHour`–`EndHour` band, so on the
+two days a year the view's own zone shifts: an hour that occurs twice is drawn once and appointments in
+it stack, an hour that does not occur is still drawn, and an appointment spanning the change is drawn
+an hour short or long. Asking a reading in the missing hour for its instant resolves rather than
+throwing.
 
 **`Cancel` is read synchronously.** Both cancellable events check `Cancel` the moment the handler
 returns. An `async` handler must do its validation *before* its first `await`; anything after it is too

@@ -127,8 +127,17 @@ cited design section first; `docs/design/README.md` maps every § to its file.
   the control as a new instance in the collection. Do not add a per-appointment subscription — that is
   one subscription per item across the whole range a host is told to keep loaded, to learn something
   the collection already reports.
-- **Every `DateTime` crossing the public API is wall-clock in `TimeZone`** (§9). The control performs
-  no time-zone conversion. Do not add any.
+- **A host's `DateTime` is interpreted in exactly one place** (§9). `AppointmentTime.In` holds the
+  whole rule — `DateTimeKind` decides, `ISchedulerAppointment.TimeZone` speaks only when the kind is
+  silent — and everything that lays appointments out goes through it. Do not re-derive it per surface.
+- **The floating fast path is load-bearing, not a tidy-up** (§9, §15). `Unspecified` with no zone, and
+  anything already in the view's zone, must return without touching the time-zone database. Measured:
+  removing it costs the timeline layout 4× for UTC appointments and 16× for zoned ones, per slot,
+  three slots per rebuild, over a collection hosts are told to keep wholly loaded.
+- **What the control reports is a grid position, not an instant** (§9). Outbound values are
+  `SchedulerMoment` — wall-clock in `TimeZone` plus that zone — and the host picks a representation
+  from it. Do not add an implicit conversion to `DateTime`: the type exists so that choice cannot be
+  made by accident.
 - **Cancellable events are read synchronously.** `Cancel` is checked the moment the handler returns,
   so it cannot be set after an `await`.
 - **The control refers to `INotifyCollectionChanged`, never a concrete collection type** (§9).

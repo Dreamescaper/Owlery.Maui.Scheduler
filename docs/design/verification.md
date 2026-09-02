@@ -49,6 +49,22 @@ A whole repopulate — three slots laid out, then every view on the page reconci
 positioned — cost 0.27 ms at 4,800 items, 1.00 ms at 12,000 and 4.75 ms at 60,000, of which the layout
 was 58%, 38% and 38% respectively.
 
+Re-measured after appointments gained a zone model (§9), same machine and method, timeline layout of
+one page:
+
+| Items loaded | Floating (fast path) | UTC | Zoned (full conversion) |
+|---|---|---|---|
+| 4,800 | 0.046 ms | 0.399 ms | 1.627 ms |
+| 12,000 | 0.104 ms | 1.019 ms | 1.420 ms |
+| 60,000 | 0.410 ms | 1.649 ms | 6.681 ms |
+
+The floating column is the same order as the 0.306 ms measured before the change, so the default costs
+what it always did. The other two are the whole argument for the fast path: reading appointments as
+instants costs roughly 4× and reading them as wall-clock in another zone roughly 16×, per slot, three
+slots per rebuild. At 60,000 zoned appointments a repopulate is about 20 ms of layout on this machine
+before a phone multiplier — so a host that puts a zone on every appointment across a wide loaded range
+is in different territory, and that is worth knowing before adopting the feature rather than after.
+
 **The index was not built, and the measurement is why.** Pre-filtering to the page is the ceiling of
 what a date index could deliver, and it removes a third to a half of the layout — a quarter of a
 repopulate at worst, on an operation that is coalesced to one per tick and never runs during a drag.

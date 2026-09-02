@@ -43,7 +43,8 @@ internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snap
     }
 
     public IReadOnlyList<IAppointmentPlacement> Layout(IEnumerable<ISchedulerAppointment> items, DateOnly pageStart) =>
-        AppointmentLayoutEngine.Layout(items, pageStart, geometry.VisibleDays, geometry.StartHour, geometry.EndHour);
+        AppointmentLayoutEngine.Layout(
+            items, pageStart, geometry.VisibleDays, geometry.StartHour, geometry.EndHour, geometry.TimeZone);
 
     public Rect BoundsFor(IAppointmentPlacement placement)
     {
@@ -67,9 +68,9 @@ internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snap
     /// </remarks>
     public Rect BoundsFor(SchedulerTimeSlot slot, DateOnly pageStart)
     {
-        var dayIndex = DateOnly.FromDateTime(slot.Start).DayNumber - pageStart.DayNumber;
-        var y = geometry.YFromMinutes(slot.Start.TimeOfDay.TotalMinutes);
-        var height = geometry.YFromMinutes(slot.End.TimeOfDay.TotalMinutes) - y;
+        var dayIndex = DateOnly.FromDateTime(slot.Start.WallClock).DayNumber - pageStart.DayNumber;
+        var y = geometry.YFromMinutes(slot.Start.WallClock.TimeOfDay.TotalMinutes);
+        var height = geometry.YFromMinutes(slot.End.WallClock.TimeOfDay.TotalMinutes) - y;
 
         return new Rect(dayIndex * geometry.DayWidth, y, geometry.DayWidth, height);
     }
@@ -87,7 +88,7 @@ internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snap
         var snapped = Snap(geometry.MinutesFromY(point.Y));
         var start = date.ToDateTime(TimeOnly.MinValue).AddMinutes(snapped);
 
-        return new SchedulerTimeSlot(start, TimeSpan.FromMinutes(SnapInterval));
+        return new SchedulerTimeSlot(new SchedulerMoment(start, geometry.TimeZone), TimeSpan.FromMinutes(SnapInterval));
     }
 
     /// <summary>

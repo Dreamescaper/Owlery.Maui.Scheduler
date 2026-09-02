@@ -61,9 +61,10 @@ public sealed record SchedulerAgendaSection(
 /// An item the scheduler places on the week grid.
 /// </summary>
 /// <remarks>
-/// <see cref="Start"/> and <see cref="End"/> are wall-clock values in
-/// <see cref="SchedulerView.TimeZone"/>. The control never converts between time zones;
-/// the caller decides what "now" means and hands over already-converted values.
+/// <see cref="Start"/> and <see cref="End"/> are read according to their
+/// <see cref="DateTimeKind"/> and this appointment's <see cref="TimeZone"/>, then placed on the axis
+/// of <see cref="SchedulerView.TimeZone"/>. Supply them with <see cref="DateTimeKind.Unspecified"/>
+/// and no zone — the default — and nothing is converted at all: they are drawn exactly as given.
 /// <para>
 /// <b>Implementations should be immutable.</b> The control observes the collection, never the
 /// appointments in it: nothing here derives from <c>BindableObject</c>, none of these are bindable
@@ -100,17 +101,104 @@ public interface ISchedulerAppointment
 
     /// <summary>Short text describing the appointment, used for the accessibility description.</summary>
     string? Subject { get; }
+
+    /// <summary>
+    /// The zone <see cref="Start"/> and <see cref="End"/> are expressed in, when their
+    /// <see cref="DateTimeKind"/> does not already say. <c>null</c> — the default — means they speak
+    /// for themselves.
+    /// </summary>
+    /// <remarks>
+    /// The kind decides first, and this only speaks when the kind is silent:
+    /// <list type="table">
+    /// <item>
+    ///   <term><see cref="DateTimeKind.Utc"/></term>
+    ///   <description>an instant. Converted into the view's zone; this property is <b>ignored</b>.</description>
+    /// </item>
+    /// <item>
+    ///   <term><see cref="DateTimeKind.Local"/></term>
+    ///   <description>an instant on this device. Converted; this property is <b>ignored</b>.</description>
+    /// </item>
+    /// <item>
+    ///   <term><see cref="DateTimeKind.Unspecified"/>, this <c>null</c></term>
+    ///   <description>floating. Drawn exactly as given, whatever the view's zone is.</description>
+    /// </item>
+    /// <item>
+    ///   <term><see cref="DateTimeKind.Unspecified"/>, this set</term>
+    ///   <description>wall-clock in that zone. Converted into the view's zone.</description>
+    /// </item>
+    /// </list>
+    /// <para>
+    /// The two ignoring rows are deliberate: a <c>Utc</c> or <c>Local</c> value already carries a
+    /// complete instant, so a zone beside it is redundant or contradictory, and ignoring it beats
+    /// guessing which the host meant.
+    /// </para>
+    /// <para>
+    /// It is a default interface member, so existing implementations keep compiling and opt in by
+    /// overriding it. One wrinkle of that: the default is reachable through the interface but not
+    /// through your own type, so read it as
+    /// <c>((ISchedulerAppointment)appointment).TimeZone</c> if you have not declared it yourself.
+    /// </para>
+    /// <para>
+    /// The zone says what the times <em>mean</em>. It does not ask for the appointment to be drawn on
+    /// that zone's clock — the grid has one time axis, and placing items on different ones would put
+    /// them in the wrong order relative to each other. A host wanting to label an appointment with
+    /// its own zone renders that in its template, which binds to the host's own type.
+    /// </para>
+    /// </remarks>
+    TimeZoneInfo? TimeZone => null;
+}
+
+/// <summary>
+/// A moment the control reports, in the zone the calendar is displayed in.
+/// </summary>
+/// <remarks>
+/// Everything the control hands back — a tapped cell, a drop, a tapped header, the visible dates —
+/// is one of these rather than a bare <see cref="DateTime"/>, because two kinds of host want two
+/// different answers from the same value and neither should have to convert. A host that thinks in
+/// wall-clock reads <see cref="WallClock"/> and never meets a time zone; a host whose backend stores
+/// instants calls <see cref="ToDateTimeUtc"/>. There is no default that is wrong for half of them.
+/// <para>
+/// Deliberately no implicit conversion to <see cref="DateTime"/>. The whole value of the type is that
+/// "which of the two is this?" cannot be answered by accident, and an implicit conversion would let
+/// <c>DateTime start = e.DropStart;</c> compile and quietly pick one.
+/// </para>
+/// </remarks>
+/// <param name="WallClock">
+/// The reading on the calendar's own clock, always <see cref="DateTimeKind.Unspecified"/>: it is a
+/// position on the grid, not an instant, until <see cref="Zone"/> resolves it.
+/// </param>
+/// <param name="Zone">The zone the calendar is displayed in — <see cref="SchedulerView.TimeZone"/>.</param>
+public readonly record struct SchedulerMoment(DateTime WallClock, TimeZoneInfo Zone)
+{
+    /// <summary>The instant this moment names, in UTC.</summary>
+    /// <remarks>
+    /// A clock reading is not always an instant: on the morning a zone springs forward the reading
+    /// never happens, and on the morning it falls back it happens twice. Rather than throw, an
+    /// invalid reading is moved forward by the gap and an ambiguous one is taken as its first
+    /// occurrence — the same rule the control applies to appointments coming the other way. The grid
+    /// draws a uniform day, so it can offer a reading that its own zone does not have.
+    /// </remarks>
+    public DateTime ToDateTimeUtc() => Internal.AppointmentTime.ToUtc(WallClock, Zone);
+
+    /// <summary>The same instant on this device's clock.</summary>
+    public DateTime ToDateTimeLocal() => ToDateTimeUtc().ToLocalTime();
+
+    public SchedulerMoment Add(TimeSpan value) => this with { WallClock = WallClock + value };
+
+    public static SchedulerMoment operator +(SchedulerMoment moment, TimeSpan value) => moment.Add(value);
+
+    public override string ToString() => $"{WallClock:yyyy-MM-dd HH:mm} {Zone.Id}";
 }
 
 
 /// <summary>
 /// A position on the grid, produced by tapping empty space or by dropping an appointment.
 /// </summary>
-public readonly record struct SchedulerTimeSlot(DateTime Start, TimeSpan Duration)
+public readonly record struct SchedulerTimeSlot(SchedulerMoment Start, TimeSpan Duration)
 {
-    public DateTime End => Start + Duration;
+    public SchedulerMoment End => Start + Duration;
 
-    public DateOnly Date => DateOnly.FromDateTime(Start);
+    public DateOnly Date => DateOnly.FromDateTime(Start.WallClock);
 }
 
 public sealed class SchedulerCellTappedEventArgs(SchedulerTimeSlot slot) : EventArgs
@@ -140,22 +228,22 @@ public sealed class SchedulerAppointmentDragStartingEventArgs(ISchedulerAppointm
 /// feedback a person should feel once per step — a short haptic tick, most obviously — rather than
 /// continuously. It does not fire when the drag is first picked up.
 /// </remarks>
-public sealed class SchedulerAppointmentDropTargetChangedEventArgs(ISchedulerAppointment appointment, DateTime dropStart)
+public sealed class SchedulerAppointmentDropTargetChangedEventArgs(ISchedulerAppointment appointment, SchedulerMoment dropStart)
     : EventArgs
 {
     public ISchedulerAppointment Appointment { get; } = appointment;
 
     /// <summary>The snapped start it has moved to, in <see cref="SchedulerView.TimeZone"/>.</summary>
     /// <remarks>Where it would land if released now; the drag may still move on or be cancelled.</remarks>
-    public DateTime DropStart { get; } = dropStart;
+    public SchedulerMoment DropStart { get; } = dropStart;
 }
 
-public sealed class SchedulerAppointmentDroppedEventArgs(ISchedulerAppointment appointment, DateTime dropStart) : EventArgs
+public sealed class SchedulerAppointmentDroppedEventArgs(ISchedulerAppointment appointment, SchedulerMoment dropStart) : EventArgs
 {
     public ISchedulerAppointment Appointment { get; } = appointment;
 
     /// <summary>The snapped start the appointment was dropped on, in <see cref="SchedulerView.TimeZone"/>.</summary>
-    public DateTime DropStart { get; } = dropStart;
+    public SchedulerMoment DropStart { get; } = dropStart;
 
     /// <summary>Set to <c>true</c> to reject the drop and snap the appointment back.</summary>
     public bool Cancel { get; set; }
@@ -168,10 +256,10 @@ public sealed class SchedulerAppointmentDroppedEventArgs(ISchedulerAppointment a
 /// A month does not raise it: its header names weekdays that recur down six rows, so there is no one
 /// date a column stands for.
 /// </remarks>
-public sealed class SchedulerHeaderTappedEventArgs(DateTime date) : EventArgs
+public sealed class SchedulerHeaderTappedEventArgs(SchedulerMoment date) : EventArgs
 {
     /// <summary>Midnight on the day whose header was tapped, in <see cref="SchedulerView.TimeZone"/>.</summary>
-    public DateTime Date { get; } = date;
+    public SchedulerMoment Date { get; } = date;
 }
 
 /// <summary>
@@ -194,16 +282,16 @@ public sealed class SchedulerTimeGutterTappedEventArgs(TimeSpan time) : EventArg
 /// Raised whenever the visible period changes, so the host can fetch the data it needs.
 /// </summary>
 public sealed class SchedulerVisibleDatesChangedEventArgs(
-    IReadOnlyList<DateTime> visibleDates,
-    DateTime prefetchFrom,
-    DateTime prefetchTo) : EventArgs
+    IReadOnlyList<SchedulerMoment> visibleDates,
+    SchedulerMoment prefetchFrom,
+    SchedulerMoment prefetchTo) : EventArgs
 {
     /// <summary>The seven days of the week the user is currently looking at.</summary>
-    public IReadOnlyList<DateTime> VisibleDates { get; } = visibleDates;
+    public IReadOnlyList<SchedulerMoment> VisibleDates { get; } = visibleDates;
 
     /// <summary>Start of the first rendered week — data before this is never displayed without another swipe.</summary>
-    public DateTime PrefetchFrom { get; } = prefetchFrom;
+    public SchedulerMoment PrefetchFrom { get; } = prefetchFrom;
 
     /// <summary>End of the last rendered week.</summary>
-    public DateTime PrefetchTo { get; } = prefetchTo;
+    public SchedulerMoment PrefetchTo { get; } = prefetchTo;
 }

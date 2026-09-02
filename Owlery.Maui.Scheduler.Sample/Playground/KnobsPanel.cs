@@ -71,8 +71,11 @@ public sealed class KnobsPanel : ContentView
                      ("Sun", DayOfWeek.Sunday)],
                     scheduler.FirstDayOfWeek, day => scheduler.FirstDayOfWeek = day),
                 Knobs.Caption("FirstDayOfWeek only applies to a seven-day page. Shorter pages start on DisplayDate."),
-                new Segmented<string>("TimeZone", [("Local", "local"), ("UTC", "utc")], "local", SetTimeZone),
-                Knobs.Caption("The control converts nothing. Changing the zone moves the current-time line and which column counts as today."),
+                new Segmented<string>("TimeZone",
+                    [("Local", "local"), ("UTC", "utc"), ("New York", "nyc")], "local", SetTimeZone),
+                new Segmented<bool>("Appointment times", [("Floating", false), ("UTC", true)], false, SetTimesAreUtc),
+                Knobs.Caption("Floating times are drawn as written whatever the zone is. UTC times are instants, "
+                    + "so changing the zone moves them. Either way the zone sets the current-time line and today."),
 
                 Knobs.Section("Timeline"),
                 Knobs.Slide("StartHour", 0, 23, scheduler.StartHour, "F0",
@@ -206,7 +209,18 @@ public sealed class KnobsPanel : ContentView
     }
 
     private void SetTimeZone(string id) =>
-        scheduler.TimeZone = id == "utc" ? TimeZoneInfo.Utc : TimeZoneInfo.Local;
+        scheduler.TimeZone = id switch
+        {
+            "utc" => TimeZoneInfo.Utc,
+            "nyc" => TimeZoneInfo.FindSystemTimeZoneById("America/New_York"),
+            _ => TimeZoneInfo.Local,
+        };
+
+    /// <summary>
+    /// Switches the generated data between the two shapes a host can supply, so the difference is
+    /// something the drawer can demonstrate rather than only describe.
+    /// </summary>
+    private void SetTimesAreUtc(bool utc) => source.SetTimesAreUtc(utc);
 
     private void SetWorkingDays(params DayOfWeek[] days) => scheduler.WorkingDays = days;
 

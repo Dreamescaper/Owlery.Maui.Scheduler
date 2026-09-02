@@ -182,6 +182,48 @@ public class SchedulerAppointmentCollection<T> : ObservableCollection<T> where T
     }
 
     /// <summary>
+    /// Puts <paramref name="replacement"/> where <paramref name="original"/> sits, raising one
+    /// <see cref="NotifyCollectionChangedAction.Replace"/>. Returns <c>false</c>, changing nothing,
+    /// when <paramref name="original"/> is not in the collection.
+    /// </summary>
+    /// <remarks>
+    /// The move-an-appointment case, in one call. A changed appointment is a new instance rather than
+    /// one mutated in place (see <see cref="ISchedulerAppointment"/>), so a host settling a drop has
+    /// to find the old instance and swap it — an index lookup, a bounds check and a range call, which
+    /// every host would otherwise write for itself. Position is kept, so the collection does not
+    /// reshuffle underneath a view that is already showing the appointment.
+    /// <para>
+    /// <paramref name="original"/> is matched with <see cref="EqualityComparer{T}.Default"/>, not by
+    /// <see cref="ISchedulerAppointment.Key"/> — pass the instance that is in the collection, not the
+    /// new one built to replace it.
+    /// </para>
+    /// </remarks>
+    public bool Replace(T original, T replacement)
+    {
+        if (original is null)
+            throw new ArgumentNullException(nameof(original));
+        if (replacement is null)
+            throw new ArgumentNullException(nameof(replacement));
+
+        var index = Items.IndexOf(original);
+
+        if (index < 0)
+            return false;
+
+        CheckReentrancy();
+
+        var replaced = Items[index];
+        Items[index] = replacement;
+
+        RaiseChange(
+            new NotifyCollectionChangedEventArgs(
+                NotifyCollectionChangedAction.Replace, replacement, replaced, index),
+            countChanged: false);
+
+        return true;
+    }
+
+    /// <summary>
     /// Replaces the <paramref name="count"/> items starting at <paramref name="index"/> with
     /// <paramref name="collection"/> and raises one event describing the change.
     /// </summary>

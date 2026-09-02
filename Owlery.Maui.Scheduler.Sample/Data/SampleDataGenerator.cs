@@ -24,7 +24,11 @@ public static class SampleDataGenerator
     /// Spreads <paramref name="count"/> appointments over one calendar month, clustered into normal
     /// teaching hours so overlaps happen naturally.
     /// </summary>
-    public static List<SampleAppointment> GenerateMonth(int count, int seed, DateOnly month)
+    /// <param name="asUtc">
+    /// Whether to stamp the times as instants. Floating is the default and the simple case; UTC shows
+    /// what a host with an instant-storing backend supplies, and moves when the view's zone changes.
+    /// </param>
+    public static List<SampleAppointment> GenerateMonth(int count, int seed, DateOnly month, bool asUtc = false)
     {
         var appointments = new List<SampleAppointment>(count);
         var monthStart = new DateOnly(month.Year, month.Month, 1);
@@ -44,9 +48,11 @@ public static class SampleDataGenerator
 
             // Every tenth item refuses to be dragged, so the cancellable drag event has something
             // to demonstrate without the host having to hand-pick an appointment.
+            var start = day.AddMinutes(minutes);
+
             appointments.Add(new SampleAppointment(
                 id,
-                day.AddMinutes(minutes),
+                asUtc ? DateTime.SpecifyKind(start, DateTimeKind.Utc) : start,
                 duration,
                 subject,
                 person,
