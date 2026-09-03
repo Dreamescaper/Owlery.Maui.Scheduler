@@ -153,6 +153,37 @@ public class DisplayDateTests
     }
 
     [Test]
+    public void A_day_page_several_days_off_is_rebuilt()
+    {
+        // A one-day page makes "several pages away" only a few days away, which is the distance the
+        // host covers whenever it offers a way back to today.
+        var harness = new SchedulerHarness(new DateTime(2026, 8, 31), visibleDays: 1);
+
+        harness.Scheduler.DisplayDate = new DateTime(2026, 9, 3);
+
+        Assert.That(harness.Scheduler.DisplayDate.Date, Is.EqualTo(new DateTime(2026, 9, 3)));
+    }
+
+    [Test]
+    public void Today_is_reachable_after_paging_a_day_at_a_time_into_the_month_before()
+    {
+        // The host's Today button, exactly: page back until the calendar is in the previous month,
+        // then name today and expect to land on it.
+        var today = new DateTime(2026, 9, 3);
+        var harness = new SchedulerHarness(today, visibleDays: 1);
+
+        harness.SwipeToPage(0);
+        harness.SwipeToPage(0);
+        harness.SwipeToPage(0);
+
+        Assert.That(harness.Scheduler.DisplayDate.Date, Is.EqualTo(new DateTime(2026, 8, 31)), "paged back");
+
+        harness.Scheduler.DisplayDate = today;
+
+        Assert.That(harness.Scheduler.DisplayDate.Date, Is.EqualTo(today));
+    }
+
+    [Test]
     public void The_next_month_slides_too()
     {
         var harness = new SchedulerHarness(new DateTime(2026, 8, 15), viewMode: SchedulerViewMode.Month);
