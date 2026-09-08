@@ -163,3 +163,24 @@ reports rather than on how many taps were sent.
 Nothing about the platform handlers is covered headlessly: with no handler registered, `PagingScrollView`
 holds whatever offset it was last told and raises `PageSettled` when a test says so, which is exactly
 what the suite wants and exactly what cannot catch a fling prediction or a clipping quirk.
+
+**Opening a day zooms onto that day and nothing else — confirmed on the iOS simulator** (see
+[section 16](timeline.md)). The transition's *motion* is skipped without a handler, so no headless test can reach it; what the
+suite covers is the shift arithmetic in `DayCountTransition` and the decision not to slide — which is
+reachable because the gate is a day-count change in the current tick rather than a running animation.
+The motion itself was checked on a device.
+
+Three temporary changes made it observable, none of them kept: the sample's `HeaderTapped` handler was
+made to write `VisibleDays` before `DisplayDate` (the order that reproduces the defect, and the one a
+host binding both properties may well get); `DayCountAnimationMs` was raised to 8000 so a screenshot
+lands mid-transition; and `SlideToAdjacentPageAsync` was made to print a line, read back through
+`simctl launch --console-pty`. Then: open Thursday, return to seven days, open Friday.
+
+| | slides after the zoom | mid-transition frame |
+|---|---|---|
+| before | once, forward | — |
+| after | never | Friday's column, widening in place |
+
+The sample's own log shows the double move either way — the centre page is reported as Thursday and
+then as Friday for one tap — because re-aiming still rebuilds onto the page asked for. What changed is
+that the second move is no longer a page slide.

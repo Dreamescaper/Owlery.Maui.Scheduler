@@ -151,6 +151,48 @@ public class DayCountTests
     }
 
     [Test]
+    public void A_date_arriving_after_the_day_count_opens_that_day_rather_than_travelling_to_it()
+    {
+        // Opening a day is two property writes, and a host — a Blazor wrapper especially — may make
+        // them in either order. With the day count first, the page is laid out from the date this
+        // write supersedes, so the date is a correction to that layout and not a journey: without
+        // this it expanded onto the day last opened and then slid across to the one asked for.
+        var harness = new SchedulerHarness(Monday, OneEachDay());
+
+        // Held open so both writes land in one tick, which is what they do in a host.
+        harness.Dispatcher.DeferDispatch = true;
+
+        harness.Scheduler.VisibleDays = 1;
+        var travelled = harness.PagerScrolls.Count;
+
+        // Tuesday is exactly one page away in a one-day view, which is what made it slide.
+        harness.Scheduler.DisplayDate = Monday.AddDays(1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                harness.VisibleDatesReports.Last().VisibleDates.Single().WallClock,
+                Is.EqualTo(Monday.AddDays(1)));
+            Assert.That(
+                harness.PagerScrolls.Skip(travelled).Where(scroll => scroll.Animated),
+                Is.Empty,
+                "an animated scroll is a slide across to the day, which is the glitch");
+        });
+    }
+
+    [Test]
+    public void A_date_set_on_its_own_still_slides_onto_the_adjacent_page()
+    {
+        // The other direction of the same rule: only a date belonging to the same batch as a day-count
+        // change is a correction. One arriving later is ordinary navigation and keeps its motion.
+        var harness = new SchedulerHarness(Monday, OneEachDay(), visibleDays: 1);
+
+        harness.Scheduler.DisplayDate = Monday.AddDays(1);
+
+        Assert.That(harness.PagerScrolls.Where(scroll => scroll.Animated), Is.Not.Empty);
+    }
+
+    [Test]
     public void Changing_the_day_count_relays_out_the_page()
     {
         var harness = new SchedulerHarness(Monday, OneEachDay());

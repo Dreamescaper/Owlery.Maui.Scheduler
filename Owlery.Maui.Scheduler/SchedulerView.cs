@@ -136,6 +136,12 @@ public partial class SchedulerView : ContentView
     private bool repopulateQueued;
     private bool constructed;
 
+    /// <summary>The day-count change currently easing into place, or null while none is.</summary>
+    private DayCountTransition? dayCountTransition;
+
+    /// <summary>Whether the day count has changed in this tick and the date may still be following it.</summary>
+    private bool dayCountChangePending;
+
     /// <summary>What each view's accessibility description was last built from.</summary>
     /// <remarks>
     /// Cached as values rather than compared against the previously bound appointment, because the
@@ -565,7 +571,19 @@ public partial class SchedulerView : ContentView
         if (ViewMode is not SchedulerViewMode.Timeline)
             return;
 
-        var previousDayWidth = geometry.ViewportWidth / Math.Clamp(oldDays, 1, 7);
+        // A host opening a day writes the date too, and the two land one after the other in some
+        // order. Marked before the guards below rather than left to the presence of an animation:
+        // the transition is skipped on a control with no handler or not yet loaded, and what a host
+        // sees must not depend on that. Cleared on the next tick, so only writes belonging to the
+        // same batch are taken as part of the same intent.
+        if (!dayCountChangePending)
+        {
+            dayCountChangePending = true;
+            Dispatcher.Dispatch(() => dayCountChangePending = false);
+        }
+
+        var previousDayCount = Math.Clamp(oldDays, 1, 7);
+        var previousDayWidth = geometry.ViewportWidth / previousDayCount;
         var previousPageStart = slots[1].PageStart;
 
         ApplyGeometry();
@@ -582,22 +600,22 @@ public partial class SchedulerView : ContentView
             return;
         }
 
-        // Puts the day that was already on screen back at the left edge of the viewport, so the new
-        // days grow in from the side they belong on — Monday and Tuesday from the left, Saturday and
-        // Sunday from the right — instead of the whole page sliding sideways first. Pages are
-        // spaced by what they currently measure, so the centre page starts one page-span in, and the
-        // shift has to undo both that and the columns preceding the anchored day.
-        var shiftedDays = previousPageStart.DayNumber - slots[1].PageStart.DayNumber;
-        var startOffset = geometry.ViewportWidth
-            - ((geometry.VisibleDays + shiftedDays) * previousDayWidth);
-
+        // Aborting runs the previous transition's finished handler, which clears the field — so the
+        // one being started here is put in place afterwards.
         this.AbortAnimation(DayCountAnimationName);
+
+        var transition = new DayCountTransition(
+            previousDayWidth, newDayWidth, previousPageStart, previousDayCount);
+
+        transition.AimAt(slots[CentreSlot].PageStart, geometry.VisibleDays);
+        dayCountTransition = transition;
 
         new Animation(
             progress =>
             {
-                geometry.DayWidthOverride = previousDayWidth + ((newDayWidth - previousDayWidth) * progress);
-                geometry.AnimationOffsetX = startOffset * (1 - progress);
+                transition.Progress = progress;
+                geometry.DayWidthOverride = transition.DayWidth;
+                geometry.AnimationOffsetX = transition.OffsetX;
                 ApplyDayWidth();
             },
             0,
@@ -605,6 +623,7 @@ public partial class SchedulerView : ContentView
             Easing.CubicInOut)
             .Commit(this, DayCountAnimationName, length: DayCountAnimationMs, finished: (_, _) =>
             {
+                dayCountTransition = null;
                 geometry.DayWidthOverride = null;
                 geometry.AnimationOffsetX = 0;
                 ApplyDayWidth();
