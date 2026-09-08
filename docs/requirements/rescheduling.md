@@ -118,14 +118,17 @@ reach.
 mark the step in whatever way suits the platform — a haptic tick, most obviously. It is told once per
 boundary, not once per movement, and not when the appointment is first picked up.
 
-**DND-16** Releasing an appointment on the time it already occupied results in no change.
+**DND-16** Releasing an appointment on the time it already occupied results in no change, and leaves
+it as movable as it was before.
 
-**DND-17** The host can reject a drop, in which case the appointment returns to where it was.
+**DND-17** A drop the host does not act on leaves the appointment where it was. Refusing one asks
+nothing of the host beyond declining to make the change.
 
-**DND-18** On acceptance the appointment stays where it was dropped while the host does its work. It
-does not snap back to the old time and then jump forward again.
+**DND-18** A move the host makes while handling the drop is shown from the moment the finger lifts.
+The appointment does not snap back to the old time and then jump forward again.
 
-**DND-19** If the host's work fails, the appointment returns to its original time.
+**DND-19** If the host's work fails afterwards, returning the appointment to its original time is a
+change to the appointments like any other.
 
 **DND-20** A drag interrupted before release — by a call, by the app being backgrounded — leaves the
 appointment unchanged and requests nothing.

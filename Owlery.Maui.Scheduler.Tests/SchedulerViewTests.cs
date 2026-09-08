@@ -167,11 +167,11 @@ public class SchedulerViewTests
     }
 
     [Test]
-    public void A_drop_the_host_never_confirms_is_given_up_on_at_the_next_change_of_week()
+    public void A_week_swiped_after_a_drop_still_draws_it_from_the_model()
     {
-        // The control holds a dropped appointment at the position it was released, waiting for the
-        // host to feed the change back. A host that never does would otherwise leave that view pinned
-        // to the surface, drifting over whatever week is scrolled to next.
+        // A drop the host does not apply is drawn where the model says the moment the finger lifts —
+        // see DropSettlingTests. What this adds is that the page rotation a swipe performs finds the
+        // appointment in a week, rather than left over from the drag.
         var harness = new SchedulerHarness(Monday, [TestAppointment.At(Monday.AddDays(2), "10:00", 1, "s")]);
         var grab = harness.PointAt(CentreSlot, 2, TimeSpan.Parse("10:30"));
 
@@ -182,7 +182,7 @@ public class SchedulerViewTests
 
         Assert.Multiple(() =>
         {
-            // Back where the model says it is: Wednesday of the original week, now the leading page.
+            // Wednesday of the original week, which the swipe has made the leading page.
             Assert.That(bounds.X, Is.EqualTo(2 * SchedulerHarness.DayWidth).Within(2));
             Assert.That(bounds.Y, Is.EqualTo(100).Within(0.01));
         });

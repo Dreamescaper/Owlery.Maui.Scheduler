@@ -314,11 +314,18 @@ public sealed class PlaygroundPage : ContentPage
     private void OnAppointmentDropTargetChanged(object? sender, SchedulerAppointmentDropTargetChangedEventArgs e) =>
         Log($"DropTargetChanged · {e.DropStart:ddd d MMM HH:mm}");
 
+    /// <summary>
+    /// Writes the move down, which is the whole of what a host does with a drop.
+    /// </summary>
+    /// <remarks>
+    /// The control moves nothing itself: it lays the calendar out from <c>ItemsSource</c> as that
+    /// reads when this returns. Refusing a drop is therefore not an instruction — leaving the model
+    /// alone is what leaves the appointment where it was.
+    /// </remarks>
     private void OnAppointmentDropped(object? sender, SchedulerAppointmentDroppedEventArgs e)
     {
         if (policy.RejectDrops)
         {
-            e.Cancel = true;
             Log($"AppointmentDropped · rejected, {Name(e.Appointment)} stays at {e.Appointment.Start:HH:mm}");
             return;
         }
@@ -326,10 +333,10 @@ public sealed class PlaygroundPage : ContentPage
         if (e.Appointment is not SampleAppointment appointment)
             return;
 
-        // The control leaves the appointment where it was dropped and does not touch the model. The
-        // move only becomes real when the host writes it down and re-emits ItemsSource.
-        // A wall-clock host: the playground's appointments are floating, so the grid position is the
-        // value. A host whose backend stores instants would call e.DropStart.ToDateTimeUtc() instead.
+        // Applied before returning, so the appointment is drawn at its new time without ever snapping
+        // back on the way. A wall-clock host: the playground's appointments are floating, so the grid
+        // position is the value. A host whose backend stores instants would call
+        // e.DropStart.ToDateTimeUtc() instead.
         source.Move(appointment, e.DropStart.WallClock);
 
         Log($"AppointmentDropped · {Name(e.Appointment)} → {e.DropStart.WallClock:ddd d MMM HH:mm}");

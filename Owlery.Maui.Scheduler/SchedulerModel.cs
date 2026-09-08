@@ -238,15 +238,27 @@ public sealed class SchedulerAppointmentDropTargetChangedEventArgs(ISchedulerApp
     public SchedulerMoment DropStart { get; } = dropStart;
 }
 
+/// <summary>
+/// Raised when a dragged appointment is released, asking the host to move it.
+/// </summary>
+/// <remarks>
+/// The control does not move anything itself: it lays the calendar out from <see cref="SchedulerView.ItemsSource"/>
+/// as that reads the moment the handler returns. A host that wants the move applies it to its data
+/// before returning — replacing the appointment with one starting at <see cref="DropStart"/>, keeping
+/// its <see cref="ISchedulerAppointment.Key"/> — and one that does not want it need do nothing at all,
+/// which leaves the appointment where it already was. There is nothing to cancel and nothing to
+/// release afterwards.
+/// <para>
+/// An update that can fail belongs after that: apply the move, start the call, and put the old start
+/// back if it fails. That last step is an ordinary change to the collection, not part of this event.
+/// </para>
+/// </remarks>
 public sealed class SchedulerAppointmentDroppedEventArgs(ISchedulerAppointment appointment, SchedulerMoment dropStart) : EventArgs
 {
     public ISchedulerAppointment Appointment { get; } = appointment;
 
     /// <summary>The snapped start the appointment was dropped on, in <see cref="SchedulerView.TimeZone"/>.</summary>
     public SchedulerMoment DropStart { get; } = dropStart;
-
-    /// <summary>Set to <c>true</c> to reject the drop and snap the appointment back.</summary>
-    public bool Cancel { get; set; }
 }
 
 /// <summary>

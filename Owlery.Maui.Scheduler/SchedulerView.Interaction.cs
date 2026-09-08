@@ -80,7 +80,7 @@ public partial class SchedulerView
     {
         if (dragArmed)
         {
-            CompleteDrag(committed: true);
+            CompleteDrag();
             return;
         }
 
@@ -677,7 +677,8 @@ public partial class SchedulerView
             UpdateDragPosition(lastDragPoint);
     }
 
-    private void CompleteDrag(bool committed)
+    /// <summary>Ends an armed drag on the finger lifting: reports the drop, then settles the calendar.</summary>
+    private void CompleteDrag()
     {
         longPressTimer?.Stop();
         longPressTimer = null;
@@ -703,48 +704,13 @@ public partial class SchedulerView
         SetScrollingEnabled(true);
         gutter.ClearIndicator();
 
-        if (!committed)
-        {
-            RepopulateAllSlots();
-            return;
-        }
+        AppointmentDropped?.Invoke(this, new SchedulerAppointmentDroppedEventArgs(Resolve(appointment), Moment(dragDropStart)));
 
-        var args = new SchedulerAppointmentDroppedEventArgs(Resolve(appointment), Moment(dragDropStart));
-        AppointmentDropped?.Invoke(this, args);
-
-        if (args.Cancel)
-        {
-            RepopulateAllSlots();
-            return;
-        }
-
-        // Accepted: the faded original moves to where it was dropped and comes back to full strength,
-        // taking over from the overlay. It stays there deliberately — the host's update is
-        // asynchronous, and snapping back only to jump forward again would read as a glitch — until
-        // the change is fed back through ItemsSource.
-        MoveFloatingViewToDropPosition();
-    }
-
-    private void MoveFloatingViewToDropPosition()
-    {
-        if (floatingView is null)
-            return;
-
-        var dayIndex = Math.Clamp(
-            DateOnly.FromDateTime(dragDropStart).DayNumber - slots[1].PageStart.DayNumber,
-            0,
-            geometry.VisibleDays - 1);
-
-        AbsoluteLayout.SetLayoutFlags(floatingView, AbsoluteLayoutFlags.None);
-        AbsoluteLayout.SetLayoutBounds(floatingView, new Rect(
-            dayIndex * geometry.DayWidth + TimelineSurface.AppointmentGap,
-            geometry.YFromMinutes(dragDropStart.TimeOfDay.TotalMinutes),
-            dragOriginalBounds.Width,
-            dragOriginalBounds.Height));
-
-        floatingView.TranslationX = geometry.ViewportWidth;
-        floatingView.TranslationY = 0;
-        floatingView.Opacity = 1;
-        floatingView.ZIndex = AppointmentZIndex;
+        // Settled from the model, whatever the host did with the drop: a host that applied the move
+        // renders at the new time, and one that did nothing renders where the appointment already was.
+        // Nothing is held back for the host to release later. A view kept out of the pages for that is
+        // one nothing can hit-test — an appointment left waiting stops answering a press at all, which
+        // is what happens to any drop a host has no work to do for.
+        RepopulateAllSlots();
     }
 }

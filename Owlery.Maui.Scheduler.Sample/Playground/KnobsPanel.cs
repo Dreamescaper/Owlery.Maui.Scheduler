@@ -118,7 +118,7 @@ public sealed class KnobsPanel : ContentView
                 Knobs.Toggle("AllowDragAcrossPeriods", scheduler.AllowDragAcrossPeriods, on => scheduler.AllowDragAcrossPeriods = on),
                 Knobs.Toggle("ShowDragTimeIndicator", scheduler.ShowDragTimeIndicator, on => scheduler.ShowDragTimeIndicator = on),
                 Knobs.Toggle("Cancel drags of locked items", policy.BlockLocked, on => policy.BlockLocked = on),
-                Knobs.Toggle("Cancel every drop", policy.RejectDrops, on => policy.RejectDrops = on),
+                Knobs.Toggle("Refuse every drop", policy.RejectDrops, on => policy.RejectDrops = on),
                 Knobs.Caption("The last two are host policy, answered in AppointmentDragStarting and AppointmentDropped."),
 
                 Knobs.Section("Appearance"),

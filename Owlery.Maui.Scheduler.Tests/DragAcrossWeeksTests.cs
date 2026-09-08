@@ -284,10 +284,9 @@ public class DragAcrossWeeksTests
     }
 
     [Test]
-    public void A_refused_drop_after_paging_puts_the_appointment_back_where_it_was()
+    public void A_drop_after_paging_the_host_does_nothing_with_puts_the_appointment_back_where_it_was()
     {
         var (harness, grab) = DragInProgress();
-        harness.Scheduler.AppointmentDropped += (_, e) => e.Cancel = true;
         var edge = harness.TrailingEdge(grab.Y);
 
         harness.DragTo(edge);
@@ -354,7 +353,6 @@ public class DragAcrossWeeksTests
     public void A_collection_replaced_during_a_drag_is_applied_once_the_drag_ends()
     {
         var (harness, grab) = DragInProgress();
-        harness.Scheduler.AppointmentDropped += (_, e) => e.Cancel = true;
 
         harness.Scheduler.ItemsSource =
         [
