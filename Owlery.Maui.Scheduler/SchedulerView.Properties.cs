@@ -714,6 +714,20 @@ public partial class SchedulerView
             return;
         }
 
+        // A host opening a day changes the date and the day count together, and a bindable property
+        // is written one at a time — so whichever lands second finds the calendar already moved for
+        // the other. While the columns are still easing into a new count, this is that second write:
+        // re-aim the transition at the page just asked for rather than navigating to it on top of
+        // one, which is a zoom onto the day the stale date named followed by a slide across to this
+        // one.
+        if (view.dayCountTransition is not null)
+        {
+            view.RebuildAll(target);
+            view.ReaimDayCountTransition();
+            view.SyncDisplayDate();
+            return;
+        }
+
         if (view.TrySlideToPage(target))
             return;
 

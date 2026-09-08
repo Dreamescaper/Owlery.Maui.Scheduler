@@ -597,10 +597,14 @@ A natural use is drilling in from a week to a single day:
 ```csharp
 scheduler.HeaderTapped += (_, e) =>
 {
-    scheduler.DisplayDate = e.Date;
+    scheduler.DisplayDate = e.Date.WallClock;
     scheduler.VisibleDays = 1;
 };
 ```
+
+The two may be set in either order, and a host that binds both — where the order is the framework's
+rather than yours — gets the same result: one transition onto the day asked for, not an expansion
+onto the day last opened followed by a move to this one.
 
 ### `SchedulerTimeGutterTappedEventArgs`
 

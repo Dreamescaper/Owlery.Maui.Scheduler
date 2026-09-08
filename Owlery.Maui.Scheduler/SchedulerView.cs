@@ -136,6 +136,9 @@ public partial class SchedulerView : ContentView
     private bool repopulateQueued;
     private bool constructed;
 
+    /// <summary>The day-count change currently easing into place, or null while none is.</summary>
+    private DayCountTransition? dayCountTransition;
+
     /// <summary>What each view's accessibility description was last built from.</summary>
     /// <remarks>
     /// Cached as values rather than compared against the previously bound appointment, because the
@@ -582,22 +585,22 @@ public partial class SchedulerView : ContentView
             return;
         }
 
-        // Puts the day that was already on screen back at the left edge of the viewport, so the new
-        // days grow in from the side they belong on — Monday and Tuesday from the left, Saturday and
-        // Sunday from the right — instead of the whole page sliding sideways first. Pages are
-        // spaced by what they currently measure, so the centre page starts one page-span in, and the
-        // shift has to undo both that and the columns preceding the anchored day.
-        var shiftedDays = previousPageStart.DayNumber - slots[1].PageStart.DayNumber;
-        var startOffset = geometry.ViewportWidth
-            - ((geometry.VisibleDays + shiftedDays) * previousDayWidth);
-
+        // Aborting runs the previous transition's finished handler, which clears the field — so the
+        // one being started here is put in place afterwards.
         this.AbortAnimation(DayCountAnimationName);
+
+        var transition = new DayCountTransition(
+            geometry.ViewportWidth, previousDayWidth, newDayWidth, previousPageStart, Math.Clamp(oldDays, 1, 7));
+
+        transition.AimAt(slots[1].PageStart, geometry.VisibleDays);
+        dayCountTransition = transition;
 
         new Animation(
             progress =>
             {
-                geometry.DayWidthOverride = previousDayWidth + ((newDayWidth - previousDayWidth) * progress);
-                geometry.AnimationOffsetX = startOffset * (1 - progress);
+                transition.Progress = progress;
+                geometry.DayWidthOverride = transition.DayWidth;
+                geometry.AnimationOffsetX = transition.OffsetX;
                 ApplyDayWidth();
             },
             0,
@@ -605,10 +608,29 @@ public partial class SchedulerView : ContentView
             Easing.CubicInOut)
             .Commit(this, DayCountAnimationName, length: DayCountAnimationMs, finished: (_, _) =>
             {
+                dayCountTransition = null;
                 geometry.DayWidthOverride = null;
                 geometry.AnimationOffsetX = 0;
                 ApplyDayWidth();
             });
+    }
+
+    /// <summary>
+    /// Points a day-count change that is still easing into place at the page now on screen.
+    /// </summary>
+    /// <remarks>
+    /// Applied at once rather than left to the next frame: the page has just been rebuilt at the
+    /// shift the transition was previously aimed with, so until this runs the calendar is holding
+    /// itself still against a day it is no longer showing.
+    /// </remarks>
+    private void ReaimDayCountTransition()
+    {
+        if (dayCountTransition is null)
+            return;
+
+        dayCountTransition.AimAt(slots[1].PageStart, geometry.VisibleDays);
+        geometry.AnimationOffsetX = dayCountTransition.OffsetX;
+        ApplyDayWidth();
     }
 
     /// <summary>Re-places what is already laid out at the current column width, without re-laying it out.</summary>
