@@ -225,7 +225,7 @@ public partial class SchedulerView
             // Handed back rather than merely forgotten. The view is already out of its week, so
             // clearing the fields below drops the last reference to something still being drawn —
             // and a view in no page cannot be pressed and is never translated again, which is the
-            // phantom described on UnownedViews. Repopulating gives the appointment a view again.
+            // phantom described on PlacedViews. Repopulating gives the appointment a view again.
             Discard(floatingView);
             floatingAppointment = null;
             floatingView = null;

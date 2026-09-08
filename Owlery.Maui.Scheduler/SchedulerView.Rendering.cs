@@ -189,7 +189,7 @@ public partial class SchedulerView
             {
                 // On a page but bound to nothing, so no position can claim it and the clear below is
                 // the last reference to it. Skipping it left it drawn and owned by nobody — see
-                // UnownedViews.
+                // PlacedViews.
                 Discard(view);
                 continue;
             }
