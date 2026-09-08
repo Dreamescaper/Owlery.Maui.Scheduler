@@ -410,3 +410,10 @@ FodyWeavers.xsd
 cdk.out
 
 .DS_Store
+
+# Agent harness local settings
+.claude/settings.local.json
+.codex/settings.local.json
+
+# Local worktrees an agent checks out alongside the repository
+.claude/worktrees/
