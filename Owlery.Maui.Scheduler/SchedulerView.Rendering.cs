@@ -186,7 +186,13 @@ public partial class SchedulerView
         foreach (var view in slot.Views)
         {
             if (!appointmentsByView.TryGetValue(view, out var bound))
+            {
+                // On a page but bound to nothing, so no position can claim it and the clear below is
+                // the last reference to it. Skipping it left it drawn and owned by nobody — see
+                // UnownedViews.
+                Discard(view);
                 continue;
+            }
 
             // Two views on one page showing the same key is out of contract (section 9), but the
             // dictionary would quietly drop whichever came first — leaving it visible, owned by no
@@ -402,6 +408,36 @@ public partial class SchedulerView
             sectionPool.Return(view);
 
         slot.SectionViews.Clear();
+    }
+
+    /// <summary>
+    /// Every view a page is currently showing, plus the drag's own while there is one.
+    /// </summary>
+    /// <remarks>
+    /// Exists so the tests can hold the control to the rule that nothing else is drawn. A view that
+    /// is visible and on no page reads as an appointment and then refuses to be pressed —
+    /// <c>HitTestAppointment</c> walks the pages, so the press falls through to the cell underneath —
+    /// and because only a page's views are translated when the weeks rotate, it stays on the column
+    /// it was last left at while every other week scrolls past it. The drag's view is the one
+    /// legitimate exception: it is deliberately out of the pages while it is being carried, and again
+    /// while an accepted drop waits for the host to feed the change back.
+    /// </remarks>
+    internal IEnumerable<View> PlacedViews
+    {
+        get
+        {
+            foreach (var slot in slots)
+            {
+                foreach (var view in slot.Views)
+                    yield return view;
+
+                foreach (var view in slot.SectionViews)
+                    yield return view;
+            }
+
+            if (floatingView is not null)
+                yield return floatingView;
+        }
     }
 
     /// <summary>

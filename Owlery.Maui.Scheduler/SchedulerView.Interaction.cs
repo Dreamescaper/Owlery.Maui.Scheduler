@@ -222,10 +222,15 @@ public partial class SchedulerView
 
         if (!ShowDraggedAppointment())
         {
-            floatingView.Opacity = 1;
+            // Handed back rather than merely forgotten. The view is already out of its week, so
+            // clearing the fields below drops the last reference to something still being drawn —
+            // and a view in no page cannot be pressed and is never translated again, which is the
+            // phantom described on UnownedViews. Repopulating gives the appointment a view again.
+            Discard(floatingView);
             floatingAppointment = null;
             floatingView = null;
             CancelDragCandidate();
+            RepopulateAllSlots();
             return;
         }
 
@@ -296,10 +301,26 @@ public partial class SchedulerView
     }
 
     /// <summary>Takes a view out of its week so rotation and reconciliation leave it alone.</summary>
+    /// <remarks>
+    /// <see cref="PageSlot.Views"/> and <see cref="PageSlot.Positions"/> are parallel:
+    /// <c>ApplyDayWidth</c> re-places the one at the other's index. Dropping a view without its
+    /// position leaves everything after it re-placed at its neighbour's, which is what a change of
+    /// column width during a drag would then draw.
+    /// </remarks>
     private void DetachFromSlot(View view)
     {
         if (slotsByView.TryGetValue(view, out var slot))
-            slot.Views.Remove(view);
+        {
+            var index = slot.Views.IndexOf(view);
+
+            if (index >= 0)
+            {
+                slot.Views.RemoveAt(index);
+
+                if (index < slot.Positions.Count)
+                    slot.Positions.RemoveAt(index);
+            }
+        }
 
         slotsByView.Remove(view);
     }

@@ -142,6 +142,27 @@ internal sealed class SchedulerHarness
             ?.Parent as AbsoluteLayout;
     }
 
+    /// <summary>
+    /// Appointment views that are drawn but belong to no page. Always empty.
+    /// </summary>
+    /// <remarks>
+    /// The shape of a phantom: it reads as an appointment, refuses to be pressed — hit-testing walks
+    /// the pages, so the press falls through to the cell underneath and behaves like an empty one —
+    /// and stays on the column it was last left at while every other week scrolls past, because only
+    /// a page's views are translated when the weeks rotate. Asserted after gestures rather than
+    /// reasoned about: the state is reachable from several directions and unrecoverable once reached,
+    /// so the cheap thing is to check for it rather than to argue that it cannot happen.
+    /// </remarks>
+    public IReadOnlyList<TestAppointmentView> OrphanedAppointments
+    {
+        get
+        {
+            var placed = Scheduler.PlacedViews.ToHashSet();
+
+            return [.. VisibleAppointments.Where(view => !placed.Contains(view))];
+        }
+    }
+
     /// <summary>The appointment views currently showing, in the order the surface holds them.</summary>
     public IReadOnlyList<TestAppointmentView> VisibleAppointments =>
         [.. surface.OfType<TestAppointmentView>().Where(view => view.IsVisible)];

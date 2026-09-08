@@ -172,3 +172,24 @@ each variant once and toggles which is visible switches kind for the price of a 
 because nothing is constructed; swapping templates costs a fresh build at ~3ms. The recommended
 pattern is therefore also the faster one, which is why the refusal names it.
 
+### Every drawn view belongs to a page
+
+A view that is visible and in none of the three pages is the worst defect this area produces, because
+nothing about it looks broken. It reads as an ordinary appointment; it refuses to be pressed, since
+`HitTestAppointment` walks the pages and the press falls through to the cell underneath and behaves
+like an empty one; and only a page's views are translated when the weeks rotate, so it holds the
+column it was last left at while every other week scrolls past it. Nothing recovers it either — once
+the last reference is gone it outlives the gesture that stranded it and every swipe after.
+
+The one legitimate exception is the drag's own view. It leaves its page on pick-up so the weeks can
+rotate underneath it, and stays out while an accepted drop waits for the host to feed the change
+back; `OnPageSettled` gives up waiting at the next change of period so a host that never answers
+cannot strand it.
+
+This is asserted rather than argued. `PlacedViews` reports what the pages hold plus that one
+exception, and `AppointmentOwnershipTests` checks after each way a drag can end that nothing else is
+drawn. The reason for checking instead of reasoning is that the state is reachable from several
+directions at once — a view handed back but left in a page, a view in a page bound to nothing, a
+pick-up that fails after the view has already been detached — and each of those is a different line
+in a different file. Enumerating them again after every change is not something anyone will keep
+doing; the invariant is one line and holds regardless of how the next path is added.
