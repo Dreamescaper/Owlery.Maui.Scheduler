@@ -96,10 +96,6 @@ public partial class SchedulerView
 
     private void RebuildAll(DateOnly centrePage)
     {
-        // Same reasoning as in SnapAsync: do not carry a waiting drop across a change of period.
-        if (!dragArmed)
-            ReleaseFloatingAppointment();
-
         slots[0].PageStart = pageSurface.PreviousPage(centrePage);
         slots[1].PageStart = centrePage;
         slots[2].PageStart = pageSurface.NextPage(centrePage);
@@ -419,9 +415,9 @@ public partial class SchedulerView
     /// <c>HitTestAppointment</c> walks the pages, so the press falls through to the cell underneath —
     /// and because only a page's views are translated when the weeks rotate, it stays on the column
     /// it was last left at while every other week scrolls past it. The drag's view is the one
-    /// legitimate exception: it is deliberately out of the pages while it is being carried, and again
-    /// while an accepted drop waits for the host to feed the change back. So is the follower on the
-    /// overlay, for as long as a drag is armed.
+    /// legitimate exception: it is deliberately out of the pages while it is being carried, and only
+    /// for that long — the drop lays the calendar out again. So is the follower on the overlay, for as
+    /// long as a drag is armed.
     /// </remarks>
     internal IEnumerable<View> PlacedViews
     {

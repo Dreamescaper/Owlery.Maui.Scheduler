@@ -123,9 +123,10 @@ Because only one appointment can be dragged at a time, the overlay keeps a singl
 `AppointmentTemplate` and rebinds it, rather than renting from the pool — the pool's views all belong
 to the surface, and nothing is ever reparented.
 
-On an accepted drop the ghost takes over: it moves to the dropped position and returns to full
-strength as the follower is hidden. That keeps the result on the scrolling surface, where it scrolls
-with the calendar as it should, without anything having to change parents.
+When the finger lifts, the follower is hidden and the ghost is handed back to the pool with everything
+else the drag borrowed: the calendar is then laid out from the model, which draws the appointment
+wherever the host has just said it belongs. Nothing has to change parents, and nothing survives the
+gesture.
 
 `OnPagerScrolled` still stops scheduling snaps while dragging, since the pager is being driven by the
 drag rather than by the user.
@@ -146,26 +147,34 @@ A collection change is still not *applied* until the drag ends — re-laying-out
 moving finger is churn for data the user cannot see yet — but that is now a comfort measure rather than
 load-bearing; every way a drag can finish ends in another repopulate.
 
-A dropped appointment is held at the position it was released until the host feeds the change back,
-which makes the host's re-emit load-bearing. That obligation is reasonable — telling a data-bound
-control that the data changed is the deal — but forgetting it used to produce something strange rather
-than something dull: the held view stayed pinned to the surface and drifted over whatever week was
-scrolled to next, a phantom appointment following the user around. Changing period is now treated as
-giving up on the wait, so the worst a forgetful host gets is the appointment snapping back to what the
-model says.
+### Settling a drop
 
-The appointment rejoins a week when `ItemsSource` is next re-emitted — which is why that already-
-documented host obligation matters more here than it looks. Until then the lifted view stays exactly
-where it was dropped.
+The lift lasts exactly as long as the gesture. `CompleteDrag` raises `AppointmentDropped` and then
+repopulates, so the calendar is laid out from `ItemsSource` as it reads the moment the handler
+returned: a host that applied the move has its appointment drawn at the new time, and a host that did
+nothing has it drawn where it already was. That is the whole contract, and `Cancel` was removed from
+the event because it said the same thing twice — refusing a drop is declining to make the change.
 
-**On a successful drop the view is deliberately left where it was dropped.** The host's update is
-asynchronous; snapping back to the old time only to jump forward a moment later would read as a glitch.
-The host re-emits its collection when the call finishes, which repositions the appointment from the
-model — and that is also what moves it back if the call failed.
+**This replaces a design that held the dropped view until the host re-emitted `ItemsSource`.** The
+reasoning was sound in itself: the host's update is asynchronous, and snapping back to the old time
+only to jump forward a moment later reads as a glitch. The cost was that the wait had no end. A held
+view is out of every page — `HitTestAppointment` walks `PageSlot.Views` — so an appointment nothing
+happened to answered no press at all: not a tap, and not the long press that would pick it up again.
+The case that hit it was the dullest one available. Returning an appointment to the time it started at
+leaves the host with nothing to save and so nothing to re-emit, and the appointment it had just been
+dragged became dead to the touch, with presses falling through to the grid behind it and marking the
+cell.
 
-**API caveat worth knowing.** `AppointmentDropped.Cancel` is read immediately after the event returns,
-so an `async` handler must do its validation *before* its first `await`. Checks that must veto a drag
-(external calendars, offline) therefore belong in `AppointmentDragStarting`, which is synchronous.
+The trap was in making a data-binding notification carry gesture state: `ItemsSource` changing meant
+"the data changed" *and* "your drag may now finish", and only the first of those is a host's routine
+obligation. Ending the lift with the gesture keeps the two apart. What is given up is the no-flicker
+window for hosts that apply the move after an `await` — they now see the appointment drawn at its old
+time and jump forward when the change lands. A host that applies it first, which is what optimistic
+updates do anyway, sees no flicker at all.
+
+**API caveat worth knowing.** `AppointmentDragStarting.Cancel` is read immediately after the event
+returns, so an `async` handler must do its validation *before* its first `await`. Checks that must veto
+a drag (external calendars, offline) belong there rather than at the drop.
 
 ### Reaching off-screen hours
 

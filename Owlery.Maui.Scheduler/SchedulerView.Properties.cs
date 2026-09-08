@@ -674,6 +674,10 @@ public partial class SchedulerView
     /// <summary>Raised while dragging, each time the drop target moves to a different boundary.</summary>
     public event EventHandler<SchedulerAppointmentDropTargetChangedEventArgs>? AppointmentDropTargetChanged;
 
+    /// <summary>
+    /// Raised when a dragged appointment is released. Apply the move to your data before returning;
+    /// the calendar is laid out from <see cref="ItemsSource"/> as it reads at that moment.
+    /// </summary>
     public event EventHandler<SchedulerAppointmentDroppedEventArgs>? AppointmentDropped;
 
     /// <summary>
@@ -818,8 +822,9 @@ public partial class SchedulerView
         if (dragArmed)
             return;
 
-        // An accepted drop leaves the appointment floating where the user put it until the host feeds
-        // the change back. This is that moment.
+        // A drag lifts its appointment out of the pages for the duration, and this is the one place it
+        // is given back. Every way a drag can end runs through here, so the lift lasts exactly as long
+        // as the gesture — nothing outlives it waiting on the host.
         ReleaseFloatingAppointment();
 
         // The agenda's row table is built from the items, so new items make it stale. Scrolling does

@@ -35,10 +35,9 @@ public class AppointmentOwnershipTests
     }
 
     [Test]
-    public void Nothing_is_stranded_by_a_refused_drop()
+    public void Nothing_is_stranded_by_a_drop_the_host_does_nothing_with()
     {
         var harness = Loaded();
-        harness.Scheduler.AppointmentDropped += (_, e) => e.Cancel = true;
         var grab = Grab(harness);
 
         harness.BeginDrag(grab);
@@ -91,8 +90,6 @@ public class AppointmentOwnershipTests
     [Test]
     public void Nothing_is_stranded_when_the_weeks_are_swiped_after_a_drop()
     {
-        // An accepted drop leaves its view out of the pages until the host feeds the change back. A
-        // host that never does is the case this is really about: the page change gives up waiting.
         var harness = Loaded();
         var grab = Grab(harness);
 

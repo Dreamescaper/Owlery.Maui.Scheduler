@@ -145,8 +145,14 @@ cited design section first; `docs/design/README.md` maps every § to its file.
   `SchedulerMoment` — wall-clock in `TimeZone` plus that zone — and the host picks a representation
   from it. Do not add an implicit conversion to `DateTime`: the type exists so that choice cannot be
   made by accident.
-- **Cancellable events are read synchronously.** `Cancel` is checked the moment the handler returns,
-  so it cannot be set after an `await`.
+- **Cancellable events are read synchronously.** `AppointmentDragStarting.Cancel` — the only one — is
+  checked the moment the handler returns, so it cannot be set after an `await`.
+- **A drag's lift lasts exactly as long as the gesture** (§11). `CompleteDrag` raises
+  `AppointmentDropped` and then lays the calendar out from `ItemsSource` as it reads at that moment;
+  the host applies the move before returning, or does nothing and keeps the old time. Nothing may be
+  held back for the host to release later — a view kept out of the pages cannot be hit-tested, so an
+  appointment left waiting stops answering a press at all, and the drop that leaves a host nothing to
+  do is the one that would wait forever.
 - **The control refers to `INotifyCollectionChanged`, never a concrete collection type** (§9).
   `ItemsSource` stays `IEnumerable<ISchedulerAppointment>`; `SchedulerAppointmentCollection<T>` is a
   convenience for hosts, not a dependency of the control. `INotifyCollectionChanged` is optional: a

@@ -340,7 +340,7 @@ rebind appointment views.
 | `AppointmentTapped` | `SchedulerAppointmentTappedEventArgs` | An appointment is tapped without dragging it. |
 | `AppointmentDragStarting` | `SchedulerAppointmentDragStartingEventArgs` | A long press has been held on an appointment, before it lifts. **Cancellable.** |
 | `AppointmentDropTargetChanged` | `SchedulerAppointmentDropTargetChangedEventArgs` | A drag comes to rest on a different boundary. Not a movement event — silent while the finger travels within one boundary, and silent when the appointment is first picked up. |
-| `AppointmentDropped` | `SchedulerAppointmentDroppedEventArgs` | A dragged appointment is released. **Cancellable.** |
+| `AppointmentDropped` | `SchedulerAppointmentDroppedEventArgs` | A dragged appointment is released. Apply the move to your data before returning. |
 | `HeaderTapped` | `SchedulerHeaderTappedEventArgs` | The header above a timeline day column is tapped. Silent outside `Timeline`. |
 | `TimeGutterTapped` | `SchedulerTimeGutterTappedEventArgs` | The timeline hour gutter is tapped. Silent outside `Timeline`. |
 | `VisibleDatesChanged` | `SchedulerVisibleDatesChangedEventArgs` | The visible period changes, including on first layout and when an agenda extends at either edge. This is the data-loading hook. |
@@ -580,7 +580,28 @@ raises it too, since the drop target genuinely moved.
 |---|---|---|
 | `Appointment` | `ISchedulerAppointment` | The dropped appointment. |
 | `DropStart` | `SchedulerMoment` | Snapped start it was dropped on. |
-| `Cancel` | `bool` (settable) | Set `true` to reject the drop and return the appointment to its old position. |
+
+There is nothing to cancel: the calendar is laid out from `ItemsSource` as it reads the moment your
+handler returns, so making the change is how a drop is accepted and doing nothing is how it is
+refused.
+
+```csharp
+scheduler.AppointmentDropped += async (_, e) =>
+{
+    var lesson = (Lesson)e.Appointment;
+    var start = e.DropStart.WallClock;
+    var moved = lesson with { Start = start, End = start + (lesson.End - lesson.Start) };
+
+    // Applied before the first await, so the lesson is drawn at its new time straight away.
+    appointments.Replace(lesson, moved);
+
+    if (!await api.MoveAsync(moved.Id, e.DropStart.ToDateTimeUtc()))
+        appointments.Replace(moved, lesson);
+};
+```
+
+Applying the move after an `await` is not wrong, only visibly worse: the appointment is drawn back at
+its old time when the handler returns and jumps forward when the change lands.
 
 ### `SchedulerHeaderTappedEventArgs`
 
@@ -722,9 +743,10 @@ it stack, an hour that does not occur is still drawn, and an appointment spannin
 an hour short or long. Asking a reading in the missing hour for its instant resolves rather than
 throwing.
 
-**`Cancel` is read synchronously.** Both cancellable events check `Cancel` the moment the handler
-returns. An `async` handler must do its validation *before* its first `await`; anything after it is too
-late to veto. Checks that must block a drag therefore belong in `AppointmentDragStarting`.
+**`Cancel` is read synchronously.** `AppointmentDragStarting` — the one cancellable event — checks
+`Cancel` the moment the handler returns. An `async` handler must do its validation *before* its first
+`await`; anything after it is too late to veto. Checks that must block a drag therefore belong there
+rather than at the drop.
 
 **Events hand you a live instance.** Dragging across periods pages the calendar, which raises
 `VisibleDatesChanged` and will typically make you load data and rebuild your collection mid-gesture.
@@ -732,13 +754,12 @@ The appointment carried by `AppointmentTapped`, `AppointmentDragStarting` and `A
 resolved against your current `ItemsSource` by `Key` before the event is raised, so acting on what you
 were given acts on something you are still displaying. This is why `Key` is on the interface.
 
-**A successful drop leaves the appointment where it was dropped.** The control does not mutate your
-model and does not wait for you. When your update completes, re-emit `ItemsSource` — that repositions
-the appointment from the model on success, and moves it back on failure. If you never do, the control
-gives up waiting at the next change of period and the appointment returns to where your model says it
-is. Re-emitting matters more than
-it used to: a dragged appointment is lifted out of its week for the duration, and re-emitting is what
-puts it back under one.
+**A drop settles from your model, not from the gesture.** The control never mutates your data, and it
+holds nothing back waiting to hear from you: when your `AppointmentDropped` handler returns, the
+calendar is laid out from `ItemsSource` as it reads at that moment. Apply the move there and the
+appointment is drawn at its new time; leave the model alone and it is drawn where it already was.
+Nothing further is owed — an update that fails later is put right by changing the appointments back,
+which the control observes like any other change.
 
 **A drag leaves a faded copy behind.** While an appointment is being moved, the place it came from
 keeps showing it at half opacity. Both that copy and the one under the finger come from

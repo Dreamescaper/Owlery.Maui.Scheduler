@@ -42,13 +42,6 @@ public partial class SchedulerView
         if (!Paged || recentring || dragArmed || ActiveGeometry.ViewportWidth <= 0)
             return;
 
-        // An accepted drop waits for the host to feed the change back before rejoining a week. If that
-        // never comes, its view would stay pinned to the surface and drift over whatever week is
-        // scrolled to next. Changing period is a safe moment to give up waiting and go back to what
-        // the model says.
-        if (floatingAppointment is not null)
-            RepopulateAllSlots();
-
         var page = Math.Clamp(e.Page, 0, SchedulerGeometry.SlotCount - 1);
 
         if (page == 1)

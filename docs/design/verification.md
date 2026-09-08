@@ -95,8 +95,13 @@ code until the platform disagreed.
 Drag-and-drop is confirmed on Android too, on the same emulator through the sample app, by injecting a
 press, a dwell and a sequence of moves: the long press lifts the appointment, the faded copy stays
 behind, the gutter shows the time under the finger, and the drop is reported at the snapped start and
-settles where the host re-emitted it. A locked appointment is refused, so the cancel path is exercised
-as well. This is where `SetScrollingEnabled` takes its `RequestDisallowInterceptTouchEvent` branch.
+settles where the host put it. A locked appointment is refused, so the cancel path is exercised as
+well. This is where `SetScrollingEnabled` takes its `RequestDisallowInterceptTouchEvent` branch.
+
+That pass predates the drop settling from the model ([section 11](interaction.md)), and the sample
+applied its move synchronously then as it does now, so what was watched still holds. What nobody has
+watched on a device is the drop that changes nothing — dropping an appointment back on its own time,
+then picking it up again — which is the case that settling was changed for.
 
 Still unverified there: paging mid-drag against a leading or trailing edge, and whether the
 neighbouring-page flash is gone — the window it happened in is closed by construction, but nobody has
