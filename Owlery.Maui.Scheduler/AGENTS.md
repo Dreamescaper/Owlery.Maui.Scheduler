@@ -80,8 +80,10 @@ cited design section first; `docs/design/README.md` maps every § to its file.
 - **Every drawn view belongs to a page** (§6). A visible view in none of the three pages cannot be
   pressed and is never translated again, so it sits on one column while the weeks scroll past — and
   nothing recovers it. Any path that takes a view out of a page must put it in another or hand it to
-  the pool. The drag's view is the only exception, and `PlacedViews` names it so the tests can hold
-  the rest to the rule; add to that property, do not work around it.
+  the pool. A drag's two views are the only exceptions — the original it lifted, and the follower on
+  the overlay — and `PlacedViews` names both so the tests can hold the rest to the rule; add to that
+  property, do not work around it. The check covers everything under the control, not only the
+  scrolling surface: the follower is not on it.
 - **Appointment views are pooled and rebound, never rebuilt** (§5, §6). Anything attached to a view
   must be attached once, at creation, and must read the currently bound appointment rather than
   capture one. The pool is deliberately unbounded; do not add a cap.

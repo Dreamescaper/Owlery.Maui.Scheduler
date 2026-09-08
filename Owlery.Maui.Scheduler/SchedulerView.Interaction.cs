@@ -289,6 +289,9 @@ public partial class SchedulerView
         dragArmed = false;
         dragView = null;
 
+        // Unconditional, for the reason given in CompleteDrag.
+        HideDraggedAppointment();
+
         if (!wasArmed)
             return;
 
@@ -296,7 +299,6 @@ public partial class SchedulerView
         StopEdgeScrolling();
         SetScrollingEnabled(true);
         gutter.ClearIndicator();
-        HideDraggedAppointment();
         RepopulateAllSlots();
     }
 
@@ -689,12 +691,17 @@ public partial class SchedulerView
         dragView = null;
         pressedView = null;
 
+        // Before the guards below, not after them. The follower belongs to a drag that is now over,
+        // and it is InputTransparent — so one left behind is drawn over the calendar, refuses every
+        // press, and never moves again, since it is positioned in the control's own coordinates
+        // rather than on anything that scrolls.
+        HideDraggedAppointment();
+
         if (!wasArmed || appointment is null || floatingView is null)
             return;
 
         SetScrollingEnabled(true);
         gutter.ClearIndicator();
-        HideDraggedAppointment();
 
         if (!committed)
         {

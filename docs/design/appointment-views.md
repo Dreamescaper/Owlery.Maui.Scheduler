@@ -181,14 +181,20 @@ like an empty one; and only a page's views are translated when the weeks rotate,
 column it was last left at while every other week scrolls past it. Nothing recovers it either — once
 the last reference is gone it outlives the gesture that stranded it and every swipe after.
 
-The one legitimate exception is the drag's own view. It leaves its page on pick-up so the weeks can
-rotate underneath it, and stays out while an accepted drop waits for the host to feed the change
-back; `OnPageSettled` gives up waiting at the next change of period so a host that never answers
-cannot strand it.
+A drag has two views, and both are legitimate exceptions while it lasts. The original leaves its page
+on pick-up so the weeks can rotate underneath it, and stays out while an accepted drop waits for the
+host to feed the change back; `OnPageSettled` gives up waiting at the next change of period so a host
+that never answers cannot strand it. The follower — the one that rides the finger — lives on the drag
+overlay instead, which is the easier of the two to miss: it is not on the scrolling surface, so it
+never moves with the weeks, and it is `InputTransparent`, so a press goes through it to the cell
+underneath. Left behind it is a phantom that holds one screen position for good. Both exit paths
+therefore hide it before anything else they do, rather than after a guard about the original.
 
-This is asserted rather than argued. `PlacedViews` reports what the pages hold plus that one
-exception, and `AppointmentOwnershipTests` checks after each way a drag can end that nothing else is
-drawn. The reason for checking instead of reasoning is that the state is reachable from several
+This is asserted rather than argued. `PlacedViews` reports what the pages hold plus those two
+exceptions, and `AppointmentOwnershipTests` checks after each way a drag can end that nothing else is
+drawn — everything under the control, not only what is on the scrolling surface. That last part is
+not incidental: the check was written against the surface first, and a follower left visible for good
+passed all nine tests without a murmur. The reason for checking instead of reasoning is that the state is reachable from several
 directions at once — a view handed back but left in a page, a view in a page bound to nothing, a
 pick-up that fails after the view has already been detached — and each of those is a different line
 in a different file. Enumerating them again after every change is not something anyone will keep

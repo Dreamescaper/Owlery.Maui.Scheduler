@@ -420,7 +420,8 @@ public partial class SchedulerView
     /// and because only a page's views are translated when the weeks rotate, it stays on the column
     /// it was last left at while every other week scrolls past it. The drag's view is the one
     /// legitimate exception: it is deliberately out of the pages while it is being carried, and again
-    /// while an accepted drop waits for the host to feed the change back.
+    /// while an accepted drop waits for the host to feed the change back. So is the follower on the
+    /// overlay, for as long as a drag is armed.
     /// </remarks>
     internal IEnumerable<View> PlacedViews
     {
@@ -437,6 +438,12 @@ public partial class SchedulerView
 
             if (floatingView is not null)
                 yield return floatingView;
+
+            // The follower on the overlay, which is legitimate only for as long as a finger is
+            // carrying it. It is not on the scrolling surface and it takes no input, so one left
+            // behind sits over the calendar at a fixed place and cannot be pressed.
+            if (dragArmed && dragOverlayView is not null)
+                yield return dragOverlayView;
         }
     }
 

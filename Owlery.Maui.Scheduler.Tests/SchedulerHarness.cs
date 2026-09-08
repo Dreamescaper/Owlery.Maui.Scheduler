@@ -152,6 +152,12 @@ internal sealed class SchedulerHarness
     /// a page's views are translated when the weeks rotate. Asserted after gestures rather than
     /// reasoned about: the state is reachable from several directions and unrecoverable once reached,
     /// so the cheap thing is to check for it rather than to argue that it cannot happen.
+    /// <para>
+    /// Everything under the control, not only what is on the scrolling surface. The follower a drag
+    /// carries lives on the overlay instead, in the control's own coordinates and taking no input, so
+    /// one left behind is a phantom of exactly the same kind — and looking only at the surface is how
+    /// it would be missed.
+    /// </para>
     /// </remarks>
     public IReadOnlyList<TestAppointmentView> OrphanedAppointments
     {
@@ -159,7 +165,12 @@ internal sealed class SchedulerHarness
         {
             var placed = Scheduler.PlacedViews.ToHashSet();
 
-            return [.. VisibleAppointments.Where(view => !placed.Contains(view))];
+            return
+            [
+                .. Descendants(Scheduler)
+                    .OfType<TestAppointmentView>()
+                    .Where(view => view.IsVisible && !placed.Contains(view))
+            ];
         }
     }
 
