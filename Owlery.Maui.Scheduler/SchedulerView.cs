@@ -139,6 +139,9 @@ public partial class SchedulerView : ContentView
     /// <summary>The day-count change currently easing into place, or null while none is.</summary>
     private DayCountTransition? dayCountTransition;
 
+    /// <summary>Whether the day count has changed in this tick and the date may still be following it.</summary>
+    private bool dayCountChangePending;
+
     /// <summary>What each view's accessibility description was last built from.</summary>
     /// <remarks>
     /// Cached as values rather than compared against the previously bound appointment, because the
@@ -568,7 +571,19 @@ public partial class SchedulerView : ContentView
         if (ViewMode is not SchedulerViewMode.Timeline)
             return;
 
-        var previousDayWidth = geometry.ViewportWidth / Math.Clamp(oldDays, 1, 7);
+        // A host opening a day writes the date too, and the two land one after the other in some
+        // order. Marked before the guards below rather than left to the presence of an animation:
+        // the transition is skipped on a control with no handler or not yet loaded, and what a host
+        // sees must not depend on that. Cleared on the next tick, so only writes belonging to the
+        // same batch are taken as part of the same intent.
+        if (!dayCountChangePending)
+        {
+            dayCountChangePending = true;
+            Dispatcher.Dispatch(() => dayCountChangePending = false);
+        }
+
+        var previousDayCount = Math.Clamp(oldDays, 1, 7);
+        var previousDayWidth = geometry.ViewportWidth / previousDayCount;
         var previousPageStart = slots[1].PageStart;
 
         ApplyGeometry();
@@ -590,9 +605,9 @@ public partial class SchedulerView : ContentView
         this.AbortAnimation(DayCountAnimationName);
 
         var transition = new DayCountTransition(
-            geometry.ViewportWidth, previousDayWidth, newDayWidth, previousPageStart, Math.Clamp(oldDays, 1, 7));
+            previousDayWidth, newDayWidth, previousPageStart, previousDayCount);
 
-        transition.AimAt(slots[1].PageStart, geometry.VisibleDays);
+        transition.AimAt(slots[CentreSlot].PageStart, geometry.VisibleDays);
         dayCountTransition = transition;
 
         new Animation(
@@ -613,24 +628,6 @@ public partial class SchedulerView : ContentView
                 geometry.AnimationOffsetX = 0;
                 ApplyDayWidth();
             });
-    }
-
-    /// <summary>
-    /// Points a day-count change that is still easing into place at the page now on screen.
-    /// </summary>
-    /// <remarks>
-    /// Applied at once rather than left to the next frame: the page has just been rebuilt at the
-    /// shift the transition was previously aimed with, so until this runs the calendar is holding
-    /// itself still against a day it is no longer showing.
-    /// </remarks>
-    private void ReaimDayCountTransition()
-    {
-        if (dayCountTransition is null)
-            return;
-
-        dayCountTransition.AimAt(slots[1].PageStart, geometry.VisibleDays);
-        geometry.AnimationOffsetX = dayCountTransition.OffsetX;
-        ApplyDayWidth();
     }
 
     /// <summary>Re-places what is already laid out at the current column width, without re-laying it out.</summary>

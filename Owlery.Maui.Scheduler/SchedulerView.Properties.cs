@@ -716,20 +716,27 @@ public partial class SchedulerView
 
         // A host opening a day changes the date and the day count together, and a bindable property
         // is written one at a time — so whichever lands second finds the calendar already moved for
-        // the other. While the columns are still easing into a new count, this is that second write:
-        // re-aim the transition at the page just asked for rather than navigating to it on top of
-        // one, which is a zoom onto the day the stale date named followed by a slide across to this
-        // one.
-        if (view.dayCountTransition is not null)
+        // the other. A date arriving in the same tick as a day-count change is that second write, and
+        // is a correction rather than a journey: it must not slide, because the day count laid the
+        // page out from the date this one supersedes, and sliding onto it is a zoom onto the day the
+        // stale date named followed by a travel across to this one.
+        if (view.dayCountChangePending)
         {
-            view.RebuildAll(target);
-            view.ReaimDayCountTransition();
-            view.SyncDisplayDate();
+            // Aimed before the rebuild rather than corrected after it, so the pages are placed at the
+            // shift they are keeping in one pass and no frame is composited holding the calendar
+            // still against a day it is no longer showing. There is nothing to aim when the
+            // transition was skipped for want of a platform; the rebuild below is then the whole of
+            // it, which is what keeps the two cases in step.
+            if (view.dayCountTransition is { } transition)
+            {
+                transition.AimAt(target, view.geometry.VisibleDays);
+                view.geometry.AnimationOffsetX = transition.OffsetX;
+            }
+        }
+        else if (view.TrySlideToPage(target))
+        {
             return;
         }
-
-        if (view.TrySlideToPage(target))
-            return;
 
         if (view.ViewMode is SchedulerViewMode.Agenda)
             view.agendaNavigationInProgress = true;

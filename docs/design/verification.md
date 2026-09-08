@@ -165,9 +165,10 @@ holds whatever offset it was last told and raises `PageSettled` when a test says
 what the suite wants and exactly what cannot catch a fling prediction or a clipping quirk.
 
 **Opening a day zooms onto that day and nothing else — confirmed on the iOS simulator** (see
-[section 16](timeline.md)). The day-count transition is skipped without a handler, so no headless test can reach it;
-what the suite covers is the shift arithmetic in `DayCountTransition`, and the wiring was checked on a
-device instead.
+[section 16](timeline.md)). The transition's *motion* is skipped without a handler, so no headless test can reach it; what the
+suite covers is the shift arithmetic in `DayCountTransition` and the decision not to slide — which is
+reachable because the gate is a day-count change in the current tick rather than a running animation.
+The motion itself was checked on a device.
 
 Three temporary changes made it observable, none of them kept: the sample's `HeaderTapped` handler was
 made to write `VisibleDays` before `DisplayDate` (the order that reproduces the defect, and the one a

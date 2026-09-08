@@ -18,7 +18,6 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// </para>
 /// </remarks>
 internal sealed class DayCountTransition(
-    double viewportWidth,
     double fromDayWidth,
     double toDayWidth,
     DateOnly fromPageStart,
@@ -55,7 +54,7 @@ internal sealed class DayCountTransition(
         var shiftedDays = fromPageStart.DayNumber - toPageStart.DayNumber;
 
         startOffset = Overlaps(toPageStart, toDayCount)
-            ? viewportWidth - ((toDayCount + shiftedDays) * fromDayWidth)
+            ? (fromDayCount - toDayCount - shiftedDays) * fromDayWidth
             : 0;
     }
 

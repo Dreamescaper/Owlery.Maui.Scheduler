@@ -41,19 +41,35 @@ written one at a time. Whichever lands second finds the calendar already moved f
 which one that is depends on the host: the sample writes the date first, while a Blazor host writes
 whatever order the parameters appear in its markup.
 
-Date first is harmless, because the new date is still inside the week showing and the page does not
-change. Day count first is not: the page is rebuilt from the *previous* date, so the columns expand
-onto whichever day was last opened, and the date arriving a moment later is then an ordinary
-navigation — one day away from where the transition just landed, so `TrySlideToPage` slides across to
-it. What the user asked to be one zoom onto Friday came out as a zoom onto Thursday followed by a
-slide, and repeating the same day looked fine because the second write changed nothing.
+Date first is harmless when the day being opened is on the page already showing — a header tap, which
+is the overwhelming case — because the page does not change and only the day count moves anything. Day
+count first is not: the page is rebuilt from the *previous* date, so the columns expand onto whichever
+day was last opened, and the date arriving a moment later is then an ordinary navigation — one day away
+from where the transition just landed, so `TrySlideToPage` slides across to it. What the user asked to
+be one zoom onto Friday came out as a zoom onto Thursday followed by a slide, and repeating the same
+day looked fine because the second write changed nothing.
 
 `DayCountTransition` therefore holds the shift as something it is *aimed* at a page rather than a
-number worked out once in `ChangeVisibleDays`. A `DisplayDate` change that arrives while a transition
-is running rebuilds onto the page asked for and re-aims the transition at it, instead of navigating on
-top of it. `Commit` applies its first frame immediately and both writes land in the same batch, so the
-correction reaches the geometry before a frame is composited — the zoom simply happens to be onto the
-right day.
+number worked out once in `ChangeVisibleDays`. A `DisplayDate` change arriving in the same tick as a
+day-count change rebuilds onto the page asked for and re-aims the transition at it, instead of
+navigating on top of it. `Commit` applies its first frame immediately and both writes land in the same
+batch, so the correction reaches the geometry before a frame is composited — the zoom simply happens to
+be onto the right day.
+
+The gate is *a day-count change in this tick*, not *an animation in flight*, and the difference is
+load-bearing. The transition is skipped altogether when there is no handler, when the control is not
+loaded, or when the column width barely moves; gating on it would have made a host's two writes behave
+one way on a live control and another on one still attaching. It also bounds the window. An animation
+lasts 220ms of wall clock, so gating on it would quietly absorb any *unrelated* date a host set inside
+that window — a "Today" button, a binding firing late — and turn the slide it deserves into a cut.
+`ChangeVisibleDays` marks the flag before its own skip guards and clears it on the next tick, the way
+`QueueRepopulate` scopes a rebuild, which is also what makes the decision reachable from the headless
+suite through `TestDispatcher.DeferDispatch`.
+
+What this does not do is make the two orders equivalent for a day on *another* page. Setting the date
+first there is a genuine change of period, and it travels before the day count zooms; only the count-
+first order collapses to a single movement. `docs/requirements/navigation.md` (NAV-28a) states the
+guarantee at that width rather than more broadly.
 
 Re-aiming rather than restarting is the point: restarting would snap the columns back to the width
 they began at, which is the one thing the transition exists to avoid. Progress lives on the transition

@@ -7,9 +7,9 @@ namespace Owlery.Maui.Scheduler.Tests;
 /// that was already on screen drawn where it already was?
 /// </summary>
 /// <remarks>
-/// Answered in the coordinates the control places pages in — a page sits at its slot index times the
-/// page span, plus the transition's shift — so the numbers here mean what they mean in
-/// <c>ApplyDayWidth</c> rather than being the formula written out twice.
+/// Answered through a real <see cref="SchedulerGeometry"/>, so a column is placed here by the same
+/// <c>PageSpan</c> and <c>DayWidth</c> the control places it by in <c>ApplyDayWidth</c>, rather than
+/// by the formula written out a second time and left to drift.
 /// </remarks>
 [TestFixture]
 public class DayCountTransitionTests
@@ -21,32 +21,46 @@ public class DayCountTransitionTests
     private static readonly DateOnly Thursday = Monday.AddDays(3);
     private static readonly DateOnly Friday = Monday.AddDays(4);
 
-    /// <summary>Where a given date is drawn while a page of <paramref name="dayCount"/> days is showing.</summary>
-    private static double ColumnX(DateOnly pageStart, int dayCount, double dayWidth, DateOnly date, double shift) =>
-        (CentreSlot * dayCount * dayWidth) + shift + ((date.DayNumber - pageStart.DayNumber) * dayWidth);
+    /// <summary>A week collapsing onto a single day, before it has been aimed anywhere.</summary>
+    private static DayCountTransition WeekCollapsingToADay() =>
+        new(Viewport / 7, Viewport, Monday, 7);
+
+    /// <summary>A page of <paramref name="dayCount"/> days, at rest or part-way through a transition.</summary>
+    private static SchedulerGeometry Page(int dayCount, DayCountTransition? transition = null) => new()
+    {
+        ViewportWidth = Viewport,
+        VisibleDays = dayCount,
+        DayWidthOverride = transition?.DayWidth,
+        AnimationOffsetX = transition?.OffsetX ?? 0
+    };
+
+    /// <summary>Where a date is drawn on the centre page, in the surface's own coordinates.</summary>
+    private static double ColumnX(SchedulerGeometry geometry, DateOnly pageStart, DateOnly date) =>
+        (CentreSlot * geometry.PageSpan) + geometry.AnimationOffsetX
+        + ((date.DayNumber - pageStart.DayNumber) * geometry.DayWidth);
 
     [Test]
     public void Shrinking_a_week_onto_one_day_starts_with_that_day_where_it_already_was()
     {
-        var transition = new DayCountTransition(Viewport, Viewport / 7, Viewport, Monday, 7);
+        var transition = WeekCollapsingToADay();
 
         transition.AimAt(Friday, 1);
 
         Assert.That(
-            ColumnX(Friday, 1, transition.DayWidth, Friday, transition.OffsetX),
-            Is.EqualTo(ColumnX(Monday, 7, Viewport / 7, Friday, 0)).Within(0.01));
+            ColumnX(Page(1, transition), Friday, Friday),
+            Is.EqualTo(ColumnX(Page(7), Monday, Friday)).Within(0.01));
     }
 
     [Test]
     public void Growing_one_day_into_a_week_starts_with_that_day_where_it_already_was()
     {
-        var transition = new DayCountTransition(Viewport, Viewport, Viewport / 7, Thursday, 1);
+        var transition = new DayCountTransition(Viewport, Viewport / 7, Thursday, 1);
 
         transition.AimAt(Monday, 7);
 
         Assert.That(
-            ColumnX(Monday, 7, transition.DayWidth, Thursday, transition.OffsetX),
-            Is.EqualTo(ColumnX(Thursday, 1, Viewport, Thursday, 0)).Within(0.01));
+            ColumnX(Page(7, transition), Monday, Thursday),
+            Is.EqualTo(ColumnX(Page(1), Thursday, Thursday)).Within(0.01));
     }
 
     [Test]
@@ -54,14 +68,14 @@ public class DayCountTransitionTests
     {
         // A host that opens a day writes the date and the day count one at a time, so a transition
         // aimed at Thursday is what the second write finds when the day wanted is Friday.
-        var transition = new DayCountTransition(Viewport, Viewport / 7, Viewport, Monday, 7);
+        var transition = WeekCollapsingToADay();
         transition.AimAt(Thursday, 1);
 
         transition.AimAt(Friday, 1);
 
         Assert.That(
-            ColumnX(Friday, 1, transition.DayWidth, Friday, transition.OffsetX),
-            Is.EqualTo(ColumnX(Monday, 7, Viewport / 7, Friday, 0)).Within(0.01));
+            ColumnX(Page(1, transition), Friday, Friday),
+            Is.EqualTo(ColumnX(Page(7), Monday, Friday)).Within(0.01));
     }
 
     [Test]
@@ -69,7 +83,7 @@ public class DayCountTransitionTests
     {
         // Nothing on screen belongs to the new page, so there is nothing to hold in place — and
         // compensating anyway would fly a month's worth of columns past on the way in.
-        var transition = new DayCountTransition(Viewport, Viewport / 7, Viewport, Monday, 7);
+        var transition = WeekCollapsingToADay();
 
         transition.AimAt(Monday.AddDays(40), 1);
 
@@ -79,7 +93,7 @@ public class DayCountTransitionTests
     [Test]
     public void The_transition_settles_at_the_new_column_width_with_no_shift_left()
     {
-        var transition = new DayCountTransition(Viewport, Viewport / 7, Viewport, Monday, 7);
+        var transition = WeekCollapsingToADay();
         transition.AimAt(Friday, 1);
 
         transition.Progress = 1;

@@ -602,9 +602,13 @@ scheduler.HeaderTapped += (_, e) =>
 };
 ```
 
-The two may be set in either order, and a host that binds both — where the order is the framework's
-rather than yours — gets the same result: one transition onto the day asked for, not an expansion
-onto the day last opened followed by a move to this one.
+The two may be set in either order — which matters for a host that binds both, where the order is the
+framework's rather than yours. Either way you get one transition onto the day asked for, rather than an
+expansion onto the day last opened followed by a move across to this one.
+
+That holds for a day the calendar is already showing, which is what a header tap gives you. Opening a
+day on another page is a change of period as well as a change of day count: set `VisibleDays` first and
+it is one movement, set `DisplayDate` first and the calendar travels to that period before zooming.
 
 ### `SchedulerTimeGutterTappedEventArgs`
 

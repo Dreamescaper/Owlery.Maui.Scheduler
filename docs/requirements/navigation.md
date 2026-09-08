@@ -40,9 +40,10 @@ not show a blank or partially drawn calendar.
 rather than cutting from one layout to the other, so it is clear that the same calendar is being
 looked at differently.
 
-**NAV-28a** Opening a day — changing the date and the day count together — reads as one movement onto
-that day, in whichever order the host sets the two. It never expands onto one day and then travels to
-another.
+**NAV-28a** Opening a day that is on screen — changing the date and the day count together — reads as
+one movement onto that day, in whichever order the host sets the two. It never expands onto the day
+last opened and then travels to the one asked for. Opening a day that is *not* on screen is a change
+of period as well, and shows as one when the date is set first.
 
 **NAV-27** Neither axis rubber-bands past its content. There is no first or last week to come up
 against, and pulling the grid away from the edge would only expose empty space behind it.
