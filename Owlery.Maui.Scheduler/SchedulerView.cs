@@ -547,6 +547,26 @@ public partial class SchedulerView : ContentView
         ? verticalScroll.Width
         : Math.Max(0, allocatedWidth - Padding.HorizontalThickness);
 
+    /// <summary>
+    /// How much of a page is on screen: the same question as <see cref="ContentWidth"/>, asked down
+    /// the other axis.
+    /// </summary>
+    /// <remarks>
+    /// The body is exactly this height — it is the control's content less the header row — so it is
+    /// read directly rather than derived. The control's own height is no better a measure of it
+    /// vertically than horizontally: a host's <c>Padding</c> and a platform inset both narrow the
+    /// content without narrowing the control, and a page that leaves the bottom inset unconsumed
+    /// leaves it to be taken inside, below what the control is told it was allocated.
+    /// <para>
+    /// The fallback, for the headless tests where nothing has been arranged, subtracts the nominal
+    /// header height rather than the one the row measured — which is what the body's own height
+    /// accounts for once there is one.
+    /// </para>
+    /// </remarks>
+    private double BodyHeight => verticalScroll.Height > 0
+        ? verticalScroll.Height
+        : Math.Max(0, allocatedHeight - Padding.VerticalThickness - ActiveHeaderHeight);
+
     protected override void OnSizeAllocated(double width, double height)
     {
         base.OnSizeAllocated(width, height);
@@ -573,7 +593,7 @@ public partial class SchedulerView : ContentView
             return;
 
         var viewport = Math.Max(0, ContentWidth - ActiveGutterWidth);
-        var viewportHeight = Math.Max(0, allocatedHeight - ActiveHeaderHeight);
+        var viewportHeight = BodyHeight;
 
         // Both axes, not just the width. A month is exactly one viewport tall, so its content height
         // is a function of this value — and a height-only reallocation used to update the geometry
@@ -711,7 +731,7 @@ public partial class SchedulerView : ContentView
         active.FirstDayOfWeek = FirstDayOfWeek;
         active.TimeZone = TimeZone;
         active.Now = NowInZone();
-        active.ViewportHeight = Math.Max(0, allocatedHeight - ActiveHeaderHeight);
+        active.ViewportHeight = BodyHeight;
 
         switch (ViewMode)
         {

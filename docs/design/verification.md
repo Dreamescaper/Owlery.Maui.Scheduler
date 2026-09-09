@@ -291,3 +291,11 @@ Two things were checked rather than assumed:
 
 The headless suite cannot reach any of this: with no handler the body reports `-1`. What it does
 cover is the `Padding` half of the same defect, which reaches the geometry by the same route.
+
+**The same fix down the vertical axis was re-checked on the same emulator.** The height path feeds
+the month surface, which is exactly one viewport tall, so a mistake there would resize every month
+cell. Both surfaces were driven after the change: the timeline still shows seven whole columns, and
+the month still draws six rows filling the body with the trailing row whole and the grid ending on
+the navigation bar. The app's page consumes the bottom inset itself, so the vertical defect is
+latent there rather than visible — what was verified on the device is the absence of a regression;
+the defect itself is covered headlessly through `Padding`, as above.

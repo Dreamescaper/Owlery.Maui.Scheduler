@@ -99,3 +99,11 @@ so, so `ContentWidth` falls back to the control's width less its own `Padding`. 
 a stub: padding is the half of this the control can work out for itself, and it is what the headless
 test covers.
 
+**The height is the same question down the other axis**, and `BodyHeight` answers it the same way.
+The body *is* the viewport height — it is the control's content less the header row — so it is read
+directly rather than derived from the control's height. Padding takes height from the content
+without taking it from the control, and so does a bottom inset a page left unconsumed, which is then
+taken below the level `OnSizeAllocated` sees. The fallback subtracts the padding and the *nominal*
+header height; the body's own height accounts for the height the header row actually measured, which
+is the more accurate of the two once there is one.
+

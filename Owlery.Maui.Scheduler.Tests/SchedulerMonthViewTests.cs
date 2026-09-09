@@ -23,6 +23,26 @@ public class SchedulerMonthViewTests
 
     private static DateTime Day(int day, int month = 8) => new(2026, month, day);
 
+    /// <summary>
+    /// A month is exactly one viewport tall, so the height it asks for is the viewport height —
+    /// which is the control's <em>content</em> less the header, not the control less the header.
+    /// Padding takes height from the content without taking it from the control, and so does a
+    /// platform inset a page left unconsumed; see <c>SchedulerView.BodyHeight</c>.
+    /// </summary>
+    [Test]
+    public void A_month_is_as_tall_as_the_content_rather_than_the_control_when_a_host_pads_it()
+    {
+        const double padding = 20;
+
+        var harness = new SchedulerHarness(
+            August,
+            viewMode: SchedulerViewMode.Month,
+            configure: scheduler => scheduler.Padding = new Thickness(padding));
+
+        var expected = SchedulerHarness.ViewHeight - (padding * 2) - harness.Scheduler.HeaderHeight;
+        Assert.That(harness.SurfaceRequestedHeight, Is.EqualTo(expected).Within(0.5));
+    }
+
     [Test]
     public void A_month_page_shows_the_appointments_of_its_own_days()
     {
