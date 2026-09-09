@@ -217,3 +217,35 @@ lands mid-transition; and `SlideToAdjacentPageAsync` was made to print a line, r
 The sample's own log shows the double move either way — the centre page is reported as Thursday and
 then as Friday for one tap — because re-aiming still rebuilds onto the page asked for. What changed is
 that the second move is no longer a page slide.
+
+**Leaving the agenda comes to rest on a whole page — confirmed on the iOS simulator**, iPhone 17 Pro
+(402pt wide), iOS 26.5, Debug, through `Owlery.Maui.Scheduler.Sample` with `VisibleDays` 1 and 100
+appointments a month. Agenda, then Timeline. Before the fix the pager settled at an offset of 52 —
+the gutter's width — and stayed there: the day header read the *previous* day, a page boundary sat at
+350pt of the 402pt screen, the chips on the visible page were clipped by their first 52pt, and the
+next page's content showed past the boundary.
+
+The cause is not the recentre's arithmetic, which was checked first and is right: the control asks
+for one viewport, 350, every time. It is that the offset is asked for while the platform scroll view
+still measures the *agenda*, whose surface is one viewport wide rather than three ([section 2](paging.md)) —
+a frame and a content size, both real, neither wide enough. `SetOffset` only deferred when one of
+them was zero, so it wrote the offset instead, and UIKit clamped it to the old content on the next
+layout. Logged from inside `MauiPagingScrollView`:
+
+| | bounds | content | offset |
+|---|---|---|---|
+| in the agenda | 402 | 402 | 0 |
+| `SetOffset(350)` asked for, and taken | 402 | 402 | 350 |
+| the layout that followed | 350 | 1050 | **52** |
+
+52 is what 350 clamps to against the agenda's content — 402 − 350 — and nothing re-applied it,
+because clearing `deferredOffsetX` had already given up the request. Deferring on whether the content
+reaches the offset, which is the test Android's handler already made, leaves the same three steps
+ending at 350. Re-checked afterwards on the same device: the day header matches the title and is
+centred, no boundary is visible, no chip is clipped; a swipe still settles on the next day; and
+Agenda → Month, the other transition that widens the surface, lands on a full-width grid.
+
+The arithmetic is `PagingOffset.Fits`, extracted so it is testable without a platform — the headless
+suite cannot reach this defect, since with no handler the harness applies whatever offset it is
+handed and models no clamp. A control-level test that the recentre asks for a whole page is worth
+having and is *not* what covers the fix: it passed before it too.
