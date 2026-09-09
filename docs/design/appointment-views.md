@@ -138,14 +138,15 @@ The round trip is not free, and the resets are the expensive half rather than th
 value the pool has just zeroed. A rotation therefore paid for two binding-context changes, two
 visibility changes and a full set of transform writes per view, to arrive where it started.
 
-`FillUnmatched` now hands this page's own surplus to this page's own unmatched positions before
-renting anything. Nothing about it is visible to the reader: a view recycled this way was on its way
-to the pool, and the position taking it was on its way to renting one.
+`PopulateSlot` now reconciles in two passes. The first matches by key and leaves a gap wherever a
+position recognised nothing; the second fills those gaps from this page's own surplus before renting
+anything, and binds as it goes. Nothing about it is visible to the reader: a view recycled this way
+was on its way to the pool, and the position taking it was on its way to renting one.
 
-It is deliberately a **second** pass. Handing a leftover to the first position that asks would give
-away a view a later position was going to recognise by key — which is the positional reuse this
-reconciliation exists to avoid, and it would reintroduce exactly the flash described above. Matching
-runs to completion first; only then is what remains genuinely surplus.
+The split is deliberate. Handing a leftover to the first position that asks would give away a view a
+later position was going to recognise by key — which is the positional reuse this reconciliation
+exists to avoid, and it would reintroduce exactly the flash described above. Matching runs to
+completion first; only then is what remains genuinely surplus.
 
 Measured on the iOS simulator through the sample, as median managed milliseconds for one page change,
 twelve changes per run ([section 15](verification.md) has the method):
