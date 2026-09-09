@@ -70,6 +70,25 @@ public class SchedulerMonthViewTests
         });
     }
 
+    /// <summary>
+    /// A month is exactly one viewport tall, so the height it asks for is the viewport height — the
+    /// control's <em>content</em> less the header, not the control less the header. See
+    /// <c>SchedulerView.BodyHeight</c>.
+    /// </summary>
+    [Test]
+    public void A_month_is_as_tall_as_the_content_rather_than_the_control_when_a_host_pads_it()
+    {
+        const double padding = 20;
+
+        var harness = new SchedulerHarness(
+            August,
+            viewMode: SchedulerViewMode.Month,
+            configure: scheduler => scheduler.Padding = new Thickness(padding));
+
+        var expected = SchedulerHarness.ViewHeight - (padding * 2) - harness.Scheduler.HeaderHeight;
+        Assert.That(harness.SurfaceRequestedHeight, Is.EqualTo(expected).Within(0.5));
+    }
+
     [Test]
     public void An_appointment_outside_the_timeline_hours_still_appears()
     {

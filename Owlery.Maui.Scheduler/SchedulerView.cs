@@ -326,6 +326,8 @@ public partial class SchedulerView : ContentView
         };
 
         verticalScroll.Scrolled += OnVerticalScrolled;
+        // The body's arrange is the only moment its size — the content's — becomes knowable.
+        verticalScroll.SizeChanged += OnBodySizeChanged;
 
         headerCorner = new Label
         {
@@ -521,6 +523,30 @@ public partial class SchedulerView : ContentView
     /// <summary>Wraps a grid position for reporting, so a host can read it either way it needs to.</summary>
     private SchedulerMoment Moment(DateTime wallClock) => new(wallClock, TimeZone);
 
+    /// <summary>
+    /// The width the content was arranged into, which is not the width the control was allocated:
+    /// padding and a platform inset both narrow the content without narrowing the control
+    /// (<c>docs/design/grid-and-scrolling.md</c> §8).
+    /// </summary>
+    /// <remarks>
+    /// Read off the body, which is what the columns must fit inside. It reports -1 until a platform
+    /// has arranged it, so the headless tests fall back to the padding — the half of this the
+    /// control can work out for itself.
+    /// </remarks>
+    private double ContentWidth => verticalScroll.Width > 0
+        ? verticalScroll.Width
+        : Math.Max(0, allocatedWidth - Padding.HorizontalThickness);
+
+    /// <summary>
+    /// How much of a page is on screen. The body is exactly that — the content less the header row —
+    /// so it is read rather than derived from the control's height, which the same two things
+    /// overstate. See <see cref="ContentWidth"/>.
+    /// </summary>
+    /// <remarks>The fallback subtracts the nominal header height; the body reflects the measured one.</remarks>
+    private double BodyHeight => verticalScroll.Height > 0
+        ? verticalScroll.Height
+        : Math.Max(0, allocatedHeight - Padding.VerticalThickness - ActiveHeaderHeight);
+
     protected override void OnSizeAllocated(double width, double height)
     {
         base.OnSizeAllocated(width, height);
@@ -531,8 +557,19 @@ public partial class SchedulerView : ContentView
         allocatedWidth = width;
         allocatedHeight = height;
 
-        var viewport = Math.Max(0, width - ActiveGutterWidth);
-        var viewportHeight = Math.Max(0, height - ActiveHeaderHeight);
+        UpdateViewport();
+    }
+
+    private void OnBodySizeChanged(object? sender, EventArgs e) => UpdateViewport();
+
+    /// <summary>Settles the geometry against the content's size, and applies it if either axis moved.</summary>
+    private void UpdateViewport()
+    {
+        if (allocatedWidth <= 0)
+            return;
+
+        var viewport = Math.Max(0, ContentWidth - ActiveGutterWidth);
+        var viewportHeight = BodyHeight;
 
         // Both axes, not just the width. A month is exactly one viewport tall, so its content height
         // is a function of this value — and a height-only reallocation used to update the geometry
@@ -670,7 +707,7 @@ public partial class SchedulerView : ContentView
         active.FirstDayOfWeek = FirstDayOfWeek;
         active.TimeZone = TimeZone;
         active.Now = NowInZone();
-        active.ViewportHeight = Math.Max(0, allocatedHeight - ActiveHeaderHeight);
+        active.ViewportHeight = BodyHeight;
 
         switch (ViewMode)
         {
@@ -1195,7 +1232,7 @@ public partial class SchedulerView : ContentView
 
         // The gutter appears or disappears with the mode, so the viewport is a different width now.
         // Nothing re-allocates the control's size, so this is the only place that would notice.
-        ActiveGeometry.ViewportWidth = Math.Max(0, allocatedWidth - ActiveGutterWidth);
+        ActiveGeometry.ViewportWidth = Math.Max(0, ContentWidth - ActiveGutterWidth);
 
         ApplyGeometry();
 

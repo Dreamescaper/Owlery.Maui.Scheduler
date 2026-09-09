@@ -249,3 +249,53 @@ The arithmetic is `PagingOffset.Fits`, extracted so it is testable without a pla
 suite cannot reach this defect, since with no handler the harness applies whatever offset it is
 handed and models no clamp. A control-level test that the recentre asks for a whole page is worth
 having and is *not* what covers the fix: it passed before it too.
+
+---
+
+**The viewport is measured off the body, not the control — confirmed on the Android emulator**, a
+2400 × 1080 landscape device with a 136 px camera cutout, at 2.625 density. The control was the
+whole content of its page, which is what leaves its own root `Grid` as the first layout able to
+consume the platform's inset ([section 8](grid-and-scrolling.md)).
+
+Read back through `maui devflow ui tree`, which is what separated the two widths — a screenshot
+shows the clipping but not which element the inset landed on:
+
+| | width (dp) |
+|---|---|
+| `SchedulerView` | 914.286 |
+| its root `Grid` | 914.286 |
+| the header grid and the body, both its children | **862.476** |
+
+914.286 − 862.476 is 51.81, the cutout. The pages were built 862.286 wide — 914.286 less the 52
+gutter — inside a strip of 810.286, so the seventh column was clipped by the inset.
+
+Measured off the screenshots, before and after, along a row inside the grid:
+
+| | column width | day boundaries visible | last boundary |
+|---|---|---|---|
+| before | 323 px | 6 | would fall at 2535, off-screen |
+| after | 304 px | **8** — every column closed | **2399**, the right edge |
+
+304 px is 810.476 dp ÷ 7, which is the body's width less the gutter: the columns now divide what
+they are drawn in.
+
+Two things were checked rather than assumed:
+
+- **Rotating the cutout to the right edge did not move the clipping**, which is what showed this to
+  be a width error rather than an offset one. With the cutout on the right the content box became
+  `[0, 2264]` and the seventh column was still cut, at 2264.
+- **`SafeAreaEdges.None` on a layout does not stop the inset, it moves it down.** Set on the
+  sample's page-level `Grid`, the inset reappeared on the next layout inside it — that grid went to
+  the full 914.286 and its child moved to x = 63.81, its own 12 padding past the 51.81 inset. This
+  is why the control cannot simply opt out and keep measuring its own width.
+
+The headless suite cannot reach any of this: with no handler the body reports `-1`. What it does
+cover is the `Padding` half of the same defect, which reaches the geometry by the same route.
+
+**The same fix down the vertical axis was re-checked on the same emulator.** The height path feeds
+the month surface, which is exactly one viewport tall, so a mistake there would resize every month
+cell. Both surfaces were driven after the change: the timeline still shows seven whole columns, and
+the month still draws six rows filling the body with the trailing row whole and the grid ending on
+the navigation bar. The app's page consumes the bottom inset itself, so the vertical defect is
+latent there rather than visible — what was verified on the device is the absence of a regression;
+the defect itself is covered headlessly through `Padding`, as above.

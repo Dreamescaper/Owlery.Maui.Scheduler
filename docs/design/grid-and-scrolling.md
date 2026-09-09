@@ -66,3 +66,44 @@ two rules follow from it:
    one-viewport cell; with `Fill` the parent grid arranges it to the cell width rather than its
    requested width, which puts the second and third weeks' headers outside the arranged box.
 
+### The viewport is measured off the body, not off the control
+
+The width the columns divide is read from that vertical `ScrollView` — `ContentWidth` — rather than
+from the width `OnSizeAllocated` reports. The two are not the same number, and the control's own
+width is the wrong one.
+
+Two things inset a control's content without narrowing the control. A host's `Padding` is the
+obvious one. A display cutout is the other, and it is the one that was reported: on Android the
+platform's inset is consumed by the **first layout inside the control** whenever nothing above it
+did — which is exactly what happens when the control is a page's whole content, because then the
+first layout is the control's own root `Grid`. That grid keeps its full width and places its
+children past the inset.
+
+So a control measuring from its own width laid seven columns across a strip wider than the one they
+are drawn in, and the trailing column was clipped by exactly the inset. Two things about that were
+initially misleading:
+
+- **The clipping is at the trailing edge whichever edge the cutout is on.** It is a width error, not
+  an offset one, and the columns are anchored at the content box's leading edge, so the overflow can
+  only leave at the other end. Measured on an Android emulator with the cutout on the left and again
+  on the right: the loss stayed on the right both times.
+- **The amount lost equals the inset**, which makes it look positional. It is not — it is
+  `control width − content width`, which is the inset by definition.
+
+Opting the root grid out with `SafeAreaEdges.None` does not help: an unconsumed inset propagates to
+the next layout down and is consumed there instead, still below the level `OnSizeAllocated` sees.
+Verified on the sample — see [§15](verification.md).
+
+The body reports `-1` until a platform has arranged it, and the headless tests have no handler to do
+so, so `ContentWidth` falls back to the control's width less its own `Padding`. That fallback is not
+a stub: padding is the half of this the control can work out for itself, and it is what the headless
+test covers.
+
+**The height is the same question down the other axis**, and `BodyHeight` answers it the same way.
+The body *is* the viewport height — it is the control's content less the header row — so it is read
+directly rather than derived from the control's height. Padding takes height from the content
+without taking it from the control, and so does a bottom inset a page left unconsumed, which is then
+taken below the level `OnSizeAllocated` sees. The fallback subtracts the padding and the *nominal*
+header height; the body's own height accounts for the height the header row actually measured, which
+is the more accurate of the two once there is one.
+
