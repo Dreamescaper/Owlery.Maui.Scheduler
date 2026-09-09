@@ -2,6 +2,7 @@
 using CoreGraphics;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
+using Owlery.Maui.Scheduler.Internal;
 using UIKit;
 
 namespace Owlery.Maui.Scheduler.Handlers;
@@ -169,11 +170,20 @@ internal class MauiPagingScrollView : UIScrollView
     /// complaint at that point — reading it straight back reports exactly what was asked for — and
     /// then resets it to zero on the first real layout, so the calendar opened on the page before the
     /// one it should have. Detecting that by reading the offset back therefore does not work; what
-    /// identifies it is the absence of a frame, so that is what is tested.
+    /// identifies it is the content not reaching the offset, so that is what is tested.
+    /// <para>
+    /// Having a frame is not enough on its own. Leaving an agenda re-pages the surface from one
+    /// viewport to three, and the recentre onto the middle page is asked for while the platform view
+    /// still measures the agenda's single page — a frame and a content size, both real, neither wide
+    /// enough. The offset was written anyway and UIKit clamped it to the old content on the next
+    /// layout, leaving the pager at rest between two pages with no request outstanding to put it
+    /// right. Android has always tested its scroll range for this; iOS was the one only testing for
+    /// zero.
+    /// </para>
     /// </remarks>
     public void SetOffset(double x, bool animated)
     {
-        if (Bounds.Width <= 0 || ContentSize.Width <= 0)
+        if (!PagingOffset.Fits(x, Bounds.Width, ContentSize.Width))
         {
             deferredOffsetX = x;
             return;
@@ -201,7 +211,7 @@ internal class MauiPagingScrollView : UIScrollView
 
         ContentSize = new CGSize(width, height);
 
-        if (deferredOffsetX is not { } pending || width < pending + Bounds.Width)
+        if (deferredOffsetX is not { } pending || !PagingOffset.Fits(pending, Bounds.Width, width))
             return;
 
         ContentOffset = new CGPoint(pending, ContentOffset.Y);

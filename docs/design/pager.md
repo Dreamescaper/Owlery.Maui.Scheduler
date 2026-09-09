@@ -34,7 +34,7 @@ scroller inside `HorizontalScrollView`, which cannot be reached to stop — so t
 follows a settle was overwritten on the scroller's next frame, and one swipe compounded into
 several. Owning it also makes "has it arrived" exact instead of polled for.
 
-## Five things that were only found by running it
+## Six things that were only found by running it
 
 **Plain properties do not reach a handler.** `PageWidth` and `IsScrollEnabled` are not bindable —
 nothing binds to them — so the mapper ran once at connect time, while `PageWidth` was still 0, and
@@ -46,6 +46,17 @@ reports exactly what was asked for — then resets it to zero once the view has 
 calendar opened one page early. Detecting that by reading the offset back therefore cannot work; the
 absence of a frame is what identifies it. Android loses it the same way against a scroll range that
 is still zero. Both handlers hold the request and re-apply it on layout.
+
+**And a frame is not enough — the content has to reach the offset.** The same deferral, tested only
+for a *zero* width, let the defect back in from the other side. Leaving the agenda re-pages the
+surface from one viewport to three ([section 2](paging.md)), and the recentre onto the middle page is asked for
+while the platform view still measures the agenda's single page: a frame and a content size, both
+real, neither wide enough. iOS took the offset and clamped it to the old content on the next layout,
+leaving the pager at rest between two pages with nothing outstanding to put it right — a day header
+naming the wrong day, and every chip on the page clipped by the gutter's width. Android had tested
+its scroll range for this all along; iOS was the one asking only whether the numbers were non-zero,
+and now asks Android's question instead — which is also the one its own re-apply on layout was
+already asking. §15 has the measurements.
 
 **State reset on `ACTION_DOWN` is never reset.** A `ViewGroup` does not intercept the down event —
 the drawing surface underneath consumes it, which is how long-press-to-drag gets its touch-down — and
