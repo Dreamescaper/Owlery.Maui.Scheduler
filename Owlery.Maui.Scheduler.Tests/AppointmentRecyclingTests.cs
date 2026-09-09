@@ -49,6 +49,39 @@ public class AppointmentRecyclingTests
     }
 
     [Test]
+    public void A_page_rotation_rebinds_its_views_where_they_stand()
+    {
+        // Four weeks, none sharing an appointment with any other, so the page rotated in has to
+        // rebind every view it takes over — which is what a rotation always is.
+        var weeks = Enumerable.Range(-1, 4).SelectMany(week => Enumerable.Range(0, 6)
+            .Select(i => TestAppointment.At(Week.AddDays(week * 7 + 1), $"{9 + i}:00", 1, $"W{week}-{i}")));
+
+        var harness = new SchedulerHarness(Week, [.. weeks]);
+
+        var built = harness.AllAppointmentViews.Count;
+        var boundBefore = harness.AllAppointmentViews.Sum(view => view.BindingChanges);
+
+        Assume.That(harness.CentrePageAppointments, Has.Count.EqualTo(6), "the week opened on what it was given");
+
+        // Act — one rotation, which repopulates exactly one page.
+        harness.SwipeToPage(2);
+
+        // Assert
+        Assert.That(harness.CentrePageAppointments, Has.Count.EqualTo(6), "the week rotated onto still shows its own");
+
+        // Six views are rebound, once each. Handing them back to the pool and renting them straight
+        // out again nulls each binding context on the way past, so the same six views would be bound
+        // twelve times for one rotation — and every property the pool resets is a write the rebind
+        // then has to undo.
+        Assert.That(
+            harness.AllAppointmentViews.Sum(view => view.BindingChanges) - boundBefore,
+            Is.EqualTo(6),
+            "a rotation rebinds each view it carries over once, rather than unbinding and binding it");
+
+        Assert.That(harness.AllAppointmentViews, Has.Count.EqualTo(built), "and it builds no new ones");
+    }
+
+    [Test]
     public void A_bound_view_describes_itself_for_assistive_technology()
     {
         var harness = new SchedulerHarness(Week, [TestAppointment.At(Week.AddDays(1), "10:00", 1, "Lesson")]);

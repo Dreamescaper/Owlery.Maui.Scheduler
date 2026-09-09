@@ -236,6 +236,16 @@ Everything here was learned by measuring this control, usually after guessing wr
   reasoning. Re-measure rather than re-argue if a range widens again.
 - **Cache anything that crosses into Java.** `Context.Resources.DisplayMetrics.Density` was being read
   on every scroll frame.
+- **A view handed back and rented straight out again is not free — the resets are what costs.**
+  `AppointmentViewPool.Return` zeroes translation, opacity and z-order, which defeats the guards
+  above: `PositionAppointmentView` cannot skip a write to a value the pool has just cleared. Reuse a
+  page's own surplus in place where the alternative is a same-pass round trip; `PopulateSlot`'s
+  second pass is that, and §6 has the measurements.
+- **Measure with the display, not only with a stopwatch.** `Owlery.Maui.Scheduler.Sample` carries
+  `PerfRun` and `FrameMeter` for this: launch it with `OWLERY_PERF=1` and it runs a matrix of
+  surfaces and volumes unattended, reporting managed milliseconds *and* the frame intervals
+  `CADisplayLink`/`Choreographer` actually delivered. A swipe cannot be injected on iOS, so it pages
+  by `DisplayDate`, which settles through the same rotation.
 
 ### Testing a performance change
 

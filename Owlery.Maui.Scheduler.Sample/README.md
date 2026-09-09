@@ -54,6 +54,7 @@ has exactly one package reference, and this is the host's tooling.
 | `‹` `Today` `›` | Writes `DisplayDate` — by `VisibleDays`, or by a month in `Month` mode. |
 | `−` *count* `+` | Steps the number of generated appointments **per month** through 0, 10, 25, 50, 100, 250, 500, 1 000, 2 500, 5 000. |
 | **Knobs** | Opens the drawer. Every row writes straight to the property it is named after, and follows it back when something else changes it — tapping a day header drops `VisibleDays` to 1, and the knob says so. |
+| **Perf** | Runs the measured workload below against whatever is on screen, and reports it in the strip. |
 | The bottom strip | The last three events the control raised, with what it reported. |
 
 The drawer also carries the two knobs that are not control properties — *Cancel drags of locked items*
@@ -74,6 +75,26 @@ locked items* refuses to pick up.
 
 Paging or scrolling beyond the current range loads the newly requested months, which is the same host
 response a real app would make to `VisibleDatesChanged`.
+
+## Measuring it
+
+`PerfRun` is a scripted workload — page forward and back, replace `ItemsSource` repeatedly, and the
+burst of whole replacements a host publishing once per answered period produces. Each reports two
+numbers, because they answer different questions: a `Stopwatch` says what the synchronous managed
+pass cost, and `FrameMeter` — `CADisplayLink` on iOS, `Choreographer` on Android — says what the
+display actually presented around it, which is where the layout and native arranging that the pass
+only *queued* land.
+
+The **Perf** button runs it against the current surface. To run the whole matrix of surfaces and
+volumes unattended, launch with `OWLERY_PERF=1` and read the `[perf]` lines off the console:
+
+```sh
+SIMCTL_CHILD_OWLERY_PERF=1 xcrun simctl launch --console-pty booted com.owlery.scheduler.playground
+```
+
+It pages by writing `DisplayDate` rather than by swiping, because a native pan cannot be injected on
+iOS. That is the same rotation and repopulate a swipe settles into, so it measures the same work —
+what it does not measure is the platform scrolling either side of it.
 
 ## Worth reading if you are writing a template
 

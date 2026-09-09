@@ -123,13 +123,65 @@ read when the rebuild runs, not when it was announced. Only the data paths go th
 a drag does still repopulates synchronously, because those calls are how a gesture puts the pages
 back and cannot be deferred.
 
+### Surplus is recycled where it stands, not through the pool
+
+Reconciliation matches by key first, and until this was measured on iOS everything it did *not* match
+went back to the pool while every position it could not satisfy rented one out. On a rebuild that is
+right — the surplus really is leaving the page. On a **rotation** it is almost entirely waste: the
+page rotated onto shares no appointment with the page its slot was showing, so every view on it was
+handed back and rented straight out again, the same physical view, within one synchronous pass.
+
+The round trip is not free, and the resets are the expensive half rather than the stack operations.
+`Return` hides the view, nulls its binding context and zeroes its translation, opacity and z-order;
+`Rent` re-shows it; and the rebind then writes every one of those back. Worse, it defeats the guards:
+`PositionAppointmentView` skips a translation or a z-order that has not changed, and it cannot skip a
+value the pool has just zeroed. A rotation therefore paid for two binding-context changes, two
+visibility changes and a full set of transform writes per view, to arrive where it started.
+
+`PopulateSlot` now reconciles in two passes. The first matches by key and leaves a gap wherever a
+position recognised nothing; the second fills those gaps from this page's own surplus before renting
+anything, and binds as it goes. Nothing about it is visible to the reader: a view recycled this way
+was on its way to the pool, and the position taking it was on its way to renting one.
+
+The split is deliberate. Handing a leftover to the first position that asks would give away a view a
+later position was going to recognise by key — which is the positional reuse this reconciliation
+exists to avoid, and it would reintroduce exactly the flash described above. Matching runs to
+completion first; only then is what remains genuinely surplus.
+
+Measured on the iOS simulator through the sample, as median managed milliseconds for one page change,
+twelve changes per run ([section 15](verification.md) has the method):
+
+| Surface | Loaded | Before | After |
+|---|---|---|---|
+| Week | 400 | 42.2ms | 28.8ms |
+| Week | 2,000 | 289.7ms | 122.6ms |
+| Month | 125 | 59.9ms | 23.1ms |
+| Month | 1,100 | 244.9ms | 71.0ms |
+| Month | 5,500 | 310.0ms | 75.5ms |
+
+The worst frame the display actually delivered over a month run fell from 1,532ms to 222ms at 1,100
+loaded, and from 1,812ms to 432ms at 5,500.
+
+A phase breakdown — a separate pair of runs, both instrumented, so the two halves are comparable to
+each other rather than to the table above — put the saving where the reasoning predicts it. Over
+twelve month rotations at 1,100 loaded, returning and renting fell from 1,316ms to 86ms, and
+`PositionAppointmentView`, writing back what the pool had just zeroed, from 1,086ms to 78ms. What did
+not move was binding a view to an appointment it had never shown, at 483ms and 576ms: that is the
+template's own work, and it is now most of what a page change costs.
+
 ### What is left, and where it is
 
-With those in place the remaining cost is concentrated in one spot: **binding a view to an appointment
+With that removed the remaining cost is concentrated in one spot: **binding a view to an appointment
 it has never shown**. Measured at roughly 6ms against 0.25ms for a rebind of the same instance — the
 difference between building a template's subtree and skipping the write entirely. A page rotation does
 that for every appointment on the incoming page, so a swipe onto a busy week is a single frame of tens
-of milliseconds. The pool is what keeps that from being worse.
+of milliseconds. The pool is what keeps that from being worse, and the recycling above is what keeps
+the rotation from paying for the pool twice.
+
+On the iOS runs above it is now 65–90% of what a page change costs, and it is the template's own work
+rather than the control's: MAUI propagating a binding context through the template's subtree, and the
+template reacting to it. Nothing in the control can remove it — see the table below for how much the
+shape of the template moves it.
 
 Beyond the pool the cost belongs to the host's template, and **how the template is written matters
 more than it looks**. The same appointment box, built once from MAUI primitives and once as a Blazor

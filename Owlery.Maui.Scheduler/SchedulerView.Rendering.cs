@@ -203,19 +203,64 @@ public partial class SchedulerView
         reusableArrangedViews.EnsureCapacity(positions.Count);
         var arranged = reusableArrangedViews;
 
+        // First pass: every position that recognises a view on this page takes it, so an appointment
+        // already showing keeps the very view it was showing in. A position that recognises nothing
+        // leaves a gap rather than filling one, so the list stays in step with positions — and what
+        // is left in `available` afterwards is what no position wanted.
         foreach (var position in positions)
         {
-            if (!available.Remove(position.Appointment.Key, out var view))
-            {
-                view = pool.Rent();
+            available.Remove(position.Appointment.Key, out var view);
+            arranged.Add(view!);
+        }
 
-                if (view is null)
+        // Copied out because the fill below hands these to positions one at a time, and indexing is
+        // the only way to say which are left over at the end.
+        reusableSurplus.Clear();
+        reusableSurplus.AddRange(available.Values);
+
+        // Second pass: fill the gaps from this page's own surplus before renting anything, then
+        // bind. A page rotated onto shares no appointment with the page its slot was showing, so
+        // without this every view on it went back to the pool and was rented straight out again —
+        // hidden, unbound, its translation, opacity and z-order zeroed, then re-shown and bound and
+        // positioned back. The resets are the expensive half: each is a write the rebind has to
+        // undo, and the guards in PositionAppointmentView cannot skip a value the pool just cleared.
+        //
+        // It has to be a *second* pass. Handing a leftover to the first position that wants one
+        // would give away a view a later position was going to recognise — the positional reuse this
+        // reconciliation exists to avoid, which repaints the appointment that kept its view and
+        // flashes the one that took it. Nothing recycled here was ever going to stay: it was on its
+        // way to the pool, and the position taking it was on its way to renting one.
+        var taken = 0;
+
+        for (var i = 0; i < arranged.Count; i++)
+        {
+            if (arranged[i] is null)
+            {
+                if (taken < reusableSurplus.Count)
+                {
+                    arranged[i] = reusableSurplus[taken++];
+                }
+                else if (pool.Rent() is { } rented)
+                {
+                    arranged[i] = rented;
+                }
+                else
+                {
+                    // No template, so nothing after this can be placed either. A position further
+                    // down may have matched a view, and dropping it without handing it back would
+                    // leave it drawn and owned by no page. Unreachable in practice: the pool's
+                    // template tracks ActiveTemplate, and nothing is laid out without one.
+                    DiscardFrom(arranged, i);
                     break;
+                }
             }
 
-            arranged.Add(view);
-            BindAppointmentView(view, position, slot, slotIndex);
+            BindAppointmentView(arranged[i], positions[i], slot, slotIndex);
         }
+
+        // Surplus no position claimed is genuinely gone from this slot.
+        for (var i = taken; i < reusableSurplus.Count; i++)
+            Discard(reusableSurplus[i]);
 
         slot.Positions.Clear();
 
@@ -231,15 +276,23 @@ public partial class SchedulerView
                 slot.Positions.Add(positions[i]);
         }
 
-        // Whatever no appointment claimed is genuinely gone from this slot.
-        foreach (var surplus in available.Values)
-            Discard(surplus);
-
         slot.Views.Clear();
         slot.Views.AddRange(arranged);
 
         PopulateSections(slot, slotIndex);
         MeasureAgendaRows(slot, slotIndex);
+    }
+
+    /// <summary>Hands back everything still placed from <paramref name="from"/> on, and drops it.</summary>
+    private void DiscardFrom(List<View> arranged, int from)
+    {
+        for (var i = from; i < arranged.Count; i++)
+        {
+            if (arranged[i] is { } stranded)
+                Discard(stranded);
+        }
+
+        arranged.RemoveRange(from, arranged.Count - from);
     }
 
     /// <summary>

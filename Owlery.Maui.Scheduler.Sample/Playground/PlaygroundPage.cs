@@ -107,6 +107,21 @@ public sealed class PlaygroundPage : ContentPage
         SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.All);
 
         source.SetCount(InitialCount);
+
+        // Launched to measure rather than to be played with: run the matrix and print it, so a run is
+        // repeatable on a platform where a swipe cannot be injected. An environment variable rather
+        // than an argument, because iOS hands UIApplicationMain the arguments and a simulator launch
+        // flag does not reach Environment.GetCommandLineArgs.
+        Console.WriteLine($"[perf] playground up, OWLERY_PERF={Environment.GetEnvironmentVariable("OWLERY_PERF")}");
+
+        if (Environment.GetEnvironmentVariable("OWLERY_PERF") == "1")
+            Dispatcher.Dispatch(() => _ = MeasureMatrixAsync());
+    }
+
+    private async Task MeasureMatrixAsync()
+    {
+        await Task.Delay(1500);
+        await PerfRun.RunMatrixAsync(scheduler, source, Announce);
     }
 
     private View TopBar()
@@ -144,10 +159,13 @@ public sealed class PlaygroundPage : ContentPage
         var today = Knobs.SmallButton("Today", Theme.Unselected, Theme.Ink);
         today.Clicked += (_, _) => scheduler.ScrollToDate(DateTime.Today);
 
+        var perf = Knobs.SmallButton("Perf", Theme.Unselected, Theme.Ink);
+        perf.Clicked += (_, _) => _ = MeasureAsync(perf);
+
         var navigation = new HorizontalStackLayout
         {
             Spacing = 6,
-            Children = { previous, today, next }
+            Children = { previous, today, next, perf }
         };
 
         return new VerticalStackLayout
@@ -157,6 +175,30 @@ public sealed class PlaygroundPage : ContentPage
             BackgroundColor = Theme.Chrome,
             Children = { top, navigation }
         };
+    }
+
+    /// <summary>
+    /// Runs the scripted workload and writes what it cost into the log strip.
+    /// </summary>
+    /// <remarks>
+    /// On the page rather than in <see cref="PerfRun"/> so the results land where every other report
+    /// from the control does, and so the button cannot be pressed again while a run is in flight.
+    /// </remarks>
+    private async Task MeasureAsync(Button button)
+    {
+        button.IsEnabled = false;
+
+        try
+        {
+            Announce($"perf: {scheduler.ViewMode}, {source.Count}/mo, {source.LoadedAppointmentCount} loaded");
+            Announce(await PerfRun.PageAsync(scheduler));
+            Announce(await PerfRun.RefreshAsync(scheduler, source));
+            Announce(await PerfRun.BurstAsync(scheduler, source));
+        }
+        finally
+        {
+            button.IsEnabled = true;
+        }
     }
 
     private Button Stepper(string text, int direction)
@@ -244,10 +286,17 @@ public sealed class PlaygroundPage : ContentPage
 
     private void OnVisibleDatesChanged(object? sender, SchedulerVisibleDatesChangedEventArgs e)
     {
+        // The control raises this synchronously inside a page change, so whatever the host does here
+        // is inside the pass a measurement is timing. Counted separately so a run can say which side
+        // of the seam the time went.
+        var hostWork = System.Diagnostics.Stopwatch.StartNew();
+
         source.SetRange(e.PrefetchFrom.WallClock, e.PrefetchTo.WallClock);
         title.Text = Describe([.. e.VisibleDates.Select(date => date.WallClock)]);
         Log($"VisibleDatesChanged · {e.VisibleDates.Count} days, "
             + $"prefetch {e.PrefetchFrom.WallClock:d MMM}–{e.PrefetchTo.WallClock:d MMM}");
+
+        PerfRun.RecordHostCallback(hostWork.Elapsed.TotalMilliseconds);
     }
 
     private string Describe(IReadOnlyList<DateTime> dates)
@@ -344,6 +393,13 @@ public sealed class PlaygroundPage : ContentPage
 
     private static string Name(ISchedulerAppointment appointment) =>
         appointment is SampleAppointment sample ? $"{sample.Subject} · {sample.Person}" : appointment.Subject ?? "?";
+
+    /// <summary>Puts a measurement in the log strip and on the console, where a run can be read back.</summary>
+    private void Announce(string message)
+    {
+        Log(message);
+        Console.WriteLine($"[perf] {message}");
+    }
 
     private void Log(string message)
     {
