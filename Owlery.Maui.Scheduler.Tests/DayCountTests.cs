@@ -37,6 +37,32 @@ public class DayCountTests
         Assert.That(bounds.Width, Is.EqualTo(SchedulerHarness.PageWidth / days).Within(3));
     }
 
+    /// <summary>
+    /// Padding insets the content without narrowing the control, so a control that measures its
+    /// columns from its own width lays them across a strip wider than the one they are drawn in and
+    /// the trailing column is clipped. A display cutout does the same thing by a different route —
+    /// see <c>ContentWidth</c> — and is not reachable from a headless test.
+    /// </summary>
+    [Test]
+    public void Columns_divide_the_content_rather_than_the_control_when_a_host_pads_it()
+    {
+        const double padding = 20;
+
+        var pageWidth = SchedulerHarness.ViewWidth - (padding * 2) - SchedulerHarness.GutterWidth;
+
+        var harness = new SchedulerHarness(
+            Monday,
+            [TestAppointment.At(Monday, "10:00", 1)],
+            configure: scheduler => scheduler.Padding = new Thickness(padding));
+
+        // The harness's own page stride is built from an unpadded control, so the centre page is
+        // picked out against the stride this one actually has.
+        var centre = harness.VisibleAppointments.Single(view =>
+            harness.BoundsOf(view).X >= pageWidth && harness.BoundsOf(view).X < pageWidth * 2);
+
+        Assert.That(harness.BoundsOf(centre).Width, Is.EqualTo(pageWidth / 7).Within(3));
+    }
+
     [TestCase(1)]
     [TestCase(3)]
     public void A_short_page_starts_on_the_display_date_rather_than_the_week(int days)
