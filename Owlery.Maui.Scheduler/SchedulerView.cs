@@ -326,8 +326,7 @@ public partial class SchedulerView : ContentView
         };
 
         verticalScroll.Scrolled += OnVerticalScrolled;
-        // The body's arrange is the only moment the width the columns actually have becomes known —
-        // see ContentWidth. The control's own reallocation happens before it and cannot report it.
+        // The body's arrange is the only moment its size — the content's — becomes knowable.
         verticalScroll.SizeChanged += OnBodySizeChanged;
 
         headerCorner = new Label
@@ -525,44 +524,25 @@ public partial class SchedulerView : ContentView
     private SchedulerMoment Moment(DateTime wallClock) => new(wallClock, TimeZone);
 
     /// <summary>
-    /// The width the control's content was arranged into, which is not the width the control itself
-    /// was allocated.
+    /// The width the content was arranged into, which is not the width the control was allocated:
+    /// padding and a platform inset both narrow the content without narrowing the control
+    /// (<c>docs/design/grid-and-scrolling.md</c> §8).
     /// </summary>
     /// <remarks>
-    /// Two things inset the content without narrowing the control. A host's <c>Padding</c> is one.
-    /// A display cutout is the other: the platform's inset is consumed by the first layout inside
-    /// the control whenever nothing above it did — which is what happens when the control is a
-    /// page's whole content — and that layout keeps its own full width while placing its children
-    /// past the inset. Measuring the columns from the control's width laid them across a strip
-    /// wider than the one they are drawn in, and the trailing column was clipped by exactly the
-    /// inset, whichever edge the cutout was on.
-    /// <para>
-    /// Read off the body, because that is the element the columns have to fit inside and the first
-    /// one narrow enough to show an inset applied above it. It reports -1 until a platform has
-    /// arranged it, and the headless tests have no handler to do so, hence the fallback — which
-    /// still accounts for the padding, the half of this the control can work out for itself.
-    /// </para>
+    /// Read off the body, which is what the columns must fit inside. It reports -1 until a platform
+    /// has arranged it, so the headless tests fall back to the padding — the half of this the
+    /// control can work out for itself.
     /// </remarks>
     private double ContentWidth => verticalScroll.Width > 0
         ? verticalScroll.Width
         : Math.Max(0, allocatedWidth - Padding.HorizontalThickness);
 
     /// <summary>
-    /// How much of a page is on screen: the same question as <see cref="ContentWidth"/>, asked down
-    /// the other axis.
+    /// How much of a page is on screen. The body is exactly that — the content less the header row —
+    /// so it is read rather than derived from the control's height, which the same two things
+    /// overstate. See <see cref="ContentWidth"/>.
     /// </summary>
-    /// <remarks>
-    /// The body is exactly this height — it is the control's content less the header row — so it is
-    /// read directly rather than derived. The control's own height is no better a measure of it
-    /// vertically than horizontally: a host's <c>Padding</c> and a platform inset both narrow the
-    /// content without narrowing the control, and a page that leaves the bottom inset unconsumed
-    /// leaves it to be taken inside, below what the control is told it was allocated.
-    /// <para>
-    /// The fallback, for the headless tests where nothing has been arranged, subtracts the nominal
-    /// header height rather than the one the row measured — which is what the body's own height
-    /// accounts for once there is one.
-    /// </para>
-    /// </remarks>
+    /// <remarks>The fallback subtracts the nominal header height; the body reflects the measured one.</remarks>
     private double BodyHeight => verticalScroll.Height > 0
         ? verticalScroll.Height
         : Math.Max(0, allocatedHeight - Padding.VerticalThickness - ActiveHeaderHeight);
@@ -580,13 +560,9 @@ public partial class SchedulerView : ContentView
         UpdateViewport();
     }
 
-    /// <summary>The body was arranged, so <see cref="ContentWidth"/> may have become knowable.</summary>
     private void OnBodySizeChanged(object? sender, EventArgs e) => UpdateViewport();
 
-    /// <summary>
-    /// Settles the geometry against the width the content has and the height the control was given,
-    /// and applies it if either moved.
-    /// </summary>
+    /// <summary>Settles the geometry against the content's size, and applies it if either axis moved.</summary>
     private void UpdateViewport()
     {
         if (allocatedWidth <= 0)

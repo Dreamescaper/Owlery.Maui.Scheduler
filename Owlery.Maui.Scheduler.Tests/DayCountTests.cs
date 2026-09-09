@@ -38,10 +38,9 @@ public class DayCountTests
     }
 
     /// <summary>
-    /// Padding insets the content without narrowing the control, so a control that measures its
-    /// columns from its own width lays them across a strip wider than the one they are drawn in and
-    /// the trailing column is clipped. A display cutout does the same thing by a different route —
-    /// see <c>ContentWidth</c> — and is not reachable from a headless test.
+    /// Padding narrows the content without narrowing the control, so columns measured from the
+    /// control overflow and the trailing one is clipped. A platform inset does the same by a
+    /// different route — see <c>ContentWidth</c> — which no headless test can reach.
     /// </summary>
     [Test]
     public void Columns_divide_the_content_rather_than_the_control_when_a_host_pads_it()

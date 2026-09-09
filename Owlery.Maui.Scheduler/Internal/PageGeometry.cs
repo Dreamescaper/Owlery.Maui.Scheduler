@@ -23,11 +23,10 @@ internal abstract class PageGeometry
     /// How much of a page is on screen: the control's content height less the header.
     /// </summary>
     /// <remarks>
-    /// Read back off the vertical scroll view, which is exactly that height. It reports -1 until the
-    /// platform has measured it, so the control falls back to its own allocation less its padding
-    /// and the nominal header height — see <c>SchedulerView.BodyHeight</c>. What the control was
-    /// allocated is not the answer on its own: padding and a platform inset both take height from
-    /// the content without taking it from the control.
+    /// Read off the vertical scroll view, which is exactly that height, falling back to the
+    /// control's allocation while that still reports -1 — see <c>SchedulerView.BodyHeight</c>. The
+    /// allocation alone will not do: padding and a platform inset both take height from the content
+    /// without taking it from the control.
     /// </remarks>
     public double ViewportHeight { get; set; }
 
