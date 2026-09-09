@@ -191,5 +191,12 @@ public sealed class AppointmentSource(SchedulerView scheduler)
         published = true;
     }
 
+    /// <summary>Hands the collection over again after a measurement borrowed <c>ItemsSource</c>.</summary>
+    public void Republish()
+    {
+        published = false;
+        Publish();
+    }
+
     private static DateOnly MonthOf(DateTime date) => new(date.Year, date.Month, 1);
 }

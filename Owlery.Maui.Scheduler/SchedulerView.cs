@@ -97,6 +97,12 @@ public partial class SchedulerView : ContentView
     /// <summary>Scratch for <c>PopulateSlot</c>, reused because its passes cannot overlap.</summary>
     private readonly Dictionary<object, View> reusableByKey = [];
     private readonly List<View> reusableArrangedViews = [];
+
+    /// <summary>Positions that found no view of their own on the first pass, by index.</summary>
+    private readonly List<int> reusableUnmatched = [];
+
+    /// <summary>Views this page kept that no position claimed, ready to be rebound where they stand.</summary>
+    private readonly List<View> reusableSurplus = [];
     private readonly Dictionary<(DateTime Date, SchedulerAgendaSectionKind Kind), View> reusableSections = [];
     private readonly Dictionary<View, PageSlot> slotsByView = [];
 

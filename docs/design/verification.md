@@ -80,6 +80,34 @@ slower, and that multiple has not been measured.
 Rendering, paging, week rotation, overlap layout, the current-time line and appointment semantics have
 also been checked on the iOS simulator through DevFlow.
 
+Paging has now been **profiled on the iOS simulator** — an iPhone 17 Pro on iOS 26.5, a Debug build,
+through `Owlery.Maui.Scheduler.Sample`. The workload is `PerfRun` in the sample, run unattended by
+launching with `OWLERY_PERF=1`: it steps `DisplayDate` twelve times per case, six forward and six
+back, and reports two numbers per case. A `Stopwatch` says what the synchronous managed pass cost; a
+`CADisplayLink`, in the sample's `FrameMeter`, says what intervals the display actually presented
+around it — which is where the layout and native arranging that the pass only *queued* land, and a
+stopwatch cannot see them. A swipe itself still cannot be injected on iOS, so `DisplayDate` stands in
+for one; it settles through the same rotation and repopulate.
+
+That run is what found the pool round trip on rotation described in [section 6](appointment-views.md),
+which cost 60–76% of a page change depending on surface and volume. It also answered two questions the
+other way, and those answers are worth keeping:
+
+- **Replacing `ItemsSource` wholesale is cheap.** Twelve whole-collection replacements with equivalent
+  data measured 0.10–0.14ms of managed work each and dropped no frames at any volume up to 5,500
+  loaded, because the reconciliation matches every view by key and the guards then skip every write.
+  A burst of five replacements per run-loop turn, eight times over — the shape a host publishing once
+  per answered period produces — cost 0–7% late frames. A host doing that is not paying for it.
+- **The host's own callback is not in the path.** `VisibleDatesChanged` is raised synchronously inside
+  a page change, so what the host does there is inside the pass; the sample's handler measured 0.4–0.7ms
+  of a 240–310ms pass.
+
+Caveats: it is a simulator rather than a device, and a Debug build — a Release build for the simulator
+fails to load corlib on this SDK, so the absolute figures overstate what a shipped build does. The
+*shape* is what the run is for, and the shape is that a page change costs work proportional to the
+number of appointment views on the incoming page, at roughly 2ms per view before the fix and roughly
+0.6ms after it. Neither number has been checked on hardware.
+
 Drag-and-drop is confirmed working on the iOS simulator by manual testing. It could not be automated:
 DevFlow drives gestures by invoking a MAUI gesture recognizer and reports that "native pan injection
 is not available on iOS", and input is deliberately handled through `GraphicsView` touch events rather

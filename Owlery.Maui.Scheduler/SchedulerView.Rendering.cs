@@ -203,19 +203,27 @@ public partial class SchedulerView
         reusableArrangedViews.EnsureCapacity(positions.Count);
         var arranged = reusableArrangedViews;
 
-        foreach (var position in positions)
+        reusableUnmatched.Clear();
+        var unmatched = reusableUnmatched;
+
+        // First pass: every position that recognises a view on this page takes it, so an appointment
+        // already showing keeps the very view it was showing in.
+        for (var i = 0; i < positions.Count; i++)
         {
-            if (!available.Remove(position.Appointment.Key, out var view))
-            {
-                view = pool.Rent();
+            available.Remove(positions[i].Appointment.Key, out var view);
 
-                if (view is null)
-                    break;
-            }
+            // A placeholder either way, so the second pass can fill it without shifting anything
+            // after it: this list has to stay in step with positions.
+            arranged.Add(view!);
 
-            arranged.Add(view);
-            BindAppointmentView(view, position, slot, slotIndex);
+            if (view is null)
+                unmatched.Add(i);
         }
+
+        FillUnmatched(arranged, unmatched, available);
+
+        for (var i = 0; i < arranged.Count; i++)
+            BindAppointmentView(arranged[i], positions[i], slot, slotIndex);
 
         slot.Positions.Clear();
 
@@ -231,15 +239,82 @@ public partial class SchedulerView
                 slot.Positions.Add(positions[i]);
         }
 
-        // Whatever no appointment claimed is genuinely gone from this slot.
-        foreach (var surplus in available.Values)
-            Discard(surplus);
-
         slot.Views.Clear();
         slot.Views.AddRange(arranged);
 
         PopulateSections(slot, slotIndex);
         MeasureAgendaRows(slot, slotIndex);
+    }
+
+    /// <summary>
+    /// Gives every position that recognised nothing a view, preferring this page's own surplus.
+    /// </summary>
+    /// <remarks>
+    /// A page rotated onto shares no appointment with the page its slot was showing, so without this
+    /// every view on it went back to the pool and was rented straight out again — hidden, unbound,
+    /// its translation, opacity and z-order reset, then re-shown and bound and positioned back. The
+    /// resets are the expensive half: each is a property write the rebind immediately has to undo,
+    /// and the guards in <see cref="PositionAppointmentView"/> that exist to skip unchanged writes
+    /// cannot skip a value the pool has just zeroed. Rebinding the surplus where it stands is the
+    /// same work minus that round trip, and measurably so — see <c>docs/design/verification.md</c>.
+    /// <para>
+    /// Two passes rather than one, and that ordering is the whole correctness of it. Handing a
+    /// leftover to the first position that wants one would give away a view a later position was
+    /// going to recognise, which is the positional reuse this reconciliation exists to avoid: the
+    /// appointment that kept its view would be repainted and the one that took it would flash.
+    /// Nothing recycled here was ever going to stay — it was on its way to the pool, and the position
+    /// taking it was on its way to renting one.
+    /// </para>
+    /// </remarks>
+    private void FillUnmatched(List<View> arranged, List<int> unmatched, Dictionary<object, View> available)
+    {
+        reusableSurplus.Clear();
+
+        foreach (var leftover in available.Values)
+            reusableSurplus.Add(leftover);
+
+        available.Clear();
+
+        var taken = 0;
+
+        foreach (var index in unmatched)
+        {
+            View? view;
+
+            if (taken < reusableSurplus.Count)
+            {
+                view = reusableSurplus[taken++];
+            }
+            else
+            {
+                view = pool.Rent();
+
+                // No template, so nothing after this can be placed either. What is already arranged
+                // stays and the positions past it are dropped — but a position past this one may
+                // have matched a view in the first pass, and dropping it without handing it back
+                // would leave it drawn and owned by no page. Unreachable in practice: the pool's
+                // template tracks ActiveTemplate, and PopulateSlot lays nothing out without one.
+                if (view is null)
+                {
+                    for (var i = index; i < arranged.Count; i++)
+                    {
+                        if (arranged[i] is { } stranded)
+                            Discard(stranded);
+                    }
+
+                    arranged.RemoveRange(index, arranged.Count - index);
+                    break;
+                }
+            }
+
+            arranged[index] = view;
+        }
+
+        // Surplus no position claimed is genuinely gone from this slot.
+        for (var i = taken; i < reusableSurplus.Count; i++)
+            Discard(reusableSurplus[i]);
+
+        reusableSurplus.Clear();
     }
 
     /// <summary>
