@@ -145,14 +145,21 @@ public partial class SchedulerView : ContentView
     /// <summary>Whether the day count has changed in this tick and the date may still be following it.</summary>
     private bool dayCountChangePending;
 
-    /// <summary>What each view's accessibility description was last built from.</summary>
+    /// <summary>Which appointment each view's accessibility description was built from.</summary>
     /// <remarks>
-    /// Cached as values rather than compared against the previously bound appointment, because the
-    /// times that go into a description are resolved into the view's zone: the same appointment
-    /// describes itself differently after <see cref="TimeZone"/> changes, and an instance comparison
-    /// cannot see that.
+    /// Compared by instance, which the contract makes sufficient: an appointment is read rather than
+    /// observed, so a changed one reaches the control as a new instance. What an instance comparison
+    /// cannot see is that a description is resolved into <see cref="TimeZone"/> and formatted with
+    /// <see cref="TimeFormat"/> — so <see cref="OnGeometryChanged"/>, which both of those arrive
+    /// through, clears this.
+    /// <para>
+    /// It held the resolved values instead, so that a zone change was visible in the comparison. That
+    /// made every realization pass resolve two times and read a subject for every row in the window
+    /// in order to discover that nothing had changed, which measured as half the pass — and the pass
+    /// runs on the agenda's scroll path.
+    /// </para>
     /// </remarks>
-    private readonly Dictionary<View, (DateTime Start, DateTime End, string? Subject)> describedByView = [];
+    private readonly Dictionary<View, ISchedulerAppointment> describedByView = [];
 
     /// <summary>Whatever <see cref="ItemsSource"/> we currently hold a subscription to, if any.</summary>
     private INotifyCollectionChanged? subscribedItems;
@@ -591,7 +598,15 @@ public partial class SchedulerView : ContentView
     }
 
     private static void OnGeometryChanged(BindableObject bindable, object oldValue, object newValue)
-        => ((SchedulerView)bindable).ApplyGeometry();
+    {
+        var view = (SchedulerView)bindable;
+
+        // TimeZone and TimeFormat arrive here, and both change what a description says without
+        // changing the appointment it was built from. Deliberately not in ApplyGeometry: that also
+        // runs for every size reallocation, and a resize leaves every description still correct.
+        view.describedByView.Clear();
+        view.ApplyGeometry();
+    }
 
     private static void OnVisibleDaysChanged(BindableObject bindable, object oldValue, object newValue)
         => ((SchedulerView)bindable).ChangeVisibleDays((int)oldValue, (int)newValue);

@@ -42,6 +42,29 @@ internal sealed class AgendaRow
     public bool Measured { get; set; }
 
     public double Bottom => Top + Height;
+
+    /// <summary>
+    /// This row's placement, made once and kept.
+    /// </summary>
+    /// <remarks>
+    /// A placement is the row plus the appointment on it, and neither changes for as long as the row
+    /// exists — a height correction moves the row rather than replacing it, which is why the
+    /// placement carries the row instead of a copy of its position. Slicing therefore has nothing to
+    /// build. It allocated one per realized row per pass, and on an agenda a pass is a scroll frame.
+    /// </remarks>
+    public AgendaPlacement Placement => placement ??= new AgendaPlacement(Appointment!, this);
+
+    /// <summary>The section this row stands for, or announces beside it. Made once, for the same reason.</summary>
+    /// <remarks>
+    /// One row is asked for exactly one kind, which is what makes a single cached section correct: a
+    /// heading row is its own kind, and an appointment row is only ever asked for the day marker in
+    /// its gutter. The kind is therefore read on the first call and not checked again.
+    /// </remarks>
+    public SchedulerAgendaSection SectionFor(SchedulerAgendaSectionKind kind) =>
+        section ??= new SchedulerAgendaSection(Date.ToDateTime(TimeOnly.MinValue), kind, DayCount);
+
+    private AgendaPlacement? placement;
+    private SchedulerAgendaSection? section;
 }
 
 /// <summary>The rows of one agenda, and how tall they are together.</summary>
@@ -55,7 +78,11 @@ internal sealed record AgendaPageLayout(IReadOnlyList<AgendaRow> Rows, double Co
 internal sealed record AgendaPlacement(ISchedulerAppointment Appointment, AgendaRow Row) : IAppointmentPlacement;
 
 /// <summary>A heading to draw, and where.</summary>
-internal sealed record AgendaSectionPlacement(SchedulerAgendaSection Section, Rect Bounds);
+/// <remarks>
+/// A struct because one is made per heading per slice, and a slice is a scroll frame. Nothing holds
+/// one past the pass that reads it, and it never crosses an interface, so there is nothing to box.
+/// </remarks>
+internal readonly record struct AgendaSectionPlacement(SchedulerAgendaSection Section, Rect Bounds);
 
 /// <summary>
 /// Turns appointments into the flat list of rows an agenda shows.

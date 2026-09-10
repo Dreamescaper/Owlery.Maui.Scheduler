@@ -257,28 +257,25 @@ internal sealed class AgendaSurface(AgendaGeometry geometry) : ISchedulerSurface
             {
                 case AgendaRowKind.MonthSection:
                     windowSections.Add(new AgendaSectionPlacement(
-                        new SchedulerAgendaSection(
-                            ToDateTime(row.Date), SchedulerAgendaSectionKind.Month, row.DayCount),
+                        row.SectionFor(SchedulerAgendaSectionKind.Month),
                         geometry.RowBounds(row)));
                     break;
 
                 case AgendaRowKind.WeekSection:
                     windowSections.Add(new AgendaSectionPlacement(
-                        new SchedulerAgendaSection(
-                            ToDateTime(row.Date), SchedulerAgendaSectionKind.Week, row.DayCount),
+                        row.SectionFor(SchedulerAgendaSectionKind.Week),
                         geometry.RowBounds(row)));
                     break;
 
                 case AgendaRowKind.Appointment:
-                    windowPlacements.Add(new AgendaPlacement(row.Appointment!, row));
+                    windowPlacements.Add(row.Placement);
 
                     // The day marker is not a row of its own — it hangs in the gutter beside the
                     // first appointment of its day, so an extra day costs nothing but its content.
                     if (row.StartsDay)
                     {
                         windowSections.Add(new AgendaSectionPlacement(
-                            new SchedulerAgendaSection(
-                                ToDateTime(row.Date), SchedulerAgendaSectionKind.Day, row.DayCount),
+                            row.SectionFor(SchedulerAgendaSectionKind.Day),
                             geometry.DayMarkerBounds(row)));
                     }
 

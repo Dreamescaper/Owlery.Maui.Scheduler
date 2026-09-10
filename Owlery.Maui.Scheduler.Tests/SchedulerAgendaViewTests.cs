@@ -137,6 +137,22 @@ public class SchedulerAgendaViewTests
     }
 
     [Test]
+    public void A_heading_repaints_when_the_appearance_colors_change()
+    {
+        // UpdateAppearance runs for every heading in the window on every realization pass, and the
+        // agenda realizes on its scroll path — so it skips the repaint when the colours have not
+        // moved. This is the direction that guard must not swallow: a colour that has.
+        var harness = Agenda(Daily(1));
+        var month = harness.AgendaSections.First(view =>
+            view.BindingContext is SchedulerAgendaSection { Kind: SchedulerAgendaSectionKind.Month });
+        var repainted = Color.FromArgb("#123456");
+
+        harness.Scheduler.PrimaryTextColor = repainted;
+
+        Assert.That(harness.LabelColorsWithin(month), Does.Contain(repainted));
+    }
+
+    [Test]
     public void Headings_are_described_for_a_screen_reader()
     {
         var harness = Agenda(Daily(1));

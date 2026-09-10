@@ -240,6 +240,15 @@ internal sealed class SchedulerHarness
             .Select(label => label.Text)
     ];
 
+    /// <summary>The colours the labels inside a view are painted, for chrome that paints itself.</summary>
+    public IReadOnlyList<Color> LabelColorsWithin(View view) =>
+    [
+        .. Descendants(view)
+            .OfType<Label>()
+            .Where(label => label.IsVisible)
+            .Select(label => label.TextColor)
+    ];
+
     /// <summary>
     /// Scrolls the vertical surface, as a gesture would.
     /// </summary>
