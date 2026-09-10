@@ -541,18 +541,20 @@ public partial class SchedulerView
         if (!ReferenceEquals(view.BindingContext, appointment))
             view.BindingContext = appointment;
 
-        // Only when the text would actually differ. Three date formats — one of them the long date
+        // Only when the appointment actually changed. Three date formats — one of them the long date
         // pattern — plus a semantic write is the largest per-appointment cost here, and a reload that
-        // changed nothing used to pay it for every appointment on all three pages.
-        var described = (
-            Start: appointment.StartIn(TimeZone),
-            End: appointment.EndIn(TimeZone),
-            appointment.Subject);
-
-        if (!describedByView.TryGetValue(view, out var previouslyDescribed) || previouslyDescribed != described)
+        // changed nothing used to pay it for every appointment on all three pages. Resolving the
+        // times to compare them cost nearly as much as writing them, so the comparison is by
+        // instance and describedByView says why that is enough.
+        if (!describedByView.TryGetValue(view, out var described) || !ReferenceEquals(described, appointment))
         {
-            SetAppointmentSemantics(view, described.Start, described.End, described.Subject);
-            describedByView[view] = described;
+            SetAppointmentSemantics(
+                view,
+                appointment.StartIn(TimeZone),
+                appointment.EndIn(TimeZone),
+                appointment.Subject);
+
+            describedByView[view] = appointment;
         }
 
         appointmentsByView[view] = appointment;

@@ -299,3 +299,90 @@ the month still draws six rows filling the body with the trailing row whole and 
 the navigation bar. The app's page consumes the bottom inset itself, so the vertical defect is
 latent there rather than visible — what was verified on the device is the absence of a regression;
 the defect itself is covered headlessly through `Padding`, as above.
+
+## The agenda's realization pass, measured on Android
+
+A slow drag on the agenda stalls the scroll for a frame or two at a regular interval. Instrumented on
+the x86 emulator (Release, no AOT, 100 appointments a month, ~30 realized rows), the stall follows
+every `PopulateSlot` on the scroll path, and nothing else: no compensating shift, no table rebuild, no
+range growth appears in the trace between the ends of the range. The interval is the realization gate,
+`Overscan / 2` — a quarter of a viewport, so four passes per screen of travel.
+
+Three measurements were needed to find where the pass goes, and the first two were wrong:
+
+- **A `Stopwatch` per row measures itself.** A per-row probe attributed 55% of the pass to rebuilding
+  the accessibility description. Replacing it with one clock read per phase moved that to 0.01ms. A
+  clock read costs ~17µs here; 30 rows × 4 reads is most of a pass.
+- **Frame jank cannot validate a change this size.** `dumpsys gfxinfo` over a fixed scroll workload
+  gave 23.2%, 21.9% and 15.5% janky frames across three runs *of the same binary*. Anything under a
+  few milliseconds is inside that.
+- What does work is counting the work and amortizing its cost over repetitions, both of which are
+  stable to the third digit.
+
+**The pass is the host's rebinds, and almost nothing else.** `view.BindingContext = appointment` is
+60–90% of it, at ~0.9ms per rebind for the sample's `Border` + stack + two `Label`s. The whole
+O(window) sweep the reconciliation performs over the other rows — repositioning all 30, both
+dictionary writes, the layout-bounds reads — totals **0.02ms**. There is nothing to win there.
+
+**Total rebinds over a distance is invariant; the gate only batches them.** Every row entering the
+window is bound exactly once however often the window is recomputed. Measured over the same workload:
+
+| gate | passes | pass median | p90 | rebinds/pass | **total rebinds** | sum of passes |
+|---|---|---|---|---|---|---|
+| `Overscan / 2` (187dp) | 20 | 4.00ms | 5.58 | 3 | **69** | 83ms |
+| 96dp | 40 | 2.65ms | 4.43 | 2 | **75** | 118ms |
+| 32dp | 104 | 1.79ms | 2.85 | 1 | **71** | 195ms |
+
+So the stall is a batching artefact rather than a quantity of work, and the gate trades peak against
+total: halving it roughly halves the peak and roughly doubles the managed total, because ~1ms of each
+pass is fixed cost paid whether or not anything churned. Lowering it is therefore a judgement about
+which of the two the reader notices, not a free win, and it is left at `Overscan / 2` until the fixed
+cost is smaller.
+
+What was taken instead is the fixed cost itself: slicing no longer allocates a placement per realized
+row per pass, headings no longer re-render when their colours have not moved, and a description is no
+longer rebuilt to discover it is unchanged. Together they measured a median pass of 4.00 → 3.66ms at
+the unchanged gate — inside the run-to-run spread on this rig, which is why the counters rather than
+the clock are what say they did anything: descriptions rebuilt per pass fell from 30 to 3, headings
+re-rendered from 12 to 2, and allocations per slice from ~54 to none.
+
+**The host's template is the lever a consumer holds.** At ~0.9ms a rebind the sample's row is the
+expensive shape; the same content drawn by one self-painting `GraphicsView` was measured at 0.11–0.36ms
+(§21). Four of those a pass is a frame; four of the former is three.
+
+### Three renderings of the same row, compared on the device
+
+The row template is the host's, and §21 says its rebind cost is the pass. Three renderings of the
+same agenda row — identical content, identical height — were built into the sample behind a knob and
+driven through the same scroll workload on the Android emulator (Release, no AOT, landscape,
+100 appointments a month):
+
+| rendering | per rebind | per paint | jank | slow draw commands |
+|---|---|---|---|---|
+| `Border` + stack + 2 `Label`s | 0.835ms | n/a — the platform draws it | 34.0% | 185 |
+| one `GraphicsView`, `IDrawable` | 0.181ms | **0.746ms** (n=120) | 32.9% | 174–185 |
+| one `SKCanvasView` | 0.183ms | **0.917ms** (n=120) | 40.2% | 203–209 |
+
+Two things come out of it, and only the first was expected.
+
+**A rebind costs what the view subtree costs, not what the drawing costs.** The two self-drawing rows
+rebind identically — 0.181 against 0.183ms — and both are ~4.6× cheaper than the view subtree. What
+is saved is `BindingContext` propagating to four elements instead of one, and the measure
+invalidation that setting `Label.Text` brings with it. The drawing technology has nothing to do with
+it, which is why swapping it changes nothing here.
+
+**SkiaSharp draws this row about a quarter slower, not faster.** 0.917 against 0.746ms per paint, both
+converged over 120 samples and both trending flat. The measurement understates Skia further: it times
+the managed callback only, and `SKCanvasView` on Android rasterizes into a bitmap and blits it around
+that callback, while `Microsoft.Maui.Graphics` hands `Draw` the hardware-accelerated Android canvas
+directly. The frame counters lean the same way across every run — more janky frames and more slow
+draw commands — though each is inside the ±8-point run-to-run spread on its own.
+
+So there is nothing to win by reaching for Skia for content this size. It is a raster surface per
+view, and the agenda holds thirty of them; the platform canvas is already the faster path. Skia earns
+its place where a drawing needs what `Microsoft.Maui.Graphics` cannot express — path effects, shaders,
+blend modes — not where a rounded rectangle and two lines of text do.
+
+**The paint is worth more attention than the rebind.** At 0.746ms a paint against 0.181ms a rebind,
+four rows entering the window cost about 0.7ms of binding and 3ms of drawing. That is where an agenda
+frame goes, and it is the host's to spend.

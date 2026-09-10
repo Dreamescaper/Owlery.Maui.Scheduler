@@ -44,8 +44,19 @@ internal sealed class AgendaSectionView : ContentView
     public string EmptyText { get; set; } = "No appointments";
 
     /// <summary>Repaints the built-in heading. A host-supplied template paints itself.</summary>
+    /// <remarks>
+    /// Guarded because every heading in the window is bound again on every realization pass, and
+    /// <see cref="Render"/> formats a month name, a weekday or a week range against the current
+    /// culture each time. Colours only move when the host changes its appearance, which repopulates
+    /// everything anyway; a heading that is merely still on screen has nothing to repaint. A heading
+    /// bound to a new section renders from <see cref="OnBindingContextChanged"/>, so nothing here is
+    /// what keeps its text current.
+    /// </remarks>
     public void UpdateAppearance(Color primaryColor, Color secondaryColor)
     {
+        if (Equals(this.primaryColor, primaryColor) && Equals(this.secondaryColor, secondaryColor))
+            return;
+
         this.primaryColor = primaryColor;
         this.secondaryColor = secondaryColor;
         Render();
