@@ -85,7 +85,15 @@ to next week is still looking at 14:00.
 
 **NAV-18** On opening, the view scrolls to shortly before the current time rather than to the top of
 the day, so what is relevant now is on screen. If the current time falls before the day window, the
-view opens at the start of it.
+view opens at the start of it. A host can name the time it opens at instead, and that time is used in
+place of the current one.
+
+**NAV-18a** Coming back to the timeline from a month or an agenda opens it the same way as loading
+does, at the named time or shortly before the current one. The surfaces share one vertical scroll and
+a month has nothing to scroll, so the position the timeline was left at does not survive the visit;
+arriving back at the top of the day window is not where anybody was. Where the opening time is too
+late in the day for the hours below it to fill the screen, the view settles as far down as the day
+goes rather than refusing to move.
 
 ## Today and the current time
 

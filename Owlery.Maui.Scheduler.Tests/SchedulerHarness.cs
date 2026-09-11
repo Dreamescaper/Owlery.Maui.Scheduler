@@ -513,6 +513,9 @@ internal sealed class SchedulerHarness
     /// <summary>Closes the window in which the agenda treats scroll events as its own navigation.</summary>
     public void FireAgendaNavigationSettleTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(250));
 
+    /// <summary>Elapses one attempt at an offset the platform would not take the first time.</summary>
+    public void FireTimelineScrollRetryTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(50));
+
     /// <summary>Where a day's header sits along the three-page strip.</summary>
     public double HeaderXAt(int slotIndex, int dayIndex) =>
         slotIndex * PageStride + (dayIndex + 0.5) * (PageStride / visibleDays);

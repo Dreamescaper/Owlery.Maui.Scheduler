@@ -107,3 +107,38 @@ taken below the level `OnSizeAllocated` sees. The fallback subtracts the padding
 header height; the body's own height accounts for the height the header row actually measured, which
 is the more accurate of the two once there is one.
 
+---
+
+## 22. A vertical offset is re-asked for, and the timeline re-anchors on arrival
+
+Sharing one vertical scroll across the three surfaces (§17) has a cost that only shows on the way
+back. A month's content is exactly one viewport tall, so while it is showing the platform clamps the
+scroll to nothing; whatever hour the reader left the timeline at is gone, and returning would land
+them at the top of the day window. The timeline therefore **opens the same way every time it appears**
+— at `InitialScrollTime`, or shortly before the current time when the host has named none — rather
+than only on load. Restoring the offset the reader left instead was the alternative: it needs the
+offset stored across a visit in which the platform overwrites it, and the reader has been through
+another surface and another date in the meantime, so what they were looking at is no longer obviously
+what they want back. Opening is a rule that holds whichever way the surface was reached.
+
+The write itself is the same trap the pager hit leaving an agenda (§19). The offset is asked for while
+the platform scroll view still measures the surface being left, which is shorter than the one arriving
+— so it clamps the request against a content size it has not resized yet, applies what fits, and
+reports nothing further. There is no event for "the content is now tall enough", so the request is
+**re-asked for on a timer** (50 ms) until an offset the platform reports is the one asked for, or six
+attempts have passed.
+
+Three things make a short, finite budget the right shape:
+
+- The request is clamped against the geometry's own content height before it goes out, so an offset
+  that is simply past the end of the day is never one the retries are waiting on — it is asked for at
+  the furthest point the content reaches, which the platform can satisfy.
+- A window that stayed open would eventually fight the reader. Three hundred milliseconds is long
+  enough to cover the layout pass that resizes the content, short enough that someone who starts
+  scrolling into it is pulled back once rather than continuously.
+- Where the offset genuinely cannot be reached, giving up leaves the reader where the platform put
+  them. That is the failure this is willing to have: best effort, not a guarantee.
+
+`ScrollToTime` is the single door — the opening anchor calls it like any host would — so the retry and
+the clamp apply to a host's own navigation as well.
+

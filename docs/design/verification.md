@@ -386,3 +386,15 @@ blend modes — not where a rounded rectangle and two lines of text do.
 **The paint is worth more attention than the rebind.** At 0.746ms a paint against 0.181ms a rebind,
 four rows entering the window cost about 0.7ms of binding and 3ms of drawing. That is where an agenda
 frame goes, and it is the host's to spend.
+
+## The timeline's opening offset — not yet seen on a device
+
+The vertical counterpart of the recentre above (§22) is covered headlessly only. The harness can be
+told to swallow a vertical scroll request, which is how the tests show that the offset is asked for
+again once the content can take it and given up on when it never can, but a headless host has no
+handler and so models no clamp: what the tests demonstrate is the control's response to a clamp, not
+that the clamp happens where it is assumed to. The assumption is the same one the pager's failure
+above established on iOS 26.5, applied to the vertical scroll view, and it has not been re-measured
+there. Worth checking on a device when the sample next runs: leave the timeline for a month, come
+back, and confirm the hours open at `InitialScrollTime` rather than at the top of the day window —
+and that the surface does not visibly step from one to the other.
