@@ -93,8 +93,10 @@ public enum SchedulerViewMode { Timeline, Month, Agenda }
 The three are different surfaces rather than settings of one, so a fair amount does not carry over.
 In `Month`:
 
-- `VisibleDays`, `StartHour`, `EndHour`, `HourHeight` and `TimeGutterWidth` are ignored. There is no
-  hour gutter, and a month is never taller than the viewport — it does not scroll.
+- `VisibleDays`, `StartHour`, `EndHour`, `HourHeight`, `InitialScrollTime` and `TimeGutterWidth` are
+  ignored. There is no hour gutter, and a month is never taller than the viewport — it does not
+  scroll. Leaving it for the timeline re-applies the timeline's opening time, because a surface that
+  cannot scroll has not kept the one it was left at.
 - Every appointment on a day is shown regardless of the hour it starts at, whereas the timeline clips
   to `StartHour`..`EndHour`.
 - Dragging is not offered, whatever `AllowDragAndDrop` says, so `AppointmentDragStarting` and
@@ -118,6 +120,8 @@ In `Agenda`:
 - Approaching either vertical edge extends the loaded range by another month. Prepending keeps the
   row under the reader fixed while the new range and any later-arriving data are inserted above it.
 - Dragging and selected-cell chrome are not offered. `HeaderTapped` and `TimeGutterTapped` are silent.
+- `ScrollToTime` and `InitialScrollTime` do nothing: the list is laid out against dates, not an hour
+  axis. Returning to the timeline re-applies its opening time, since the two share one scroll.
 - `VisibleDatesChanged.VisibleDates` is the whole loaded agenda range, not only the pixels currently
   in the viewport; every date in that range is reachable by vertical scrolling.
 
@@ -178,6 +182,7 @@ In `Agenda`:
 | `StartHour` | `int` | `8` | First hour shown on the timeline. |
 | `EndHour` | `int` | `23` | Last hour shown. Content height is `(EndHour - StartHour) * HourHeight`. |
 | `HourHeight` | `double` | `50` | Height in device-independent pixels of one hour row. |
+| `InitialScrollTime` | `TimeOnly?` | `null` | The time of day the timeline opens at, on load and each time `ViewMode` returns to `Timeline` from another surface. `null` opens shortly before the current time. A time too late in the day to bring to the top settles as far down as the hours reach; one before `StartHour` opens at the start of the window. Setting it does not move a timeline already on screen — use `ScrollToTime` for that. Takes invariant `HH:mm` text from XAML. |
 | `VisibleDays` | `int` | `7` | How many days a timeline page shows. `7` is a week, `3` a three-day view, `1` a single day; `5` gives a working week. Changing it animates the columns to their new width. Ignored outside `Timeline`. |
 | `FirstDayOfWeek` | `DayOfWeek` | `Monday` | Which day starts the week. Only applies when `VisibleDays` is 7 — shorter pages start on `DisplayDate` instead, which is what puts today in the leading column. |
 | `TimeGutterWidth` | `double` | `52` | Width of the fixed left column holding the hour labels. |
@@ -189,7 +194,8 @@ Appointments falling outside `StartHour`–`EndHour` are clipped to the visible 
 running past midnight is clipped to its own day.
 
 **Changing any property in this group rebuilds all three rendered weeks.** They are configuration, not
-per-frame state — set them once rather than animating them.
+per-frame state — set them once rather than animating them. `InitialScrollTime` is the exception: it
+rebuilds nothing and is read the next time the timeline appears.
 
 ### Working time and shading
 
@@ -349,7 +355,7 @@ rebind appointment views.
 
 | Method | Description |
 |---|---|
-| `void ScrollToTime(TimeSpan time)` | Scrolls the timeline so `time` sits near the top of the viewport. The control calls this itself on load to open near the current time. Does nothing outside `Timeline`. |
+| `void ScrollToTime(TimeSpan time)` | Scrolls the timeline so `time` sits near the top of the viewport, held inside what the hours can reach. The control calls this itself whenever the timeline appears, to open at `InitialScrollTime` or near the current time. Does nothing outside `Timeline`. |
 | `void ScrollToDate(DateTime date)` | Brings a date into view. On a timeline or month this changes `DisplayDate`; in an agenda it also scrolls the first appointment on or after that date to the top. |
 
 ---

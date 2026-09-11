@@ -71,6 +71,9 @@ public partial class SchedulerView
     public static readonly BindableProperty HourHeightProperty = BindableProperty.Create(
         nameof(HourHeight), typeof(double), typeof(SchedulerView), 50d, propertyChanged: OnGeometryChanged);
 
+    public static readonly BindableProperty InitialScrollTimeProperty = BindableProperty.Create(
+        nameof(InitialScrollTime), typeof(TimeOnly?), typeof(SchedulerView), null);
+
     public static readonly BindableProperty VisibleDaysProperty = BindableProperty.Create(
         nameof(VisibleDays), typeof(int), typeof(SchedulerView), 7, propertyChanged: OnVisibleDaysChanged);
 
@@ -291,6 +294,22 @@ public partial class SchedulerView
     {
         get => (double)GetValue(HourHeightProperty);
         set => SetValue(HourHeightProperty, value);
+    }
+
+    /// <summary>The time of day the timeline opens at, or null to open near the current time.</summary>
+    /// <remarks>
+    /// Applied every time the timeline appears — on load, and again whenever <see cref="ViewMode"/>
+    /// comes back to <see cref="SchedulerViewMode.Timeline"/> from another surface, which otherwise
+    /// returns to the top of the day window. Best effort: a time the content cannot bring to the top,
+    /// because the hours below it are shorter than the viewport, settles as far down as it reaches,
+    /// and one before <see cref="StartHour"/> opens at the start of the window. Setting it does not
+    /// move a timeline already on screen; <see cref="ScrollToTime"/> does that.
+    /// </remarks>
+    [System.ComponentModel.TypeConverter(typeof(TimeOnlyTypeConverter))]
+    public TimeOnly? InitialScrollTime
+    {
+        get => (TimeOnly?)GetValue(InitialScrollTimeProperty);
+        set => SetValue(InitialScrollTimeProperty, value);
     }
 
     /// <summary>

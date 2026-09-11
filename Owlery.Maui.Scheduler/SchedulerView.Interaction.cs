@@ -631,6 +631,10 @@ public partial class SchedulerView
             return;
         }
 
+        // The reader's own scroll, by way of the drag. It supersedes an opening offset still being
+        // re-asked for, which would otherwise pull the surface back from under the appointment.
+        EndTimelineScroll();
+
         _ = verticalScroll.ScrollToAsync(0, target, false);
 
         // The finger has not moved, but the hours under it have. Touch points arrive in the timeline's

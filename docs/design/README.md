@@ -15,7 +15,7 @@ still resolves. They are grouped by subject rather than renumbered.
 | [Project boundary](project-boundary.md) | §1 — a separate library, and why no Blazor is in it |
 | [Paging](paging.md) | §2–4 — the three-slot ring buffer, detecting the end of a swipe, rotating positions |
 | [Appointment views and the pool](appointment-views.md) | §5–6 — one shared layer, pooling, reconciliation, identity, one template |
-| [The drawn grid, and where scrolling lives](grid-and-scrolling.md) | §7–8 — the canvas instead of cell views, the vertical scroll outside the pager |
+| [The drawn grid, and where scrolling lives](grid-and-scrolling.md) | §7–8, §22 — the canvas instead of cell views, the vertical scroll outside the pager, re-asking for an offset the platform clamped |
 | [Data and layout](data-and-layout.md) | §9–10 — the data contract, overlap packing |
 | [Interaction](interaction.md) | §11–12 — long-press-to-drag, edge paging, cell and chrome taps |
 | [Accessibility](accessibility.md) | §13 — what a screen reader can reach, and what it deliberately cannot |

@@ -48,6 +48,12 @@ public partial class SchedulerView : ContentView
     private const double GhostOpacity = 0.5;
     private const double LiftedOpacity = 0.85;
 
+    /// <summary>How often a vertical offset the platform would not take is asked for again.</summary>
+    private const int TimelineScrollRetryIntervalMs = 50;
+
+    /// <summary>How many times it is asked for again before the control lets it go.</summary>
+    private const int TimelineScrollRetries = 6;
+
     // AbsoluteLayout paints by ZIndex first, so the stacking order is stated explicitly rather than
     // being an accident of the order children happen to be added in.
     /// <summary>Height of one hour label, and of the drag-time chip that may cover it.</summary>
@@ -134,6 +140,23 @@ public partial class SchedulerView : ContentView
     private bool suppressDisplayDateSync;
     private bool agendaNavigationInProgress;
     private double? pendingAgendaScrollTarget;
+
+    /// <summary>The timeline offset asked for and not yet seen applied, or null when none is owed.</summary>
+    private double? pendingTimelineScrollTarget;
+
+    /// <summary>Re-asks for an offset the platform clamped away, for a bounded number of frames.</summary>
+    /// <remarks>
+    /// A surface swapped in is taller than the one the platform still holds a content size for — a
+    /// month's is exactly one viewport — and an offset written against the old size is clamped
+    /// rather than queued. Nothing reports that: the platform stops short and says nothing further,
+    /// so the request is repeated until an offset it reports is the one asked for. The budget is
+    /// short and finite deliberately. Where the offset is genuinely out of reach, giving up leaves
+    /// the reader where the platform put them, which is better than a surface that keeps pulling
+    /// itself back for the rest of the session.
+    /// </remarks>
+    private IDispatcherTimer? timelineScrollRetryTimer;
+
+    private int timelineScrollRetriesLeft;
     private VisibleDatesReportKey? lastVisibleDatesReport;
     private bool initialised;
     private bool repopulateQueued;
@@ -447,8 +470,82 @@ public partial class SchedulerView : ContentView
         if (ViewMode is not SchedulerViewMode.Timeline)
             return;
 
-        var y = geometry.YFromMinutes(time.TotalMinutes);
-        _ = verticalScroll.ScrollToAsync(0, Math.Max(0, y), false);
+        // Clamped here rather than left to the platform: hours shorter than the screen put the later
+        // ones out of reach, and a request that can never be satisfied would be re-asked for until
+        // the retries ran out before settling where the platform had put it anyway.
+        var furthest = Math.Max(0, geometry.ContentHeight - geometry.ViewportHeight);
+
+        RequestTimelineScroll(Math.Clamp(geometry.YFromMinutes(time.TotalMinutes), 0, furthest));
+    }
+
+    /// <summary>Asks for a vertical offset, and keeps asking while the platform cannot take it.</summary>
+    private void RequestTimelineScroll(double target)
+    {
+        pendingTimelineScrollTarget = target;
+        timelineScrollRetriesLeft = TimelineScrollRetries;
+
+        _ = verticalScroll.ScrollToAsync(0, target, false);
+
+        // Where the request was applied outright there is nothing to wait for. The scroll event the
+        // platform raises on its way may already have ended this one, which is why the offset is
+        // read back rather than the pending target.
+        if (Math.Abs(verticalScroll.ScrollY - target) < 0.5)
+        {
+            EndTimelineScroll();
+            return;
+        }
+
+        timelineScrollRetryTimer?.Stop();
+        timelineScrollRetryTimer?.Start();
+    }
+
+    private void OnTimelineScrollRetryTicked(object? sender, EventArgs e)
+    {
+        if (pendingTimelineScrollTarget is not { } target || ViewMode is not SchedulerViewMode.Timeline)
+        {
+            EndTimelineScroll();
+            return;
+        }
+
+        if (Math.Abs(verticalScroll.ScrollY - target) < 0.5 || --timelineScrollRetriesLeft <= 0)
+        {
+            EndTimelineScroll();
+            return;
+        }
+
+        _ = verticalScroll.ScrollToAsync(0, target, false);
+    }
+
+    /// <summary>Stops owing an offset, whether it arrived or was given up on.</summary>
+    private void EndTimelineScroll()
+    {
+        pendingTimelineScrollTarget = null;
+        timelineScrollRetryTimer?.Stop();
+    }
+
+    /// <summary>Puts the timeline's opening time at the top of the viewport, as far as it reaches.</summary>
+    /// <remarks>
+    /// Runs whenever the timeline appears rather than only on load. The three surfaces share one
+    /// vertical scroll, and a month's content is exactly one viewport tall, so the offset a reader
+    /// left the timeline at does not survive the visit — it is clamped away while the other surface
+    /// is showing, and coming back to the top of the day window is not where anybody was.
+    /// </remarks>
+    private void ScrollToOpeningAnchor()
+    {
+        if (ViewMode is not SchedulerViewMode.Timeline)
+            return;
+
+        if (InitialScrollTime is { } opening)
+        {
+            ScrollToTime(opening.ToTimeSpan());
+            return;
+        }
+
+        // Open on the current time rather than at StartHour, like most calendars do.
+        var now = NowInZone();
+
+        if (now.TimeOfDay.TotalMinutes > geometry.WindowStartMinutes)
+            ScrollToTime(now.TimeOfDay - TimeSpan.FromHours(1));
     }
 
     /// <summary>Brings a date into view on the active surface.</summary>
@@ -489,10 +586,12 @@ public partial class SchedulerView : ContentView
         agendaNavigationSettleTimer.Interval = TimeSpan.FromMilliseconds(250);
         agendaNavigationSettleTimer.Tick += OnAgendaNavigationSettled;
 
-        // Open on the current time rather than at StartHour, like most calendars do.
-        var now = NowInZone();
-        if (ViewMode is SchedulerViewMode.Timeline && now.TimeOfDay.TotalMinutes > geometry.WindowStartMinutes)
-            ScrollToTime(now.TimeOfDay - TimeSpan.FromHours(1));
+        timelineScrollRetryTimer = Dispatcher.CreateTimer();
+        timelineScrollRetryTimer.Interval = TimeSpan.FromMilliseconds(TimelineScrollRetryIntervalMs);
+        timelineScrollRetryTimer.IsRepeating = true;
+        timelineScrollRetryTimer.Tick += OnTimelineScrollRetryTicked;
+
+        ScrollToOpeningAnchor();
     }
 
     private void OnUnloaded(object? sender, EventArgs e)
@@ -506,6 +605,8 @@ public partial class SchedulerView : ContentView
         longPressTimer = null;
         agendaBackwardGrowTimer?.Stop();
         agendaNavigationSettleTimer?.Stop();
+        EndTimelineScroll();
+        timelineScrollRetryTimer = null;
     }
 
     private void OnCurrentTimeTick(object? sender, EventArgs e)
@@ -818,6 +919,11 @@ public partial class SchedulerView : ContentView
     /// </remarks>
     internal void OnVerticalScrolled(object? sender, ScrolledEventArgs e)
     {
+        // The offset asked for has arrived, so there is nothing left to re-ask for. Read before the
+        // agenda's gate: the timeline scrolls too, and this is the only report either of them gets.
+        if (pendingTimelineScrollTarget is { } requestedTop && Math.Abs(e.ScrollY - requestedTop) < 0.5)
+            EndTimelineScroll();
+
         if (ViewMode is not SchedulerViewMode.Agenda || !initialised)
             return;
 
@@ -1228,6 +1334,7 @@ public partial class SchedulerView : ContentView
         agendaBackwardGrowTimer?.Stop();
         EndAgendaNavigation();
         ReleaseAgendaCompensation();
+        EndTimelineScroll();
 
         if (dragOverlayView is not null)
         {
@@ -1253,6 +1360,8 @@ public partial class SchedulerView : ContentView
 
         if (mode is SchedulerViewMode.Agenda && initialised)
             ScrollAgendaToDate(DateOnly.FromDateTime(DisplayDate));
+        else if (mode is SchedulerViewMode.Timeline && initialised)
+            ScrollToOpeningAnchor();
     }
 
     private string TimeZoneAbbreviation()
