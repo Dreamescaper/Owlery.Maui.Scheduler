@@ -142,3 +142,5 @@ Three things make a short, finite budget the right shape:
 `ScrollToTime` is the single door — the opening anchor calls it like any host would — so the retry and
 the clamp apply to a host's own navigation as well.
 
+Both ways back onto the timeline were checked on the sample — see [§15](verification.md).
+
