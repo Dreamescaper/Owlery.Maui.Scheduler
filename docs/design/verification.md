@@ -387,14 +387,29 @@ blend modes — not where a rounded rectangle and two lines of text do.
 four rows entering the window cost about 0.7ms of binding and 3ms of drawing. That is where an agenda
 frame goes, and it is the host's to spend.
 
-## The timeline's opening offset — not yet seen on a device
+## The timeline's opening offset, on an iOS simulator
 
-The vertical counterpart of the recentre above (§22) is covered headlessly only. The harness can be
-told to swallow a vertical scroll request, which is how the tests show that the offset is asked for
-again once the content can take it and given up on when it never can, but a headless host has no
-handler and so models no clamp: what the tests demonstrate is the control's response to a clamp, not
-that the clamp happens where it is assumed to. The assumption is the same one the pager's failure
-above established on iOS 26.5, applied to the vertical scroll view, and it has not been re-measured
-there. Worth checking on a device when the sample next runs: leave the timeline for a month, come
-back, and confirm the hours open at `InitialScrollTime` rather than at the top of the day window —
-and that the surface does not visibly step from one to the other.
+Checked on an iPhone 17 Pro simulator, iOS 26.5 (23F77), with the sample built for
+`iossimulator-arm64` and its window widened to `StartHour` 0 / `EndHour` 24 — the configuration that
+makes the anchor visible, since a full day puts the opening hour a long way down a 1200dp surface
+rather than at an offset the platform would clamp to zero anyway.
+
+Both ways back onto the timeline re-anchor, and neither showed a step:
+
+- **From a month.** The timeline was sitting at the top of the day window, 00:00. Switching to Month
+  and straight back left the grid with 08:00 a little under the top edge — the near-now rule at
+  08:33, so 07:33 asked for, 08:00 drawn about 24dp below the top. Not 00:00, which is where the
+  clamp used to leave it.
+- **From an agenda.** Same again from a timeline deliberately scrolled down to the early afternoon
+  first, so the offset being restored was not the one it happened to be at. It came back to the same
+  07:33. This is the path the pager's own failure came from, and the one where the arriving content
+  is measured last.
+
+What this does *not* cover is the explicit branch: the sample has no knob for `InitialScrollTime`, so
+what ran was the `null` rule — near the current time. The two branches differ only in which time is
+handed to `ScrollToTime`, and the clamp, the retry and the re-anchor are common to both, but the
+named time itself has still only been exercised headlessly.
+
+Neither did anything here prove the clamp: the offsets asked for were reached, and whether that took
+one attempt or three is not visible from the outside. The retry remains insurance whose necessity is
+established by the pager's measurement above rather than by this one.
