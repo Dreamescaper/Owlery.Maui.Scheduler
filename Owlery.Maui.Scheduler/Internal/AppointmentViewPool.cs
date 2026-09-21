@@ -8,7 +8,7 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// for a different week never reparents it and never rebuilds its (potentially deep) subtree.
 /// <para>
 /// The pool is deliberately unbounded. When the template comes from Blazor, every
-/// <see cref="DataTemplate.CreateContent"/> permanently registers a template root with the renderer,
+/// <see cref="ElementTemplate.CreateContent"/> permanently registers a template root with the renderer,
 /// which detaching the view would not release — so discarding a spare would leak the Blazor side and
 /// force a fresh registration next time. Retaining every view is strictly cheaper.
 /// </para>

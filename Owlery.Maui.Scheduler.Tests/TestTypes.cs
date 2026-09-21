@@ -25,7 +25,7 @@ internal static class TestApplication
         var dispatcher = new TestDispatcher();
 
         // Registered before Build as well: some MAUI internals resolve it during construction.
-        DependencyService.RegisterSingleton<ISystemResourcesProvider>(new TestSystemResources());
+        RegisterSystemResources();
 
         var builder = MauiApp.CreateBuilder();
         builder.UseMauiApp<ApplicationFromTestAssembly>();
@@ -39,10 +39,17 @@ internal static class TestApplication
         application.Handler = new StubHandler { MauiContext = mauiContext, VirtualView = application };
         application.CreateWindow(new ActivationState(mauiContext));
 
-        DependencyService.RegisterSingleton<ISystemResourcesProvider>(new TestSystemResources());
+        RegisterSystemResources();
 
         return ((MC.Application)application, dispatcher);
     }
+
+    // ISystemResourcesProvider is obsolete, but MAUI still resolves it internally and only this
+    // registration makes that resolution find anything.
+#pragma warning disable CS0612
+    private static void RegisterSystemResources() =>
+        DependencyService.RegisterSingleton<ISystemResourcesProvider>(new TestSystemResources());
+#pragma warning restore CS0612
 
     /// <summary>A handler that exists only so elements have a MauiContext to find services through.</summary>
     private sealed class StubHandler : IElementHandler

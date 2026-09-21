@@ -16,7 +16,7 @@ internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snap
     /// The first day of the page containing <paramref name="date"/>.
     /// </summary>
     /// <remarks>
-    /// A full week snaps to <see cref="SchedulerGeometry.FirstDayOfWeek"/>, because a week that
+    /// A full week snaps to <see cref="PageGeometry.FirstDayOfWeek"/>, because a week that
     /// started on an arbitrary day would not be one. Shorter pages start on the day asked for, which
     /// is what makes "today" the leading column in a day or three-day view.
     /// </remarks>
