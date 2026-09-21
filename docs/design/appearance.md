@@ -85,3 +85,11 @@ digits, so centring the font box leaves the ink above centre and the circle look
 nudge lands the ink on the row's centre, where the circle is drawn, and reads as better spacing on a
 day without a circle too.
 
+The agenda's gutter cell is floored rather than taking its row's height. A day marker hangs beside the
+first appointment of its day and was given exactly that row's rectangle, which was fine while it was
+two labels — but the circle is a fixed size, so a host whose `RowHeightResolver` or template makes a
+compact row could hand the marker a cell shorter than the circle it has to hold. Android clips a child
+to its frame and iOS does not, so the same row would have lost the bottom of the circle on one platform
+and spilled it over the next day on the other. `AgendaGeometry.MinimumDayMarkerHeight` is the floor; the
+gutter is its own column, so a cell taller than its row overlaps nothing beside it.
+
