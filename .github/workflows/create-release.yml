@@ -1,8 +1,9 @@
-name: Create release
+name: Create release tag
 
-# Tags the chosen commit with the version Nerdbank.GitVersioning computes for it, then publishes a
-# GitHub release on that tag. Publishing the release is what triggers publish-nuget.yml, so this is
-# the only button a release needs.
+# Tags the chosen commit with the version Nerdbank.GitVersioning computes for it and pushes the tag.
+# It deliberately stops there: create the GitHub release on that tag by hand afterwards, because a
+# release created with the built-in GITHUB_TOKEN raises no event and publish-nuget.yml would never
+# run. A release you create yourself does trigger it, so no PAT is needed here.
 on:
   workflow_dispatch:
     inputs:
@@ -15,20 +16,10 @@ permissions:
   contents: write
 
 jobs:
-  create-release:
+  create-release-tag:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate release token
-        env:
-          RELEASE_TAG_TOKEN: ${{ secrets.RELEASE_TAG_TOKEN }}
-        run: |
-          if [ -z "$RELEASE_TAG_TOKEN" ]; then
-            echo "::error::Set the RELEASE_TAG_TOKEN secret to a token with contents:write permission."
-            echo "::error::The built-in GITHUB_TOKEN cannot be used here: GitHub suppresses events raised by it, so the release would be created and publish-nuget.yml would never run."
-            exit 1
-          fi
-
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
@@ -36,7 +27,6 @@ jobs:
           # Nerdbank.GitVersioning derives the patch number from the commit height, so it needs
           # the whole history rather than the tip.
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TAG_TOKEN }}
 
       - name: Install nbgv
         run: dotnet tool install --tool-path ../.tools nbgv --version 3.9.50
@@ -72,13 +62,7 @@ jobs:
       - name: Push release tag
         run: git push origin "refs/tags/${{ steps.tag.outputs.release_tag }}"
 
-      - name: Publish GitHub release
-        env:
-          # The PAT again, not GITHUB_TOKEN — see the validation step. This is the event
-          # publish-nuget.yml listens for.
-          GH_TOKEN: ${{ secrets.RELEASE_TAG_TOKEN }}
+      - name: Report next step
         run: |
-          gh release create "${{ steps.tag.outputs.release_tag }}" \
-            --title "${{ steps.tag.outputs.release_tag }}" \
-            --generate-notes \
-            --verify-tag
+          echo "Tagged ${{ steps.tag.outputs.release_tag }}."
+          echo "Create the GitHub release on it (GitHub UI or 'gh release create ${{ steps.tag.outputs.release_tag }} --generate-notes --verify-tag') to trigger publish-nuget.yml."

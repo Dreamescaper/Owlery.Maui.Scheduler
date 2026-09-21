@@ -66,17 +66,18 @@ dotnet build Owlery.Maui.Scheduler.Sample/Owlery.Maui.Scheduler.Sample.csproj -f
 Versions come from [Nerdbank.GitVersioning](https://github.com/dotnet/Nerdbank.GitVersioning)
 (`version.json`), so a release on tag `v0.1.4` publishes `0.1.4`.
 
-Run the **Create release** workflow against a branch or commit. It tags that commit with the version
-NBGV computes for it and publishes a GitHub release on the tag — you never type a version number, so
-the tag and the package cannot disagree.
+Run the **Create release tag** workflow against a branch or commit. It tags that commit with the
+version NBGV computes for it and pushes the tag — you never type a version number, so the tag and the
+package cannot disagree.
 
-Publishing that release runs `.github/workflows/publish-nuget.yml`, which builds every target
-framework, runs the tests, and pushes the package and symbols to nuget.org.
+Then create a GitHub release on that tag by hand — the GitHub UI, or
+`gh release create <tag> --generate-notes --verify-tag`. Publishing that release runs
+`.github/workflows/publish-nuget.yml`, which builds every target framework, runs the tests, and
+pushes the package and symbols to nuget.org.
 
-Creating the release needs a `RELEASE_TAG_TOKEN` secret holding a PAT with `contents: write`. The
-built-in `GITHUB_TOKEN` will not do: GitHub suppresses the events it raises, so the release would
-appear and nothing would publish. Creating a release by hand — `gh release create`, or the GitHub UI —
-works without the secret, because that is your identity rather than the Actions token. Authentication is
+Creating the release by hand is deliberate. A release created with the built-in `GITHUB_TOKEN` raises
+no event, so the publish workflow would never run, and a PAT would mean keeping a `RELEASE_TAG_TOKEN`
+secret. Using your own identity raises the event without either. Authentication to nuget.org is
 [Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) — the workflow
 proves its identity with a short-lived OIDC token, so there is no API key stored anywhere. That also
 means the policy on nuget.org names this workflow file: renaming or moving it breaks publishing until
