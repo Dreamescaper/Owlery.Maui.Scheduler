@@ -57,3 +57,39 @@ labels or borders, then invalidate the canvas. They never repopulate a page or r
 The draw order is explicit. A current-day fill wins over a non-working-day fill, while out-of-hours
 bands on a working day are painted over the current-day fill so both meanings remain visible.
 
+Today's two treatments are separate properties, not one. The cell background and the day-number
+circle answer different questions — "this whole column is today" and "this is today's number" — and a
+host that wants a Google-Calendar-style marker usually wants the circle without the column wash. The
+old `ShowCurrentDayHighlight` bundled them, so it was renamed to `ShowCurrentDayBackground` and a
+`ShowCurrentDayCircle` added; a host that wants both sets both. The circle is *filled*, not stroked,
+because that is the marker people recognise, and the day number is drawn on top in
+`CurrentDayTextColor` — a second colour is unavoidable, since a number cannot derive a legible
+contrast from the fill it sits on. Its default is white to match the default accent fill.
+
+The old bold on today's number is gone. It existed because weight and colour were the only way to mark
+the number before there was a circle; with a filled circle behind it, the weight is noise. The timeline
+header keeps one `Border` per column, hidden by an empty background, so a header built once can mark
+whichever column becomes today after the weeks rotate without rebuilding the strip.
+
+The circle is sized per surface because each draws its number differently. The timeline's is a `Border`
+just larger than the 16pt number, with the header's spacing widened to make room; the agenda's day
+marker does the same around its 20pt number. The month's is painted on the canvas and sits in a
+day-number row widened to 24 points so the circle clears the cell's top line and the first appointment
+beneath it. That row is one of the cell's lines, so on a tall window a cell now shows one fewer
+appointment; on a phone, where a cell already held three, the count is unchanged. Its centre is offset
+by the cell's own `y` — the day-number row is drawn at the top of every cell, and a circle that forgets
+the cell's row lands on the first week instead of today's.
+
+The month's day number is dropped by a couple of points inside its row. A font's descent sits below the
+digits, so centring the font box leaves the ink above centre and the circle looks low against it; the
+nudge lands the ink on the row's centre, where the circle is drawn, and reads as better spacing on a
+day without a circle too.
+
+The agenda's gutter cell is floored rather than taking its row's height. A day marker hangs beside the
+first appointment of its day and was given exactly that row's rectangle, which was fine while it was
+two labels — but the circle is a fixed size, so a host whose `RowHeightResolver` or template makes a
+compact row could hand the marker a cell shorter than the circle it has to hold. Android clips a child
+to its frame and iOS does not, so the same row would have lost the bottom of the circle on one platform
+and spilled it over the next day on the other. `AgendaGeometry.MinimumDayMarkerHeight` is the floor; the
+gutter is its own column, so a cell taller than its row overlaps nothing beside it.
+

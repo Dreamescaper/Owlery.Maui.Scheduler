@@ -231,6 +231,14 @@ internal sealed class SchedulerHarness
             .OrderBy(section => section.Date)
     ];
 
+    /// <summary>The circle behind each visible agenda day marker; filled only on today.</summary>
+    public IReadOnlyList<Border> AgendaDayCircles =>
+    [
+        .. AgendaSections
+            .Where(view => ((SchedulerAgendaSection)view.BindingContext).Kind == SchedulerAgendaSectionKind.Day)
+            .SelectMany(view => Descendants(view).OfType<Border>())
+    ];
+
     /// <summary>All label text inside a view, including the built-in agenda section variants.</summary>
     public IReadOnlyList<string> TextWithin(View view) =>
     [
@@ -285,11 +293,22 @@ internal sealed class SchedulerHarness
     ];
 
     /// <summary>The column labels of each rendered page's header, left to right.</summary>
+    /// <summary>
+    /// One grid per page header — the harness's only description of the header strip's shape.
+    /// </summary>
+    /// <remarks>
+    /// Written once because everything that reaches into a header goes through it, and the strip's
+    /// nesting is the thing most likely to change. A copy that was missed would not fail: it would
+    /// return nothing, which satisfies every "none of them are marked" assertion in the suite.
+    /// </remarks>
+    private IEnumerable<Grid> PageHeaderGrids =>
+        Descendants(Scheduler)
+            .OfType<Grid>()
+            .Where(grid => grid.Parent is AbsoluteLayout && grid.ColumnDefinitions.Count > 0);
+
     public IReadOnlyList<IReadOnlyList<Label>> PageHeaders =>
     [
-        .. Descendants(Scheduler)
-            .OfType<Grid>()
-            .Where(grid => grid.Parent is AbsoluteLayout && grid.ColumnDefinitions.Count > 0)
+        .. PageHeaderGrids
             .OrderBy(grid => grid.TranslationX)
             .Select(grid => (IReadOnlyList<Label>)
             [
@@ -302,11 +321,15 @@ internal sealed class SchedulerHarness
     /// <summary>The day-number labels in the page headers, which only a timeline has.</summary>
     public IReadOnlyList<Label> HeaderDayNumbers =>
     [
-        .. Descendants(Scheduler)
-            .OfType<Grid>()
-            .Where(grid => grid.Parent is AbsoluteLayout && grid.ColumnDefinitions.Count > 0)
+        .. PageHeaderGrids
             .SelectMany(grid => Descendants(grid).OfType<Label>())
             .Where(label => label.FontSize == 16)
+    ];
+
+    /// <summary>The circle behind each day-number label; filled only on today.</summary>
+    public IReadOnlyList<Border> HeaderDayNumberRings =>
+    [
+        .. PageHeaderGrids.SelectMany(grid => Descendants(grid).OfType<Border>())
     ];
 
     public IDrawable SurfaceDrawable => surfaceGraphicsView.Drawable;

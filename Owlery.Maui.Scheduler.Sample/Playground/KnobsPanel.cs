@@ -125,8 +125,10 @@ public sealed class KnobsPanel : ContentView
                 Knobs.Toggle("IsBusy", scheduler.IsBusy, on => scheduler.IsBusy = on),
                 Knobs.Toggle("ShowNonWorkingDaysShading", scheduler.ShowNonWorkingDaysShading,
                     on => scheduler.ShowNonWorkingDaysShading = on),
-                Knobs.Toggle("ShowCurrentDayHighlight", scheduler.ShowCurrentDayHighlight,
-                    on => scheduler.ShowCurrentDayHighlight = on),
+                Knobs.Toggle("ShowCurrentDayBackground", scheduler.ShowCurrentDayBackground,
+                    on => scheduler.ShowCurrentDayBackground = on),
+                Knobs.Toggle("ShowCurrentDayCircle", scheduler.ShowCurrentDayCircle,
+                    on => scheduler.ShowCurrentDayCircle = on),
                 Knobs.Toggle("ShowNonWorkingHoursShading", scheduler.ShowNonWorkingHoursShading,
                     on => scheduler.ShowNonWorkingHoursShading = on),
                 new Segmented<int>("MinorGridLineMinutes",
@@ -247,7 +249,8 @@ public sealed class KnobsPanel : ContentView
         scheduler.NonWorkingDaysBackgroundColor = Color.FromArgb(dark ? "#181818" : paper ? "#F3EDE3" : "#FAFAFA");
         scheduler.NonWorkingHoursBackgroundColor = Color.FromArgb(dark ? "#1C1C1C" : paper ? "#F3EDE3" : "#FAFAFA");
         scheduler.CurrentDayBackgroundColor = Color.FromArgb(dark ? "#28213D" : "#F3E8FC");
-        scheduler.CurrentDayTextColor = Color.FromArgb(dark ? "#B9C2FF" : "#4458C8");
+        scheduler.CurrentDayCircleColor = Color.FromArgb(dark ? "#4E5FCF" : "#4458C8");
+        scheduler.CurrentDayTextColor = Colors.White;
         scheduler.CurrentTimeIndicatorColor = Color.FromArgb(dark ? "#FF6B52" : "#FD4225");
         scheduler.AdjacentMonthBackgroundColor = Color.FromArgb(dark ? "#161616" : paper ? "#F0E8DC" : "#F5F5F5");
         scheduler.AdjacentMonthTextColor = Color.FromArgb(dark ? "#707070" : "#B0B0B0");

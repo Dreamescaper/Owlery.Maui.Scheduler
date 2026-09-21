@@ -40,6 +40,17 @@ internal sealed class AgendaGeometry : PageGeometry
     /// </remarks>
     public double MinimumRowHeight { get; set; } = 24;
 
+    /// <summary>
+    /// The least the gutter cell may be, whatever the row beside it measures.
+    /// </summary>
+    /// <remarks>
+    /// The day marker is the one thing here whose height is its own rather than its row's: a weekday
+    /// over a fixed-size circle. Taking the row's height unfloored let a compact row — a host's
+    /// <c>RowHeightResolver</c> returning less than this, or a template that measures short — hand the
+    /// marker a cell smaller than the circle, which Android clips and iOS spills over the next day.
+    /// </remarks>
+    public const double MinimumDayMarkerHeight = 46;
+
     public double MonthSectionHeight { get; set; } = 56;
 
     public double WeekSectionHeight { get; set; } = 28;
@@ -127,6 +138,7 @@ internal sealed class AgendaGeometry : PageGeometry
     /// </remarks>
     public Rect RowBounds(AgendaRow row) => new(DayGutterWidth + RowInset, row.Top, RowWidth, row.Height);
 
-    /// <summary>The gutter cell beside a day's first row.</summary>
-    public Rect DayMarkerBounds(AgendaRow row) => new(0, row.Top, DayGutterWidth, row.Height);
+    /// <summary>The gutter cell beside a day's first row, never shorter than the marker itself.</summary>
+    public Rect DayMarkerBounds(AgendaRow row) =>
+        new(0, row.Top, DayGutterWidth, Math.Max(row.Height, MinimumDayMarkerHeight));
 }

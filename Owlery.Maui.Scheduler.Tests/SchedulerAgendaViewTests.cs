@@ -31,6 +31,28 @@ public class SchedulerAgendaViewTests
     ];
 
     [Test]
+    public void Only_the_agenda_day_marker_for_today_is_filled()
+    {
+        var today = DateTime.Today;
+        var harness = new SchedulerHarness(
+            today,
+            [
+                TestAppointment.At(today, "10:00", 1),
+                TestAppointment.At(today.AddDays(1), "10:00", 1)
+            ],
+            viewMode: SchedulerViewMode.Agenda);
+
+        Assert.That(harness.AgendaDayCircles, Has.Count.EqualTo(2));
+        Assert.That(harness.AgendaDayCircles.Count(ring => ring.BackgroundColor is not null), Is.EqualTo(1));
+
+        harness.Scheduler.ShowCurrentDayCircle = false;
+
+        Assert.That(
+            harness.AgendaDayCircles,
+            Has.None.Matches<Border>(ring => ring.BackgroundColor is not null));
+    }
+
+    [Test]
     public void Rows_are_stacked_down_a_single_column()
     {
         var harness = Agenda(Daily(3));

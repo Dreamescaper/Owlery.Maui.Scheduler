@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Layouts;
 using Owlery.Maui.Scheduler.Internal;
 
@@ -38,7 +39,8 @@ public partial class SchedulerView
     /// </remarks>
     private bool SlotHeaderMatchesMode(PageSlot slot) =>
         slot.DayNameLabels.Length == HeaderColumns
-        && slot.DayNumberLabels.Length == (ViewMode is SchedulerViewMode.Timeline ? HeaderColumns : 0);
+        && slot.DayNumberLabels.Length == (ViewMode is SchedulerViewMode.Timeline ? HeaderColumns : 0)
+        && slot.DayNumberRings.Length == slot.DayNumberLabels.Length;
 
     /// <summary>
     /// Builds one page's header.
@@ -60,10 +62,11 @@ public partial class SchedulerView
         var header = slot.Header;
         var nameLabels = new Label[columns];
         var numberLabels = ViewMode is SchedulerViewMode.Timeline ? new Label[columns] : [];
+        var numberRings = ViewMode is SchedulerViewMode.Timeline ? new Border[columns] : [];
 
         for (var day = 0; day < columns; day++)
         {
-            var stack = new VerticalStackLayout { Spacing = 2, Padding = new Thickness(0, 6) };
+            var stack = new VerticalStackLayout { Spacing = 4, Padding = new Thickness(0, 4) };
 
             nameLabels[day] = new Label
             {
@@ -81,10 +84,27 @@ public partial class SchedulerView
                 numberLabels[day] = new Label
                 {
                     FontSize = 16,
-                    HorizontalTextAlignment = TextAlignment.Center
+                    HorizontalTextAlignment = TextAlignment.Center,
+                    VerticalTextAlignment = TextAlignment.Center
                 };
 
-                stack.Add(numberLabels[day]);
+                // The circle lives here even when today is elsewhere, so a header built once can mark
+                // whichever column turns out to be today after the weeks rotate — building it on the
+                // day it is needed would cost the strip a layout pass mid-rotation. Its fill is
+                // toggled by UpdateSlotHeader. It is not free: a Border is a platform view of its own,
+                // and on Android it carries a hardware layer whether or not it is filled.
+                numberRings[day] = new Border
+                {
+                    StrokeShape = new Ellipse(),
+                    StrokeThickness = 0,
+                    Padding = 0,
+                    WidthRequest = 26,
+                    HeightRequest = 26,
+                    HorizontalOptions = LayoutOptions.Center,
+                    Content = numberLabels[day]
+                };
+
+                stack.Add(numberRings[day]);
             }
 
             header.Add(stack, day);
@@ -92,6 +112,7 @@ public partial class SchedulerView
 
         slot.DayNameLabels = nameLabels;
         slot.DayNumberLabels = numberLabels;
+        slot.DayNumberRings = numberRings;
     }
 
     private void RebuildAll(DateOnly centrePage)
@@ -335,6 +356,11 @@ public partial class SchedulerView
 
         slot.SectionViews.Clear();
 
+        // Read once for the whole pass rather than per heading: both are the same value for every one
+        // of them, and each read is a trip through the bindable store in a loop that runs on scroll.
+        var appearance = AgendaSectionAppearance;
+        var emptyText = AgendaEmptyText;
+
         foreach (var placement in sections)
         {
             var key = (placement.Section.Date, placement.Section.Kind);
@@ -348,25 +374,32 @@ public partial class SchedulerView
             }
 
             slot.SectionViews.Add(view);
-            BindSectionView(view, placement, slotIndex);
+            BindSectionView(view, placement, slotIndex, appearance, emptyText);
         }
 
         foreach (var surplus in spare.Values)
             sectionPool.Return(surplus);
     }
 
-    private void BindSectionView(View view, AgendaSectionPlacement placement, int slotIndex)
+    private void BindSectionView(
+        View view,
+        AgendaSectionPlacement placement,
+        int slotIndex,
+        AgendaSectionAppearance appearance,
+        string emptyText)
     {
+        // Set the appearance before the binding context: assigning it renders the heading, and Render
+        // reads this state. A heading that has not changed renders again from the context change.
+        if (view is AgendaSectionView built)
+        {
+            built.EmptyText = emptyText;
+            built.UpdateAppearance(appearance);
+        }
+
         var wasShowing = view.BindingContext as SchedulerAgendaSection;
 
         if (wasShowing != placement.Section)
             view.BindingContext = placement.Section;
-
-        if (view is AgendaSectionView built)
-        {
-            built.EmptyText = AgendaEmptyText;
-            built.UpdateAppearance(PrimaryTextColor, SecondaryTextColor);
-        }
 
         // A heading is what a screen reader uses to find its way down the list, so it is described
         // rather than left as decoration — and only rewritten when it actually says something new.
@@ -618,7 +651,6 @@ public partial class SchedulerView
         for (var day = 0; day < slot.DayNameLabels.Length; day++)
         {
             var date = slot.PageStart.AddDays(day);
-            var isToday = ShowCurrentDayHighlight && date == today;
 
             slot.DayNameLabels[day].Text = culture.DateTimeFormat
                 .GetAbbreviatedDayName(date.DayOfWeek)
@@ -627,8 +659,20 @@ public partial class SchedulerView
 
             var number = slot.DayNumberLabels[day];
             number.Text = date.Day.ToString(culture);
-            number.FontAttributes = isToday ? FontAttributes.Bold : FontAttributes.None;
-            number.TextColor = isToday ? CurrentDayTextColor : PrimaryTextColor;
+
+            // The circle marks today; it is independent of the cell background, which the drawable
+            // paints. Only write a value that changed: this runs on every scroll event.
+            var circle = slot.DayNumberRings[day];
+            var marked = ShowCurrentDayCircle && date == today;
+            var fill = marked ? CurrentDayCircleColor : null;
+
+            if (circle.BackgroundColor != fill)
+                circle.BackgroundColor = fill;
+
+            var textColor = marked ? CurrentDayTextColor : PrimaryTextColor;
+
+            if (number.TextColor != textColor)
+                number.TextColor = textColor;
         }
 
         slot.Header.TranslationX = slotIndex * geometry.PageSpan + geometry.AnimationOffsetX;

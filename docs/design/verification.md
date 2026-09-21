@@ -25,6 +25,20 @@ upward-scroll correction wobble discussed in [section 21](agenda.md), and the sa
 known row height; gesture arbitration with the shared drawing surface is still to be confirmed on a
 device.
 
+The current-day circle ([section 20](appearance.md)) has been seen on the iOS simulator — iPhone 17
+Pro, iOS 26.5, through the sample — on all three surfaces: a filled circle behind the number in the
+timeline header, in the month cell and on the agenda's day marker, with the cell background independent
+of it. The month circle is painted on the canvas, where a centre that omits the cell's `y` still draws a
+circle — just on the first week instead of today's — so the month appearance test pins its bounds rather
+than only its presence.
+
+**Known device defect, not yet diagnosed:** switching from the month surface to the agenda leaves the
+agenda blank until it is re-entered, on the iOS simulator. It reproduces on the release before the
+current-day circle was added, so it predates it. The agenda's rows are laid out far below the viewport
+with the scroll left at the top, and the range is a month wider than a fresh launch's — the backward
+growth appears to have run without the scroll being compensated. The headless suite does not cover the
+transition.
+
 Fast downward scrolling has been profiled on the Android `sdk_gphone64_arm64` emulator with 5,000
 appointments per month in a linked Release build. Three identical 30-fling runs produced median
 frame percentiles of 17/20/22/32 ms (p50/p90/p95/p99) with measured heights and 17/19/21/32 ms with

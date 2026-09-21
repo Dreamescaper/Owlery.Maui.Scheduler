@@ -101,11 +101,11 @@ public class SchedulerMonthViewTests
     [Test]
     public void A_busy_day_gives_its_last_line_to_the_marker()
     {
-        // Five lines fit at this size, so seven appointments show four and the marker stands for three.
+        // Four lines fit at this size, so seven appointments show three and the marker stands for four.
         var harness = Month([.. Enumerable.Range(0, 7)
             .Select(i => TestAppointment.At(Day(15), $"{9 + i:00}:00", 1))]);
 
-        Assert.That(harness.CentrePageAppointments, Has.Count.EqualTo(4));
+        Assert.That(harness.CentrePageAppointments, Has.Count.EqualTo(3));
     }
 
     [Test]

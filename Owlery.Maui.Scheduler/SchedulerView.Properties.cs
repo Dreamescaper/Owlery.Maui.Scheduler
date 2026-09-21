@@ -121,8 +121,12 @@ public partial class SchedulerView
         nameof(ShowNonWorkingDaysShading), typeof(bool), typeof(SchedulerView), true,
         propertyChanged: OnAppearanceChanged);
 
-    public static readonly BindableProperty ShowCurrentDayHighlightProperty = BindableProperty.Create(
-        nameof(ShowCurrentDayHighlight), typeof(bool), typeof(SchedulerView), true,
+    public static readonly BindableProperty ShowCurrentDayBackgroundProperty = BindableProperty.Create(
+        nameof(ShowCurrentDayBackground), typeof(bool), typeof(SchedulerView), true,
+        propertyChanged: OnAppearanceChanged);
+
+    public static readonly BindableProperty ShowCurrentDayCircleProperty = BindableProperty.Create(
+        nameof(ShowCurrentDayCircle), typeof(bool), typeof(SchedulerView), true,
         propertyChanged: OnAppearanceChanged);
 
     public static readonly BindableProperty ShowNonWorkingHoursShadingProperty = BindableProperty.Create(
@@ -169,8 +173,11 @@ public partial class SchedulerView
     public static readonly BindableProperty CurrentDayBackgroundColorProperty = AppearanceColor(
         nameof(CurrentDayBackgroundColor), "#F3E8FC");
 
+    public static readonly BindableProperty CurrentDayCircleColorProperty = AppearanceColor(
+        nameof(CurrentDayCircleColor), "#4458C8");
+
     public static readonly BindableProperty CurrentDayTextColorProperty = AppearanceColor(
-        nameof(CurrentDayTextColor), "#4458C8");
+        nameof(CurrentDayTextColor), "#FFFFFF");
 
     public static readonly BindableProperty CurrentTimeIndicatorColorProperty = AppearanceColor(
         nameof(CurrentTimeIndicatorColor), "#FD4225");
@@ -438,12 +445,27 @@ public partial class SchedulerView
         set => SetValue(ShowNonWorkingDaysShadingProperty, value);
     }
 
-    /// <summary>Whether today's background and day number are emphasised.</summary>
-    /// <remarks>The current-time indicator is independent and remains visible.</remarks>
-    public bool ShowCurrentDayHighlight
+    /// <summary>Whether today's column, cell or rows receive a distinct background.</summary>
+    /// <remarks>
+    /// Independent of <see cref="ShowCurrentDayCircle"/>, which marks today's day number, and of the
+    /// current-time indicator, which remains visible either way.
+    /// </remarks>
+    public bool ShowCurrentDayBackground
     {
-        get => (bool)GetValue(ShowCurrentDayHighlightProperty);
-        set => SetValue(ShowCurrentDayHighlightProperty, value);
+        get => (bool)GetValue(ShowCurrentDayBackgroundProperty);
+        set => SetValue(ShowCurrentDayBackgroundProperty, value);
+    }
+
+    /// <summary>Whether today's day number is drawn inside a filled circle.</summary>
+    /// <remarks>
+    /// The circle is filled with <see cref="CurrentDayCircleColor"/> and the number drawn in
+    /// <see cref="CurrentDayTextColor"/>. Independent of <see cref="ShowCurrentDayBackground"/>: a host
+    /// may mark the day without shading its cells, and vice versa.
+    /// </remarks>
+    public bool ShowCurrentDayCircle
+    {
+        get => (bool)GetValue(ShowCurrentDayCircleProperty);
+        set => SetValue(ShowCurrentDayCircleProperty, value);
     }
 
     /// <summary>Whether time outside the working interval is shaded on working days.</summary>
@@ -537,6 +559,14 @@ public partial class SchedulerView
         set => SetValue(CurrentDayBackgroundColorProperty, value);
     }
 
+    /// <summary>Fill of the circle drawn behind today's day number.</summary>
+    public Color CurrentDayCircleColor
+    {
+        get => (Color)GetValue(CurrentDayCircleColorProperty);
+        set => SetValue(CurrentDayCircleColorProperty, value);
+    }
+
+    /// <summary>Colour of today's day number while it is drawn on the circle.</summary>
     public Color CurrentDayTextColor
     {
         get => (Color)GetValue(CurrentDayTextColorProperty);

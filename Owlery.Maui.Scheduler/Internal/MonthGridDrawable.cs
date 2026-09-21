@@ -17,6 +17,9 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// </remarks>
 internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots) : IDrawable
 {
+    /// <summary>How far the day number drops so its ink, not its font box, centres on the circle.</summary>
+    private const float DayNumberBaselineNudge = 2;
+
     public Color GridLineColor { get; set; } = null!;
 
     public Color NonWorkingDaysBackgroundColor { get; set; } = null!;
@@ -32,11 +35,15 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
 
     public Color CurrentDayTextColor { get; set; } = null!;
 
+    public Color CurrentDayCircleColor { get; set; } = null!;
+
     public Color OverflowTextColor { get; set; } = null!;
 
     public bool ShowNonWorkingDaysShading { get; set; }
 
-    public bool ShowCurrentDayHighlight { get; set; }
+    public bool ShowCurrentDayBackground { get; set; }
+
+    public bool ShowCurrentDayCircle { get; set; }
 
     public IReadOnlyCollection<DayOfWeek> WorkingDays { get; set; } = [];
 
@@ -72,10 +79,11 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
             var x = (float)cell.X + offset;
             var y = (float)cell.Y;
 
-            var isToday = ShowCurrentDayHighlight && date == today;
+            var isToday = date == today;
+            var circled = ShowCurrentDayCircle && isToday;
             var isAdjacent = date.Month != page.Month || date.Year != page.Year;
 
-            var fill = isToday
+            var fill = ShowCurrentDayBackground && isToday
                 ? CurrentDayBackgroundColor
                 : isAdjacent
                     ? AdjacentMonthBackgroundColor
@@ -89,14 +97,23 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
                 canvas.FillRectangle(x, y, (float)cell.Width, (float)cell.Height);
             }
 
-            canvas.FontColor = isToday ? CurrentDayTextColor : isAdjacent ? AdjacentMonthDayNumberColor : DayNumberColor;
-            canvas.FontSize = 12;
-            canvas.Font = isToday ? Microsoft.Maui.Graphics.Font.DefaultBold : Microsoft.Maui.Graphics.Font.Default;
+            if (circled)
+                DrawCurrentDayCircle(canvas, x, y, cell.Width);
 
+            canvas.FontColor = circled
+                ? CurrentDayTextColor
+                : isAdjacent
+                    ? AdjacentMonthDayNumberColor
+                    : DayNumberColor;
+            canvas.FontSize = 12;
+            canvas.Font = Microsoft.Maui.Graphics.Font.Default;
+
+            // A font's descent sits below the digits, so centring the font box leaves the ink high in
+            // the row. The nudge drops it onto the row's centre, which is where the circle is drawn.
             canvas.DrawString(
                 date.Day.ToString(culture),
                 x,
-                y,
+                y + DayNumberBaselineNudge,
                 (float)cell.Width,
                 (float)MonthGeometry.DayNumberHeight,
                 HorizontalAlignment.Center,
@@ -104,6 +121,21 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
 
             DrawOverflow(canvas, x, y, cell.Width, index < overflow.Count ? overflow[index] : 0, culture);
         }
+    }
+
+    /// <summary>
+    /// Fills the circle behind a day number, leaving a point of the reserved row free above and below
+    /// so it does not touch the cell's top line or the first appointment beneath it.
+    /// </summary>
+    private void DrawCurrentDayCircle(ICanvas canvas, float x, float y, double width)
+    {
+        var radius = (float)(MonthGeometry.DayNumberHeight - 4) / 2;
+
+        canvas.FillColor = CurrentDayCircleColor;
+        canvas.FillCircle(
+            x + (float)width / 2,
+            y + (float)MonthGeometry.DayNumberHeight / 2,
+            radius);
     }
 
     private void DrawOverflow(ICanvas canvas, float x, float y, double width, int hidden, CultureInfo culture)

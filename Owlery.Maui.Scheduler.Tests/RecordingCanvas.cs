@@ -10,6 +10,8 @@ internal class RecordingCanvas : DispatchProxy
 
     public List<FillOperation> Fills { get; } = [];
 
+    public List<EllipseOperation> Ellipses { get; } = [];
+
     public List<LineOperation> Lines { get; } = [];
 
     public static (ICanvas Canvas, RecordingCanvas Recording) Create()
@@ -33,6 +35,9 @@ internal class RecordingCanvas : DispatchProxy
                 break;
             case nameof(ICanvas.FillRectangle):
                 Fills.Add(new FillOperation(fillColor!, Rectangle(args!)));
+                break;
+            case nameof(ICanvas.FillEllipse):
+                Ellipses.Add(new EllipseOperation(fillColor!, Rectangle(args!)));
                 break;
             case nameof(ICanvas.DrawLine):
                 Lines.Add(new LineOperation(
@@ -62,5 +67,7 @@ internal class RecordingCanvas : DispatchProxy
 }
 
 internal readonly record struct FillOperation(Color Color, RectF Bounds);
+
+internal readonly record struct EllipseOperation(Color Color, RectF Bounds);
 
 internal readonly record struct LineOperation(Color Color, PointF Start, PointF End);

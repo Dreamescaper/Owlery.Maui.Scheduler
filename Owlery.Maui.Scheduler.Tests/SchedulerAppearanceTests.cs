@@ -32,7 +32,9 @@ public class SchedulerAppearanceTests
         Assert.Multiple(() =>
         {
             Assert.That(harness.Scheduler.ShowNonWorkingDaysShading, Is.True);
-            Assert.That(harness.Scheduler.ShowCurrentDayHighlight, Is.True);
+            Assert.That(harness.Scheduler.ShowCurrentDayBackground, Is.True);
+            Assert.That(harness.Scheduler.ShowCurrentDayCircle, Is.True);
+            Assert.That(harness.Scheduler.CurrentDayTextColor, Is.EqualTo(Colors.White));
             Assert.That(harness.Scheduler.ShowNonWorkingHoursShading, Is.False);
             Assert.That(harness.Scheduler.WorkingDays, Is.EqualTo(Weekdays).AsCollection);
             Assert.That(harness.Scheduler.WorkingHoursStart, Is.EqualTo(new TimeOnly(9, 0)));
@@ -59,7 +61,7 @@ public class SchedulerAppearanceTests
     public void An_empty_working_day_collection_makes_every_day_non_working()
     {
         var drawable = Timeline();
-        drawable.ShowCurrentDayHighlight = false;
+        drawable.ShowCurrentDayBackground = false;
         drawable.WorkingDays = [];
 
         Assert.That(
@@ -89,7 +91,7 @@ public class SchedulerAppearanceTests
     public void Timeline_shades_each_non_working_day_across_all_three_pages()
     {
         var drawable = Timeline();
-        drawable.ShowCurrentDayHighlight = false;
+        drawable.ShowCurrentDayBackground = false;
 
         var recording = Draw(drawable);
 
@@ -102,7 +104,7 @@ public class SchedulerAppearanceTests
     public void Non_working_day_shading_can_be_disabled_or_reclassified()
     {
         var drawable = Timeline();
-        drawable.ShowCurrentDayHighlight = false;
+        drawable.ShowCurrentDayBackground = false;
         drawable.ShowNonWorkingDaysShading = false;
 
         Assert.That(Draw(drawable).Fills, Is.Empty);
@@ -128,7 +130,7 @@ public class SchedulerAppearanceTests
     public void Timeline_shades_before_and_after_working_hours_on_working_days_only()
     {
         var drawable = Timeline();
-        drawable.ShowCurrentDayHighlight = false;
+        drawable.ShowCurrentDayBackground = false;
         drawable.ShowNonWorkingDaysShading = false;
         drawable.ShowNonWorkingHoursShading = true;
         drawable.WorkingHoursStart = new TimeOnly(9, 0);
@@ -153,7 +155,7 @@ public class SchedulerAppearanceTests
     public void Working_hour_shading_is_clipped_and_invalid_intervals_draw_nothing()
     {
         var drawable = Timeline(startHour: 12, endHour: 16);
-        drawable.ShowCurrentDayHighlight = false;
+        drawable.ShowCurrentDayBackground = false;
         drawable.ShowNonWorkingDaysShading = false;
         drawable.ShowNonWorkingHoursShading = true;
 
@@ -216,7 +218,7 @@ public class SchedulerAppearanceTests
     public void Disabling_current_day_highlight_does_not_disable_the_current_time_indicator()
     {
         var drawable = Timeline();
-        drawable.ShowCurrentDayHighlight = false;
+        drawable.ShowCurrentDayBackground = false;
 
         var recording = Draw(drawable);
 
@@ -253,7 +255,7 @@ public class SchedulerAppearanceTests
             CurrentDayTextColor = Color.FromArgb("#AAAAAA"),
             OverflowTextColor = Color.FromArgb("#BBBBBB"),
             ShowNonWorkingDaysShading = true,
-            ShowCurrentDayHighlight = false,
+            ShowCurrentDayBackground = false,
             WorkingDays =
             [
                 DayOfWeek.Sunday,
@@ -273,6 +275,47 @@ public class SchedulerAppearanceTests
                 fill.Color == NonWorkingDay && fill.Bounds == new RectF(1100, 200, 100, 100)));
             Assert.That(recording.Fills, Has.None.Matches<FillOperation>(fill => fill.Color == NonWorkingHour));
         });
+    }
+
+    [Test]
+    public void Month_fills_a_circle_behind_today_only_when_enabled()
+    {
+        var geometry = new MonthGeometry
+        {
+            ViewportWidth = 700,
+            ViewportHeight = 600,
+            Now = new DateTime(2026, 8, 15)
+        };
+        var slots = new[] { Slot(new DateOnly(2026, 8, 1)) };
+        var circle = Color.FromArgb("#DDEEFF");
+        var drawable = new MonthGridDrawable(geometry, slots)
+        {
+            GridLineColor = Grid,
+            NonWorkingDaysBackgroundColor = NonWorkingDay,
+            AdjacentMonthBackgroundColor = Color.FromArgb("#777777"),
+            CurrentDayBackgroundColor = CurrentDay,
+            DayNumberColor = Color.FromArgb("#888888"),
+            AdjacentMonthDayNumberColor = Color.FromArgb("#999999"),
+            CurrentDayTextColor = Color.FromArgb("#AAAAAA"),
+            CurrentDayCircleColor = circle,
+            OverflowTextColor = Color.FromArgb("#BBBBBB"),
+            ShowNonWorkingDaysShading = false,
+            ShowCurrentDayBackground = false,
+            ShowCurrentDayCircle = true,
+            WorkingDays = Weekdays
+        };
+
+        var drawn = Draw(drawable).Ellipses.Single(ellipse => ellipse.Color == circle);
+
+        // 15 August is index 19 of the grid — row 2, column 5 — so the circle must sit in that cell
+        // rather than at the top of the canvas.
+        Assert.That(drawn.Bounds, Is.EqualTo(new RectF(540, 202, 20, 20)));
+
+        drawable.ShowCurrentDayCircle = false;
+
+        Assert.That(
+            Draw(drawable).Ellipses,
+            Has.None.Matches<EllipseOperation>(ellipse => ellipse.Color == circle));
     }
 
     [Test]
@@ -312,19 +355,46 @@ public class SchedulerAppearanceTests
     }
 
     [Test]
-    public void Current_day_header_emphasis_follows_its_flag_and_colors()
+    public void Current_day_header_circle_follows_its_flag_and_colors()
     {
         var harness = new SchedulerHarness(DateTime.Today);
-        var currentColor = Color.FromArgb("#123456");
-        harness.Scheduler.CurrentDayTextColor = currentColor;
+        var circle = Color.FromArgb("#123456");
+        var number = Color.FromArgb("#654321");
+        harness.Scheduler.CurrentDayCircleColor = circle;
+        harness.Scheduler.CurrentDayTextColor = number;
 
-        Assert.That(harness.HeaderDayNumbers, Has.Some.Matches<Label>(label =>
-            label.FontAttributes == FontAttributes.Bold && label.TextColor == currentColor));
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.HeaderDayNumberRings, Has.Some.Matches<Border>(ring => ring.BackgroundColor == circle));
+            Assert.That(harness.HeaderDayNumbers, Has.Some.Matches<Label>(label => label.TextColor == number));
+        });
 
-        harness.Scheduler.ShowCurrentDayHighlight = false;
+        harness.Scheduler.ShowCurrentDayCircle = false;
 
-        Assert.That(harness.HeaderDayNumbers, Has.None.Matches<Label>(label =>
-            label.FontAttributes == FontAttributes.Bold || label.TextColor == currentColor));
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.HeaderDayNumberRings, Has.None.Matches<Border>(ring => ring.BackgroundColor is not null));
+            Assert.That(harness.HeaderDayNumbers, Has.None.Matches<Label>(label => label.TextColor == number));
+        });
+    }
+
+    [Test]
+    public void Current_day_circle_and_background_are_independent()
+    {
+        var harness = new SchedulerHarness(DateTime.Today);
+        var circle = Color.FromArgb("#112233");
+
+        harness.Scheduler.ShowCurrentDayBackground = false;
+        harness.Scheduler.CurrentDayCircleColor = circle;
+
+        Assert.That(harness.HeaderDayNumberRings, Has.Some.Matches<Border>(ring => ring.BackgroundColor == circle),
+            "turning the background off must not take the circle with it");
+
+        harness.Scheduler.ShowCurrentDayBackground = true;
+        harness.Scheduler.ShowCurrentDayCircle = false;
+
+        Assert.That(harness.HeaderDayNumberRings, Has.None.Matches<Border>(ring => ring.BackgroundColor == circle),
+            "turning the circle off must not depend on the background");
     }
 
     [Test]
@@ -404,7 +474,7 @@ public class SchedulerAppearanceTests
             CurrentDayBackgroundColor = CurrentDay,
             CurrentTimeIndicatorColor = CurrentTime,
             ShowNonWorkingDaysShading = true,
-            ShowCurrentDayHighlight = true,
+            ShowCurrentDayBackground = true,
             ShowNonWorkingHoursShading = false,
             WorkingDays = Weekdays,
             WorkingHoursStart = new TimeOnly(9, 0),

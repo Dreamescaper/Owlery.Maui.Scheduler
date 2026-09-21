@@ -202,7 +202,8 @@ rebuilds nothing and is read the next time the timeline appears.
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `ShowNonWorkingDaysShading` | `bool` | `true` | Whether days absent from `WorkingDays` have a distinct background in timeline and month views. |
-| `ShowCurrentDayHighlight` | `bool` | `true` | Whether today's background and day number are emphasised. In an agenda the background runs through today's appointment rows. Does not control the current-time indicator. |
+| `ShowCurrentDayBackground` | `bool` | `true` | Whether today's column, cell or agenda rows receive `CurrentDayBackgroundColor`. Independent of `ShowCurrentDayCircle` and of the current-time indicator. |
+| `ShowCurrentDayCircle` | `bool` | `true` | Whether today's day number is drawn inside a filled circle on every surface. The circle is filled with `CurrentDayCircleColor` and the number drawn in `CurrentDayTextColor`. Independent of `ShowCurrentDayBackground`: mark the day without shading its cells, or the reverse. |
 | `ShowNonWorkingHoursShading` | `bool` | `false` | Whether time before and after the working interval is shaded on working days. Ignored in month view. |
 | `WorkingDays` | `IReadOnlyCollection<DayOfWeek>` | Monday–Friday | Days regarded as working. Replace the collection to report a change; in-place mutations are not observed. An empty collection makes every day non-working, and `null` restores the default week rather than throwing later from inside a draw. |
 | `WorkingHoursStart` | `TimeOnly` | `09:00` | Beginning of the same-day working interval. |
@@ -306,8 +307,9 @@ implement tap-to-arm-then-tap-to-confirm; that is host policy.
 | `SecondaryTextColor` | `Color` | `#6E6E6E` | Weekday names, time-zone text, gutter labels and month overflow text. |
 | `NonWorkingDaysBackgroundColor` | `Color` | `#FAFAFA` | Background of a shaded non-working day. |
 | `NonWorkingHoursBackgroundColor` | `Color` | `#FAFAFA` | Background of shaded time outside the working interval. |
-| `CurrentDayBackgroundColor` | `Color` | `#F3E8FC` | Background used when today's highlight is enabled, including today's agenda rows. |
-| `CurrentDayTextColor` | `Color` | `#4458C8` | Emphasised day-number colour for today. |
+| `CurrentDayBackgroundColor` | `Color` | `#F3E8FC` | Background used when `ShowCurrentDayBackground` is enabled, including today's agenda rows. |
+| `CurrentDayCircleColor` | `Color` | `#4458C8` | Fill of the circle drawn behind today's day number. |
+| `CurrentDayTextColor` | `Color` | `Colors.White` | Colour of today's day number while it is drawn on the circle. Only applies while `ShowCurrentDayCircle` is enabled. |
 | `CurrentTimeIndicatorColor` | `Color` | `#FD4225` | Current-time line and dot. |
 | `AdjacentMonthBackgroundColor` | `Color` | `#F5F5F5` | Background of leading and trailing month cells. |
 | `AdjacentMonthTextColor` | `Color` | `#B0B0B0` | Day number of a leading or trailing month cell. |
@@ -331,7 +333,8 @@ custom selection template keep ownership of their own colours:
     <Setter Property="MinorGridLineColor" Value="#292929" />
     <Setter Property="NonWorkingDaysBackgroundColor" Value="#181818" />
     <Setter Property="CurrentDayBackgroundColor" Value="#28213D" />
-    <Setter Property="CurrentDayTextColor" Value="#B9C2FF" />
+    <Setter Property="CurrentDayCircleColor" Value="#4E5FCF" />
+    <Setter Property="CurrentDayTextColor" Value="White" />
 </Style>
 ```
 

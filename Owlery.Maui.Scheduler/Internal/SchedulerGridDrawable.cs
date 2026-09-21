@@ -24,7 +24,7 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
 
     public bool ShowNonWorkingDaysShading { get; set; }
 
-    public bool ShowCurrentDayHighlight { get; set; }
+    public bool ShowCurrentDayBackground { get; set; }
 
     public bool ShowNonWorkingHoursShading { get; set; }
 
@@ -69,7 +69,7 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
             {
                 var date = geometry.SlotStarts[slot].AddDays(day);
 
-                var fill = ShowCurrentDayHighlight && date == today
+                var fill = ShowCurrentDayBackground && date == today
                     ? CurrentDayBackgroundColor
                     : ShowNonWorkingDaysShading && !SchedulerWorkingTime.IsWorkingDay(date, WorkingDays)
                         ? NonWorkingDaysBackgroundColor

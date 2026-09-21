@@ -157,6 +157,40 @@ public class AgendaSurfaceTests
     }
 
     [Test]
+    public void A_short_row_does_not_shrink_the_day_marker_below_its_own_height()
+    {
+        var geometry = Geometry();
+        var surface = new AgendaSurface(geometry);
+
+        // A day marker's height is its own — a weekday over a fixed-size circle — not its row's, so a
+        // row shorter than that must not hand it a cell the circle is cut off by.
+        geometry.EstimatedRowHeight = 30;
+        surface.Layout([TestAppointment.At(Day(3), "09:00", 1)], Page);
+
+        var marker = surface.SectionsFor(Page).First(s => s.Section.Kind is SchedulerAgendaSectionKind.Day);
+        var firstRow = surface.Rows.First(r => r.Kind is AgendaRowKind.Appointment);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstRow.Height, Is.EqualTo(30));
+            Assert.That(marker.Bounds.Height, Is.EqualTo(AgendaGeometry.MinimumDayMarkerHeight));
+        });
+    }
+
+    [Test]
+    public void A_row_taller_than_the_day_marker_gives_it_the_whole_row()
+    {
+        var geometry = Geometry();
+        var surface = new AgendaSurface(geometry);
+
+        surface.Layout([TestAppointment.At(Day(3), "09:00", 1)], Page);
+
+        var marker = surface.SectionsFor(Page).First(s => s.Section.Kind is SchedulerAgendaSectionKind.Day);
+
+        Assert.That(marker.Bounds.Height, Is.EqualTo(RowHeight));
+    }
+
+    [Test]
     public void A_month_and_a_row_share_the_same_left_edge_past_the_gutter()
     {
         var geometry = Geometry();
