@@ -123,8 +123,8 @@ public class MonthGeometryTests
     [Test]
     public void Line_capacity_is_what_fits_beneath_the_day_number()
     {
-        // 660 / 6 = 110 a cell, less 18 for the day number, over 18 a chip.
-        Assert.That(Geometry().LinesPerCell, Is.EqualTo(5));
+        // 660 / 6 = 110 a cell, less 24 for the day number, over 18 a chip.
+        Assert.That(Geometry().LinesPerCell, Is.EqualTo(4));
     }
 
     [Test]

@@ -17,11 +17,11 @@ internal sealed class AgendaGridDrawable(AgendaGeometry geometry, AgendaSurface 
 {
     public Color CurrentDayBackgroundColor { get; set; } = null!;
 
-    public bool ShowCurrentDayHighlight { get; set; } = true;
+    public bool ShowCurrentDayBackground { get; set; } = true;
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
-        if (!ShowCurrentDayHighlight)
+        if (!ShowCurrentDayBackground)
             return;
 
         var rows = surface.Rows;

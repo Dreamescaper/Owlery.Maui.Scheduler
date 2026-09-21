@@ -28,8 +28,11 @@ gutter aligned with the top of that day's first appointment.
 **AGD-6** Later appointments on the same day continue beneath an empty gutter; the day marker is not
 repeated for every row.
 
-**AGD-6a** When current-day highlighting is enabled, the rows belonging to today share the current-day
-background used by the other surfaces.
+**AGD-6a** When current-day background highlighting is enabled, the rows belonging to today share the
+current-day background used by the other surfaces.
+
+**AGD-6b** When the current-day circle is enabled, today's day marker in the gutter draws its number
+inside a filled circle, as the other surfaces do.
 
 ## Appointments and sizing
 

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Layouts;
 using Owlery.Maui.Scheduler.Internal;
 
@@ -63,7 +64,7 @@ public partial class SchedulerView
 
         for (var day = 0; day < columns; day++)
         {
-            var stack = new VerticalStackLayout { Spacing = 2, Padding = new Thickness(0, 6) };
+            var stack = new VerticalStackLayout { Spacing = 4, Padding = new Thickness(0, 4) };
 
             nameLabels[day] = new Label
             {
@@ -81,10 +82,23 @@ public partial class SchedulerView
                 numberLabels[day] = new Label
                 {
                     FontSize = 16,
-                    HorizontalTextAlignment = TextAlignment.Center
+                    HorizontalTextAlignment = TextAlignment.Center,
+                    VerticalTextAlignment = TextAlignment.Center
                 };
 
-                stack.Add(numberLabels[day]);
+                // The circle lives here even when today is elsewhere, so a header built once can mark
+                // whichever column turns out to be today after the weeks rotate. Its fill is toggled
+                // by UpdateSlotHeader; an unfilled Border is invisible and costs no extra view.
+                stack.Add(new Border
+                {
+                    StrokeShape = new Ellipse(),
+                    StrokeThickness = 0,
+                    Padding = 0,
+                    WidthRequest = 26,
+                    HeightRequest = 26,
+                    HorizontalOptions = LayoutOptions.Center,
+                    Content = numberLabels[day]
+                });
             }
 
             header.Add(stack, day);
@@ -357,16 +371,18 @@ public partial class SchedulerView
 
     private void BindSectionView(View view, AgendaSectionPlacement placement, int slotIndex)
     {
+        // Set the appearance before the binding context: assigning it renders the heading, and Render
+        // reads this state. A heading that has not changed renders again from the context change.
+        if (view is AgendaSectionView built)
+        {
+            built.EmptyText = AgendaEmptyText;
+            built.UpdateAppearance(AgendaSectionAppearance);
+        }
+
         var wasShowing = view.BindingContext as SchedulerAgendaSection;
 
         if (wasShowing != placement.Section)
             view.BindingContext = placement.Section;
-
-        if (view is AgendaSectionView built)
-        {
-            built.EmptyText = AgendaEmptyText;
-            built.UpdateAppearance(PrimaryTextColor, SecondaryTextColor);
-        }
 
         // A heading is what a screen reader uses to find its way down the list, so it is described
         // rather than left as decoration — and only rewritten when it actually says something new.
@@ -618,7 +634,6 @@ public partial class SchedulerView
         for (var day = 0; day < slot.DayNameLabels.Length; day++)
         {
             var date = slot.PageStart.AddDays(day);
-            var isToday = ShowCurrentDayHighlight && date == today;
 
             slot.DayNameLabels[day].Text = culture.DateTimeFormat
                 .GetAbbreviatedDayName(date.DayOfWeek)
@@ -627,8 +642,20 @@ public partial class SchedulerView
 
             var number = slot.DayNumberLabels[day];
             number.Text = date.Day.ToString(culture);
-            number.FontAttributes = isToday ? FontAttributes.Bold : FontAttributes.None;
-            number.TextColor = isToday ? CurrentDayTextColor : PrimaryTextColor;
+
+            // The circle marks today; it is independent of the cell background, which the drawable
+            // paints. Only write a value that changed: this runs on every scroll event.
+            var circle = (Border)number.Parent;
+            var marked = ShowCurrentDayCircle && date == today;
+            var fill = marked ? CurrentDayCircleColor : null;
+
+            if (circle.BackgroundColor != fill)
+                circle.BackgroundColor = fill;
+
+            var textColor = marked ? CurrentDayTextColor : PrimaryTextColor;
+
+            if (number.TextColor != textColor)
+                number.TextColor = textColor;
         }
 
         slot.Header.TranslationX = slotIndex * geometry.PageSpan + geometry.AnimationOffsetX;

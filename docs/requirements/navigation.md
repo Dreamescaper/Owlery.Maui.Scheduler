@@ -97,9 +97,13 @@ goes rather than refusing to move.
 
 ## Today and the current time
 
-**NAV-19** When current-day highlighting is enabled, today's column is visually distinguished from
-the rest of the week whenever it is on screen, and its day number is emphasised in the header. When
-disabled, neither treatment is applied.
+**NAV-19** When current-day background highlighting is enabled, today's column is visually
+distinguished from the rest of the week whenever it is on screen. When disabled, no background is
+applied.
+
+**NAV-19a** When the current-day circle is enabled, today's day number is drawn inside a filled circle
+in the header, on the same column, whenever it is on screen. It is independent of the background:
+either treatment may be enabled without the other. When disabled, the number is drawn like any other.
 
 **NAV-20** A line across today's column marks the current time.
 
@@ -108,8 +112,8 @@ calendar.
 
 **NAV-22** The current-time line is not drawn when the current time falls outside the day window.
 
-**NAV-23** When the date changes while the calendar is open and current-day highlighting is enabled,
-both the highlighted column and the emphasised day number move to the new day.
+**NAV-23** When the date changes while the calendar is open and either current-day treatment is
+enabled, both the highlighted column and the circled day number move to the new day.
 
 **NAV-24** When non-working-day shading is enabled, days outside the configured recurring working
 week are shaded differently. Monday through Friday are working by default.

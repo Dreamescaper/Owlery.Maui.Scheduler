@@ -19,8 +19,14 @@ internal sealed class MonthGeometry : PageGeometry
 
     public const int CellCount = Columns * Rows;
 
-    /// <summary>Height reserved at the top of a cell for its day number.</summary>
-    public const double DayNumberHeight = 18;
+    /// <summary>
+    /// Height reserved at the top of a cell for its day number and its current-day circle.
+    /// </summary>
+    /// <remarks>
+    /// Tall enough that the circle clears the cell's top line and the first appointment below it. It is
+    /// a line of the cell's capacity, so widening it here costs a chip on a tall window.
+    /// </remarks>
+    public const double DayNumberHeight = 24;
 
     /// <summary>Height of one appointment chip.</summary>
     public const double ChipHeight = 16;

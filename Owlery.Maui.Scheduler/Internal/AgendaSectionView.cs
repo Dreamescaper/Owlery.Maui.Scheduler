@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Maui.Controls.Shapes;
 
 namespace Owlery.Maui.Scheduler.Internal;
 
@@ -13,7 +14,9 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// <para>
 /// One view renders all three kinds. Both labels are built once and toggled, because a pooled view is
 /// rebound rather than rebuilt and a heading that reshaped itself per bind would pay for a fresh
-/// layout every time one scrolled into view.
+/// layout every time one scrolled into view. The day number has a second label of its own because it
+/// is the only kind that can sit in a filled circle, and mutating a shared label's shape on every
+/// rebind would be worse than carrying one more.
 /// </para>
 /// </remarks>
 internal sealed class AgendaSectionView : ContentView
@@ -21,9 +24,11 @@ internal sealed class AgendaSectionView : ContentView
     private readonly Label primary;
     private readonly Label secondary;
     private readonly Label detail;
+    private readonly Label dayNumber;
+    private readonly Border dayCircle;
     private readonly VerticalStackLayout stack;
-    private Color primaryColor = Colors.Black;
-    private Color secondaryColor = Colors.Gray;
+    private AgendaSectionAppearance appearance =
+        new(Colors.Black, Colors.Gray, Colors.Black, Colors.White, false, default);
 
     public AgendaSectionView()
     {
@@ -31,11 +36,30 @@ internal sealed class AgendaSectionView : ContentView
         secondary = new Label { LineBreakMode = LineBreakMode.TailTruncation };
         detail = new Label { FontSize = 11, LineBreakMode = LineBreakMode.TailTruncation };
 
+        dayNumber = new Label
+        {
+            FontSize = 20,
+            HorizontalTextAlignment = TextAlignment.Center,
+            VerticalTextAlignment = TextAlignment.Center
+        };
+
+        dayCircle = new Border
+        {
+            StrokeShape = new Ellipse(),
+            StrokeThickness = 0,
+            Padding = 0,
+            WidthRequest = 28,
+            HeightRequest = 28,
+            HorizontalOptions = LayoutOptions.Center,
+            IsVisible = false,
+            Content = dayNumber
+        };
+
         stack = new VerticalStackLayout
         {
             Spacing = 0,
             VerticalOptions = LayoutOptions.Start,
-            Children = { secondary, primary, detail }
+            Children = { secondary, dayCircle, primary, detail }
         };
 
         Content = stack;
@@ -52,13 +76,12 @@ internal sealed class AgendaSectionView : ContentView
     /// bound to a new section renders from <see cref="OnBindingContextChanged"/>, so nothing here is
     /// what keeps its text current.
     /// </remarks>
-    public void UpdateAppearance(Color primaryColor, Color secondaryColor)
+    public void UpdateAppearance(AgendaSectionAppearance appearance)
     {
-        if (Equals(this.primaryColor, primaryColor) && Equals(this.secondaryColor, secondaryColor))
+        if (this.appearance == appearance)
             return;
 
-        this.primaryColor = primaryColor;
-        this.secondaryColor = secondaryColor;
+        this.appearance = appearance;
         Render();
     }
 
@@ -79,9 +102,9 @@ internal sealed class AgendaSectionView : ContentView
 
         var culture = CultureInfo.CurrentUICulture;
 
-        primary.TextColor = primaryColor;
-        secondary.TextColor = secondaryColor;
-        detail.TextColor = secondaryColor;
+        primary.TextColor = appearance.PrimaryColor;
+        secondary.TextColor = appearance.SecondaryColor;
+        detail.TextColor = appearance.SecondaryColor;
 
         // A month and a week are headings to scan by — sit them in the middle of their strip so the
         // band reads evenly, rather than hugging its top.
@@ -91,6 +114,7 @@ internal sealed class AgendaSectionView : ContentView
         switch (section.Kind)
         {
             case SchedulerAgendaSectionKind.Month:
+                ShowDayCircle(false);
                 Show(
                     section.Date.ToString("MMMM yyyy", culture),
                     null,
@@ -103,7 +127,8 @@ internal sealed class AgendaSectionView : ContentView
             case SchedulerAgendaSectionKind.Week:
                 // A small-caps kicker beneath the month: the range, muted, tracked out, carrying the
                 // month's weight instead of competing with it.
-                primary.TextColor = secondaryColor;
+                ShowDayCircle(false);
+                primary.TextColor = appearance.SecondaryColor;
                 Show(
                     WeekRange(section.Date, culture).ToUpper(culture),
                     null,
@@ -115,16 +140,45 @@ internal sealed class AgendaSectionView : ContentView
                 break;
 
             case SchedulerAgendaSectionKind.Day:
-                // Weekday above the number, which is what the gutter has room for.
-                Show(
-                    section.Date.Day.ToString(culture),
-                    culture.DateTimeFormat.GetAbbreviatedDayName(section.Date.DayOfWeek).ToUpper(culture),
-                    null,
-                    20,
-                    FontAttributes.None,
-                    TextAlignment.Center);
+                ShowDayNumber(section, culture);
                 break;
         }
+    }
+
+    /// <summary>
+    /// The day marker: the weekday above a number that sits in a filled circle on today.
+    /// </summary>
+    /// <remarks>
+    /// The number's own label is used rather than the shared <see cref="primary"/>, so a heading
+    /// reused for a month or a week never has to shed a shape it was given for a day.
+    /// </remarks>
+    private void ShowDayNumber(SchedulerAgendaSection section, CultureInfo culture)
+    {
+        var isToday = appearance.ShowCurrentDayCircle
+            && DateOnly.FromDateTime(section.Date) == appearance.Today;
+
+        dayNumber.Text = section.Date.Day.ToString(culture);
+        dayNumber.TextColor = isToday ? appearance.NumberColor : appearance.PrimaryColor;
+
+        dayCircle.BackgroundColor = isToday ? appearance.CircleColor : null;
+        dayCircle.IsVisible = true;
+        primary.IsVisible = false;
+
+        secondary.Text = culture.DateTimeFormat
+            .GetAbbreviatedDayName(section.Date.DayOfWeek)
+            .ToUpper(culture);
+        secondary.FontSize = 11;
+        secondary.HorizontalTextAlignment = TextAlignment.Center;
+        secondary.IsVisible = true;
+
+        detail.IsVisible = false;
+        stack.HorizontalOptions = LayoutOptions.Center;
+    }
+
+    private void ShowDayCircle(bool visible)
+    {
+        dayCircle.IsVisible = visible;
+        primary.IsVisible = !visible;
     }
 
     private void Show(
@@ -166,3 +220,15 @@ internal sealed class AgendaSectionView : ContentView
             : $"{weekStart.ToString("d MMM", culture)} – {end.ToString("d MMM", culture)}";
     }
 }
+
+/// <summary>
+/// Everything the built-in agenda heading paints from, as one value so the repaint guard is a single
+/// comparison rather than one per field.
+/// </summary>
+internal readonly record struct AgendaSectionAppearance(
+    Color PrimaryColor,
+    Color SecondaryColor,
+    Color CircleColor,
+    Color NumberColor,
+    bool ShowCurrentDayCircle,
+    DateOnly Today);

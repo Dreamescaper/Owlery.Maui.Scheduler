@@ -25,7 +25,9 @@ they show their appointments and can be selected.
 **MON-6** Because the row count is fixed rather than fitted, a short month that begins on the first
 day of the week shows two whole rows of the following month.
 
-**MON-7** Today's cell is distinguished from the rest when current-day highlighting is enabled.
+**MON-7** Today's cell is distinguished from the rest when current-day background highlighting is
+enabled. Independently, today's day number is drawn inside a filled circle when the current-day circle
+is enabled.
 
 **MON-8** Days outside the configured working week are distinguished when non-working-day shading is
 enabled. Working hours do not apply to a month, whose cells have no time axis.

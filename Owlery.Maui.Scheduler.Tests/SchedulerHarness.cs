@@ -231,6 +231,14 @@ internal sealed class SchedulerHarness
             .OrderBy(section => section.Date)
     ];
 
+    /// <summary>The circle behind each visible agenda day marker; filled only on today.</summary>
+    public IReadOnlyList<Border> AgendaDayCircles =>
+    [
+        .. AgendaSections
+            .Where(view => ((SchedulerAgendaSection)view.BindingContext).Kind == SchedulerAgendaSectionKind.Day)
+            .SelectMany(view => Descendants(view).OfType<Border>())
+    ];
+
     /// <summary>All label text inside a view, including the built-in agenda section variants.</summary>
     public IReadOnlyList<string> TextWithin(View view) =>
     [
@@ -307,6 +315,12 @@ internal sealed class SchedulerHarness
             .Where(grid => grid.Parent is AbsoluteLayout && grid.ColumnDefinitions.Count > 0)
             .SelectMany(grid => Descendants(grid).OfType<Label>())
             .Where(label => label.FontSize == 16)
+    ];
+
+    /// <summary>The circle behind each day-number label; filled only on today.</summary>
+    public IReadOnlyList<Border> HeaderDayNumberRings =>
+    [
+        .. HeaderDayNumbers.Select(label => (Border)label.Parent)
     ];
 
     public IDrawable SurfaceDrawable => surfaceGraphicsView.Drawable;

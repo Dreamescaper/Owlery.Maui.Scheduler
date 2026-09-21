@@ -459,6 +459,15 @@ public partial class SchedulerView : ContentView
         _ => throw new NotSupportedException($"{ViewMode} has no appointment template."),
     };
 
+    /// <summary>What the built-in agenda headings paint from, read when one is bound or repainted.</summary>
+    private AgendaSectionAppearance AgendaSectionAppearance => new(
+        PrimaryTextColor,
+        SecondaryTextColor,
+        CurrentDayCircleColor,
+        CurrentDayTextColor,
+        ShowCurrentDayCircle,
+        DateOnly.FromDateTime(ActiveGeometry.Now));
+
     private bool DraggingEnabled => AllowDragAndDrop && ViewMode is SchedulerViewMode.Timeline;
 
     /// <summary>
@@ -615,15 +624,37 @@ public partial class SchedulerView : ContentView
         ActiveGeometry.Now = NowInZone();
         gridView.Invalidate();
 
-        // The drawable re-evaluates "today" every time it repaints, but the day headers are real
-        // labels that are only rewritten when a slot is rebuilt. Left alone they would keep marking
-        // yesterday until the next swipe. Only the timeline has such labels — a month's day numbers
-        // are painted, and a surface without a header strip has none at all.
-        if (previousDate == ActiveGeometry.Now.Date || ViewMode is not SchedulerViewMode.Timeline)
+        // The drawable re-evaluates "today" every time it repaints, but the day headers and the
+        // agenda's day markers are real labels that are only rewritten when a slot is rebuilt. Left
+        // alone they would keep marking yesterday until the next swipe. A month's day numbers are
+        // painted, so it needs nothing beyond the invalidate above.
+        if (previousDate == ActiveGeometry.Now.Date)
             return;
 
-        for (var i = 0; i < slots.Length; i++)
-            UpdateSlotHeader(slots[i], i);
+        if (ViewMode is SchedulerViewMode.Timeline)
+        {
+            for (var i = 0; i < slots.Length; i++)
+                UpdateSlotHeader(slots[i], i);
+        }
+        else if (ViewMode is SchedulerViewMode.Agenda)
+        {
+            RefreshAgendaSectionAppearance();
+        }
+    }
+
+    /// <summary>Repaints the agenda headings that are already on screen, after "today" moved.</summary>
+    private void RefreshAgendaSectionAppearance()
+    {
+        var appearance = AgendaSectionAppearance;
+
+        foreach (var slot in slots)
+        {
+            foreach (var view in slot.SectionViews)
+            {
+                if (view is AgendaSectionView section)
+                    section.UpdateAppearance(appearance);
+            }
+        }
     }
 
     private DateTime NowInZone() => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZone);
@@ -1252,7 +1283,7 @@ public partial class SchedulerView : ContentView
         gridDrawable.CurrentDayBackgroundColor = CurrentDayBackgroundColor;
         gridDrawable.CurrentTimeIndicatorColor = CurrentTimeIndicatorColor;
         gridDrawable.ShowNonWorkingDaysShading = ShowNonWorkingDaysShading;
-        gridDrawable.ShowCurrentDayHighlight = ShowCurrentDayHighlight;
+        gridDrawable.ShowCurrentDayBackground = ShowCurrentDayBackground;
         gridDrawable.ShowNonWorkingHoursShading = ShowNonWorkingHoursShading;
         gridDrawable.WorkingDays = WorkingDays;
         gridDrawable.WorkingHoursStart = WorkingHoursStart;
@@ -1265,9 +1296,11 @@ public partial class SchedulerView : ContentView
         monthDrawable.DayNumberColor = PrimaryTextColor;
         monthDrawable.AdjacentMonthDayNumberColor = AdjacentMonthTextColor;
         monthDrawable.CurrentDayTextColor = CurrentDayTextColor;
+        monthDrawable.CurrentDayCircleColor = CurrentDayCircleColor;
         monthDrawable.OverflowTextColor = SecondaryTextColor;
         monthDrawable.ShowNonWorkingDaysShading = ShowNonWorkingDaysShading;
-        monthDrawable.ShowCurrentDayHighlight = ShowCurrentDayHighlight;
+        monthDrawable.ShowCurrentDayBackground = ShowCurrentDayBackground;
+        monthDrawable.ShowCurrentDayCircle = ShowCurrentDayCircle;
         monthDrawable.WorkingDays = WorkingDays;
         monthDrawable.OverflowFormat = MonthOverflowFormat;
 
@@ -1278,16 +1311,9 @@ public partial class SchedulerView : ContentView
             DragTimeIndicatorTextColor);
 
         agendaDrawable.CurrentDayBackgroundColor = CurrentDayBackgroundColor;
-        agendaDrawable.ShowCurrentDayHighlight = ShowCurrentDayHighlight;
+        agendaDrawable.ShowCurrentDayBackground = ShowCurrentDayBackground;
 
-        foreach (var slot in slots)
-        {
-            foreach (var view in slot.SectionViews)
-            {
-                if (view is AgendaSectionView section)
-                    section.UpdateAppearance(PrimaryTextColor, SecondaryTextColor);
-            }
-        }
+        RefreshAgendaSectionAppearance();
 
         cellSelection.UpdateAppearance(
             CellSelectionBackgroundColor,
