@@ -88,4 +88,11 @@ internal sealed class PageSlot
     public Label[] DayNameLabels { get; set; } = [];
 
     public Label[] DayNumberLabels { get; set; } = [];
+
+    /// <summary>The circle behind each day number, filled only on the column that is today.</summary>
+    /// <remarks>
+    /// Held beside the labels rather than reached through <see cref="Element.Parent"/>, so the header's
+    /// nesting is free to change without breaking the update path at scroll time.
+    /// </remarks>
+    public Border[] DayNumberRings { get; set; } = [];
 }

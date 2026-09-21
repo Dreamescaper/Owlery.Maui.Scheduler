@@ -114,28 +114,22 @@ internal sealed class AgendaSectionView : ContentView
         switch (section.Kind)
         {
             case SchedulerAgendaSectionKind.Month:
-                ShowDayCircle(false);
                 Show(
                     section.Date.ToString("MMMM yyyy", culture),
-                    null,
                     section.AppointmentCount == 0 ? EmptyText : null,
                     22,
-                    FontAttributes.Bold,
-                    TextAlignment.Start);
+                    FontAttributes.Bold);
                 break;
 
             case SchedulerAgendaSectionKind.Week:
                 // A small-caps kicker beneath the month: the range, muted, tracked out, carrying the
                 // month's weight instead of competing with it.
-                ShowDayCircle(false);
                 primary.TextColor = appearance.SecondaryColor;
                 Show(
                     WeekRange(section.Date, culture).ToUpper(culture),
                     null,
-                    null,
                     11,
                     FontAttributes.None,
-                    TextAlignment.Start,
                     letterSpacing: 1.2);
                 break;
 
@@ -164,38 +158,42 @@ internal sealed class AgendaSectionView : ContentView
         dayCircle.IsVisible = true;
         primary.IsVisible = false;
 
-        secondary.Text = culture.DateTimeFormat
-            .GetAbbreviatedDayName(section.Date.DayOfWeek)
-            .ToUpper(culture);
-        secondary.FontSize = 11;
-        secondary.HorizontalTextAlignment = TextAlignment.Center;
-        secondary.IsVisible = true;
-
-        detail.IsVisible = false;
-        stack.HorizontalOptions = LayoutOptions.Center;
+        Surrounds(
+            culture.DateTimeFormat.GetAbbreviatedDayName(section.Date.DayOfWeek).ToUpper(culture),
+            null,
+            TextAlignment.Center);
     }
 
-    private void ShowDayCircle(bool visible)
-    {
-        dayCircle.IsVisible = visible;
-        primary.IsVisible = !visible;
-    }
-
+    /// <summary>A month name or a week range: the heading kinds that read across, not down.</summary>
     private void Show(
         string text,
-        string? above,
         string? below,
         double fontSize,
         FontAttributes attributes,
-        TextAlignment alignment,
         double letterSpacing = 0)
     {
         primary.Text = text;
         primary.FontSize = fontSize;
         primary.FontAttributes = attributes;
-        primary.HorizontalTextAlignment = alignment;
+        primary.HorizontalTextAlignment = TextAlignment.Start;
         primary.CharacterSpacing = letterSpacing;
+        primary.IsVisible = true;
 
+        dayCircle.IsVisible = false;
+
+        Surrounds(null, below, TextAlignment.Start);
+    }
+
+    /// <summary>
+    /// The kicker above and the note below, whichever of the three kinds is showing.
+    /// </summary>
+    /// <remarks>
+    /// Shared because the two that carry it disagree only on where they sit: a month or a week reads
+    /// from the left, a day marker down the centre of the gutter. The stack takes its alignment from
+    /// the same answer, so the labels and the column they sit in cannot drift apart.
+    /// </remarks>
+    private void Surrounds(string? above, string? below, TextAlignment alignment)
+    {
         secondary.Text = above;
         secondary.FontSize = 11;
         secondary.HorizontalTextAlignment = alignment;

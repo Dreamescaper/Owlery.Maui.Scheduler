@@ -17,6 +17,9 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// </remarks>
 internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots) : IDrawable
 {
+    /// <summary>How far the day number drops so its ink, not its font box, centres on the circle.</summary>
+    private const float DayNumberBaselineNudge = 2;
+
     public Color GridLineColor { get; set; } = null!;
 
     public Color NonWorkingDaysBackgroundColor { get; set; } = null!;
@@ -77,6 +80,7 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
             var y = (float)cell.Y;
 
             var isToday = date == today;
+            var circled = ShowCurrentDayCircle && isToday;
             var isAdjacent = date.Month != page.Month || date.Year != page.Year;
 
             var fill = ShowCurrentDayBackground && isToday
@@ -93,10 +97,10 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
                 canvas.FillRectangle(x, y, (float)cell.Width, (float)cell.Height);
             }
 
-            if (ShowCurrentDayCircle && isToday)
+            if (circled)
                 DrawCurrentDayCircle(canvas, x, y, cell.Width);
 
-            canvas.FontColor = ShowCurrentDayCircle && isToday
+            canvas.FontColor = circled
                 ? CurrentDayTextColor
                 : isAdjacent
                     ? AdjacentMonthDayNumberColor
@@ -118,9 +122,6 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
             DrawOverflow(canvas, x, y, cell.Width, index < overflow.Count ? overflow[index] : 0, culture);
         }
     }
-
-    /// <summary>How far the day number drops so its ink, not its font box, centres on the circle.</summary>
-    private const float DayNumberBaselineNudge = 2;
 
     /// <summary>
     /// Fills the circle behind a day number, leaving a point of the reserved row free above and below

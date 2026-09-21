@@ -631,15 +631,16 @@ public partial class SchedulerView : ContentView
         if (previousDate == ActiveGeometry.Now.Date)
             return;
 
+        // The timeline check is load-bearing — UpdateSlotHeader indexes day-number labels a month
+        // header never builds. The agenda's is not: a surface that is not the agenda has no section
+        // views, so the refresh walks nothing, and ApplyAppearance calls it unguarded for that reason.
         if (ViewMode is SchedulerViewMode.Timeline)
         {
             for (var i = 0; i < slots.Length; i++)
                 UpdateSlotHeader(slots[i], i);
         }
-        else if (ViewMode is SchedulerViewMode.Agenda)
-        {
-            RefreshAgendaSectionAppearance();
-        }
+
+        RefreshAgendaSectionAppearance();
     }
 
     /// <summary>Repaints the agenda headings that are already on screen, after "today" moved.</summary>

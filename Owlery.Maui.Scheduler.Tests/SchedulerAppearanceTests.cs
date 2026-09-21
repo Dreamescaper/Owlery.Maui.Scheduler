@@ -307,12 +307,9 @@ public class SchedulerAppearanceTests
 
         var drawn = Draw(drawable).Ellipses.Single(ellipse => ellipse.Color == circle);
 
-        Assert.Multiple(() =>
-        {
-            // 15 August is index 19 of the grid — row 2, column 5 — so the circle must sit in that
-            // cell rather than at the top of the canvas.
-            Assert.That(drawn.Bounds, Is.EqualTo(new RectF(540, 202, 20, 20)));
-        });
+        // 15 August is index 19 of the grid — row 2, column 5 — so the circle must sit in that cell
+        // rather than at the top of the canvas.
+        Assert.That(drawn.Bounds, Is.EqualTo(new RectF(540, 202, 20, 20)));
 
         drawable.ShowCurrentDayCircle = false;
 
