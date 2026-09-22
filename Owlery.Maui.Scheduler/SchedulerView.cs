@@ -49,10 +49,10 @@ public partial class SchedulerView : ContentView
     private const double LiftedOpacity = 0.85;
 
     /// <summary>How often a vertical offset the platform would not take is asked for again.</summary>
-    private const int TimelineScrollRetryIntervalMs = 50;
+    private const int VerticalScrollRetryIntervalMs = 50;
 
     /// <summary>How many times it is asked for again before the control lets it go.</summary>
-    private const int TimelineScrollRetries = 6;
+    private const int VerticalScrollRetries = 6;
 
     // AbsoluteLayout paints by ZIndex first, so the stacking order is stated explicitly rather than
     // being an accident of the order children happen to be added in.
@@ -153,10 +153,20 @@ public partial class SchedulerView : ContentView
     /// short and finite deliberately. Where the offset is genuinely out of reach, giving up leaves
     /// the reader where the platform put them, which is better than a surface that keeps pulling
     /// itself back for the rest of the session.
+    /// <para>
+    /// Shared by both surfaces that anchor the vertical scroll, because the clamp is the scroll
+    /// view's rather than either surface's: an agenda entered from a month asks for an offset a
+    /// month of rows down and is clamped to the top, and the rows it then realizes sit a screenful
+    /// below what the reader is looking at — an agenda that is simply blank.
+    /// </para>
     /// </remarks>
-    private IDispatcherTimer? timelineScrollRetryTimer;
+    private IDispatcherTimer? verticalScrollRetryTimer;
 
-    private int timelineScrollRetriesLeft;
+    private int verticalScrollRetriesLeft;
+
+    /// <summary>The surface that asked, so a mode change abandons the offset rather than applying it.</summary>
+    private SchedulerViewMode verticalScrollRetryMode;
+
     private VisibleDatesReportKey? lastVisibleDatesReport;
     private bool initialised;
     private bool repopulateQueued;
@@ -491,45 +501,104 @@ public partial class SchedulerView : ContentView
     private void RequestTimelineScroll(double target)
     {
         pendingTimelineScrollTarget = target;
-        timelineScrollRetriesLeft = TimelineScrollRetries;
 
-        _ = verticalScroll.ScrollToAsync(0, target, false);
+        AskForVerticalOffset(target);
 
         // Where the request was applied outright there is nothing to wait for. The scroll event the
         // platform raises on its way may already have ended this one, which is why the offset is
         // read back rather than the pending target.
         if (Math.Abs(verticalScroll.ScrollY - target) < 0.5)
-        {
             EndTimelineScroll();
-            return;
-        }
-
-        timelineScrollRetryTimer?.Stop();
-        timelineScrollRetryTimer?.Start();
     }
 
-    private void OnTimelineScrollRetryTicked(object? sender, EventArgs e)
+    /// <summary>
+    /// Writes an offset to the shared vertical scroll and arms the retry that sees it through.
+    /// </summary>
+    /// <remarks>
+    /// Called by whichever surface is anchoring itself, never by the corrections that run on the
+    /// scroll path: a compensating shift that re-asked would write an offset per frame into a fling
+    /// the reader is still in the middle of, and <c>ScrollToAsync</c> cancels one.
+    /// </remarks>
+    private void AskForVerticalOffset(double target)
     {
-        if (pendingTimelineScrollTarget is not { } target || ViewMode is not SchedulerViewMode.Timeline)
+        verticalScrollRetryMode = ViewMode;
+        verticalScrollRetriesLeft = VerticalScrollRetries;
+        verticalScrollRetryTimer?.Stop();
+
+        _ = verticalScroll.ScrollToAsync(0, target, false);
+
+        if (Math.Abs(verticalScroll.ScrollY - target) < 0.5)
+            return;
+
+        verticalScrollRetryTimer?.Start();
+    }
+
+    /// <summary>
+    /// The offset the surface on screen has asked for and has not seen applied, if any.
+    /// </summary>
+    /// <remarks>
+    /// Read afresh on every attempt rather than captured when the first one was made. An agenda's
+    /// entry navigation reflows while it lands — its rows measure against the estimate they were
+    /// laid out at, and each correction lowers the offset that answers the same date — so the
+    /// offset first asked for is stale by the time the platform can take one at all.
+    /// </remarks>
+    private double? OwedVerticalOffset => ViewMode is SchedulerViewMode.Agenda
+        ? pendingAgendaScrollTarget
+        : pendingTimelineScrollTarget;
+
+    private void OnVerticalScrollRetryTicked(object? sender, EventArgs e)
+    {
+        // The surface that asked for it is gone, so the offset is abandoned rather than given up on:
+        // whatever is showing now has its own anchor, and ending its navigation is not this timer's
+        // business.
+        if (ViewMode != verticalScrollRetryMode)
         {
-            EndTimelineScroll();
+            verticalScrollRetryTimer?.Stop();
             return;
         }
 
-        if (Math.Abs(verticalScroll.ScrollY - target) < 0.5 || --timelineScrollRetriesLeft <= 0)
+        if (OwedVerticalOffset is not { } target
+            || Math.Abs(verticalScroll.ScrollY - target) < 0.5
+            || --verticalScrollRetriesLeft <= 0)
         {
-            EndTimelineScroll();
+            GiveUpVerticalOffset();
             return;
         }
 
         _ = verticalScroll.ScrollToAsync(0, target, false);
+
+        // Asking again is the control still moving the surface on purpose, so the window in which
+        // the agenda reads an offset as its own rather than the reader's is reopened with it. Left
+        // to close on the deadline the first attempt set, it would expire with a retry still in
+        // flight and the offset that finally arrived would be read as a fling into the top.
+        if (ViewMode is SchedulerViewMode.Agenda)
+        {
+            agendaNavigationSettleTimer?.Stop();
+            agendaNavigationSettleTimer?.Start();
+        }
+    }
+
+    /// <summary>
+    /// Stops re-asking, the offset having arrived or the budget having run out.
+    /// </summary>
+    /// <remarks>
+    /// The agenda has a settle window of its own that ends its navigation, releases the translation
+    /// holding its content and resynchronises where the reader is; the timeline has only the offset
+    /// it was owed, so that is cleared here.
+    /// </remarks>
+    private void GiveUpVerticalOffset()
+    {
+        verticalScrollRetryTimer?.Stop();
+
+        if (ViewMode is not SchedulerViewMode.Agenda)
+            EndTimelineScroll();
     }
 
     /// <summary>Stops owing an offset, whether it arrived or was given up on.</summary>
     private void EndTimelineScroll()
     {
         pendingTimelineScrollTarget = null;
-        timelineScrollRetryTimer?.Stop();
+        verticalScrollRetryTimer?.Stop();
     }
 
     /// <summary>Puts the timeline's opening time at the top of the viewport, as far as it reaches.</summary>
@@ -595,10 +664,10 @@ public partial class SchedulerView : ContentView
         agendaNavigationSettleTimer.Interval = TimeSpan.FromMilliseconds(250);
         agendaNavigationSettleTimer.Tick += OnAgendaNavigationSettled;
 
-        timelineScrollRetryTimer = Dispatcher.CreateTimer();
-        timelineScrollRetryTimer.Interval = TimeSpan.FromMilliseconds(TimelineScrollRetryIntervalMs);
-        timelineScrollRetryTimer.IsRepeating = true;
-        timelineScrollRetryTimer.Tick += OnTimelineScrollRetryTicked;
+        verticalScrollRetryTimer = Dispatcher.CreateTimer();
+        verticalScrollRetryTimer.Interval = TimeSpan.FromMilliseconds(VerticalScrollRetryIntervalMs);
+        verticalScrollRetryTimer.IsRepeating = true;
+        verticalScrollRetryTimer.Tick += OnVerticalScrollRetryTicked;
 
         ScrollToOpeningAnchor();
     }
@@ -615,7 +684,7 @@ public partial class SchedulerView : ContentView
         agendaBackwardGrowTimer?.Stop();
         agendaNavigationSettleTimer?.Stop();
         EndTimelineScroll();
-        timelineScrollRetryTimer = null;
+        verticalScrollRetryTimer = null;
     }
 
     private void OnCurrentTimeTick(object? sender, EventArgs e)
@@ -1182,14 +1251,20 @@ public partial class SchedulerView : ContentView
         agendaGeometry.VisibleTop = target;
         lastAgendaObservedTop = target;
         pendingAgendaScrollTarget = target;
-        _ = verticalScroll.ScrollToAsync(0, target, false);
+
+        // Through the retry, not straight to the scroll view: an agenda entered from a month asks
+        // for an offset against a content size the platform still measures as one viewport, which
+        // clamps the request to the top and reports nothing further. The rows are realized around
+        // the offset that was asked for, so unanswered it is a blank screen rather than a jump.
+        AskForVerticalOffset(target);
 
         PopulateSlot(slots[CentreSlot], CentreSlot);
 
         // The offset is not the platform's yet. Where it applied the request outright there is
         // nothing left to wait for; otherwise stay in navigation until one of the offsets it reports
-        // is the one asked for, or the settle window closes.
-        if (Math.Abs(verticalScroll.ScrollY - target) < 0.5)
+        // is the one asked for, or the settle window closes. Read against what is owed rather than
+        // the target above, because measuring the rows just placed may have corrected it.
+        if (pendingAgendaScrollTarget is { } owed && Math.Abs(verticalScroll.ScrollY - owed) < 0.5)
         {
             EndAgendaNavigation();
         }
@@ -1208,6 +1283,7 @@ public partial class SchedulerView : ContentView
         agendaNavigationInProgress = false;
         pendingAgendaScrollTarget = null;
         agendaNavigationSettleTimer?.Stop();
+        verticalScrollRetryTimer?.Stop();
     }
 
     /// <summary>Closes the settle window when the platform never reported the offset asked for.</summary>

@@ -144,3 +144,25 @@ the clamp apply to a host's own navigation as well.
 
 Both ways back onto the timeline were checked on the sample — see [§15](verification.md).
 
+### The agenda anchors through the same retry
+
+The clamp belongs to the scroll view rather than to either surface, so the retry is shared: entering
+an agenda asks for its offset the same way, and gives the mode that asked, so a reader who changes
+surface again abandons the offset rather than having it applied to whatever arrived.
+
+What differs is what a clamped request costs. A timeline denied its opening offset shows the top of
+the day window — the wrong hour, but hours. An agenda realizes its rows around the offset it asked
+for and nowhere else ([§21](agenda.md)), so a request clamped to the top leaves the rows a screenful
+below what the reader is looking at: not a jump, an empty surface. That is the defect §15 recorded as
+"blank until it is re-entered", and re-entering worked only because the failed visit had meanwhile
+dragged `DisplayDate` to the top of the range, where the offset asked for is zero.
+
+The other difference is that an agenda's offset moves while it lands. Its rows are placed at the
+estimate and measure in the same pass, and every correction above the fold pulls the offset that
+answers the same date upward — four requests, each lower than the last, before the platform has taken
+any of them. So each attempt re-reads what is currently owed instead of repeating what was first
+asked for. Asking again also reopens the window in which the agenda reads an offset as its own rather
+than the reader's, since a retry is the control still moving the surface on purpose; left to close on
+the first attempt's deadline, it would expire with a retry in flight and the offset that finally
+arrived would be read as a fling into the top.
+
