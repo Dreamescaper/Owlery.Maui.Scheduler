@@ -115,7 +115,7 @@ public class TimelineScrollAnchorTests
 
         // The layout pass that resizes the content has landed, so the same offset now fits.
         harness.DeferVerticalScrollRequests = false;
-        harness.FireTimelineScrollRetryTimer();
+        harness.FireVerticalScrollRetryTimer();
 
         Assert.That(harness.TimelineScrollY, Is.EqualTo(8 * HourHeight).Within(0.5));
     }
@@ -130,12 +130,12 @@ public class TimelineScrollAnchorTests
         harness.Scheduler.ViewMode = SchedulerViewMode.Timeline;
 
         for (var i = 0; i < 10; i++)
-            harness.FireTimelineScrollRetryTimer();
+            harness.FireVerticalScrollRetryTimer();
 
         // Nothing is owed any more, so a scroll view that would now accept the offset is not asked
         // for it: the reader is left where the platform put them rather than pulled back later.
         harness.DeferVerticalScrollRequests = false;
-        harness.FireTimelineScrollRetryTimer();
+        harness.FireVerticalScrollRetryTimer();
 
         Assert.That(harness.TimelineScrollY, Is.Zero);
     }
@@ -187,7 +187,7 @@ public class TimelineScrollAnchorTests
         harness.FireEdgeScrollTimer();
 
         var reached = harness.TimelineScrollY;
-        harness.FireTimelineScrollRetryTimer();
+        harness.FireVerticalScrollRetryTimer();
 
         Assert.That(harness.TimelineScrollY, Is.EqualTo(reached).Within(0.5),
             "the opening offset must not pull the surface back from under a drag");
@@ -202,7 +202,7 @@ public class TimelineScrollAnchorTests
         harness.Scheduler.ViewMode = SchedulerViewMode.Timeline;
 
         harness.ScrollVerticallyTo(120);
-        harness.FireTimelineScrollRetryTimer();
+        harness.FireVerticalScrollRetryTimer();
 
         Assert.That(harness.TimelineScrollY, Is.EqualTo(120).Within(0.5));
     }

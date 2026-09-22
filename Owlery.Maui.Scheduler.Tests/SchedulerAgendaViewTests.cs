@@ -690,6 +690,135 @@ public class SchedulerAgendaViewTests
             "after the settle window the agenda follows the reader again");
     }
 
+    /// <summary>
+    /// Appointments through the month before the page as well as its own.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Dense"/> starts on the Monday and leaves July empty, which puts the offset
+    /// entering the agenda asks for a few rows down. A full month ahead of <c>DisplayDate</c> is
+    /// what makes it a screenful, and a screenful is what makes a clamped request the difference
+    /// between the list and a blank surface.
+    /// </remarks>
+    private static ISchedulerAppointment[] TwoMonthsDense(int perDay = 6) =>
+    [
+        .. from day in Enumerable.Range(-31, 45)
+           from n in Enumerable.Range(0, perDay)
+           select TestAppointment.At(Monday.AddDays(day), $"{8 + n:00}:00", 1, $"m{day}n{n}")
+    ];
+
+    /// <summary>An agenda entered from a month, whose entry offset the platform clamps away.</summary>
+    /// <remarks>
+    /// The month is what makes this the worst case: its content is exactly one viewport tall, so the
+    /// shared vertical scroll has no room at all for an offset a month of rows down and clamps the
+    /// request to the top — then reports nothing further, because nothing moved.
+    /// </remarks>
+    private static SchedulerHarness AgendaEnteredFromAMonth()
+    {
+        var harness = new SchedulerHarness(Monday, TwoMonthsDense(), viewMode: SchedulerViewMode.Month)
+        {
+            DeferVerticalScrollRequests = true
+        };
+
+        harness.Scheduler.ViewMode = SchedulerViewMode.Agenda;
+
+        return harness;
+    }
+
+    /// <summary>
+    /// The offset entering an agenda asks for is asked for again when the platform refuses it.
+    /// </summary>
+    /// <remarks>
+    /// Found on the iOS simulator as an agenda that was simply blank until it was left and
+    /// re-entered. Nothing had failed to render: the rows were realized around the offset the
+    /// navigation asked for, the platform had clamped that offset away against the month's content
+    /// size, and the two were a screenful apart.
+    /// </remarks>
+    [Test]
+    public void An_entry_offset_the_platform_clamped_away_is_asked_for_again()
+    {
+        var harness = AgendaEnteredFromAMonth();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.AgendaScrollY, Is.Zero, "the month's content had no room for it");
+            Assert.That(harness.LastVerticalScrollRequest, Is.GreaterThan(SchedulerHarness.ViewHeight),
+                "the offset asked for is a screenful or more down the list");
+        });
+
+        // The layout pass that resizes the surface to the agenda's content has landed, so the same
+        // offset now fits.
+        harness.DeferVerticalScrollRequests = false;
+        harness.FireVerticalScrollRetryTimer();
+
+        Assert.That(harness.AgendaScrollY, Is.EqualTo(harness.LastVerticalScrollRequest).Within(0.5));
+    }
+
+    /// <summary>The symptom, rather than the offset: what the reader is actually looking at.</summary>
+    [Test]
+    public void Entering_an_agenda_from_a_month_leaves_rows_on_the_screen()
+    {
+        var harness = AgendaEnteredFromAMonth();
+
+        harness.DeferVerticalScrollRequests = false;
+        harness.FireVerticalScrollRetryTimer();
+
+        // Whatever the offset ended up being, the settle window closing must not reveal a surface
+        // scrolled somewhere else: the translation it releases is the last thing holding the
+        // content, and before the retry that release was the moment the agenda went blank.
+        harness.FireAgendaNavigationSettleTimer();
+
+        Assert.That(
+            harness.VisibleAppointments.Select(harness.VisualTopOf),
+            Has.Some.InRange(0, SchedulerHarness.ViewHeight),
+            "the rows realized are the ones the viewport is showing");
+    }
+
+    /// <summary>
+    /// A row measuring shorter than its estimate moves the offset that answers the same date.
+    /// </summary>
+    /// <remarks>
+    /// The navigation places the rows and they measure in the same pass, each correction above the
+    /// fold pulling the offset up. Asking again for the offset that was first requested would land
+    /// the surface hundreds of units past where that date now sits, so what is owed is re-read on
+    /// every attempt rather than captured on the first.
+    /// </remarks>
+    [Test]
+    public void The_offset_asked_for_again_is_the_one_the_measured_rows_corrected_it_to()
+    {
+        var harness = AgendaEnteredFromAMonth();
+
+        var firstAsked = harness.VerticalScrollRequests[0];
+        var owed = harness.LastVerticalScrollRequest;
+
+        Assert.That(owed, Is.LessThan(firstAsked), "measuring the rows above the fold shortened the list");
+
+        harness.DeferVerticalScrollRequests = false;
+        harness.FireVerticalScrollRetryTimer();
+
+        Assert.That(harness.AgendaScrollY, Is.EqualTo(owed).Within(0.5));
+    }
+
+    /// <summary>
+    /// And an offset the platform will never take is let go of rather than asked for forever.
+    /// </summary>
+    [Test]
+    public void An_entry_offset_that_never_fits_is_given_up_on()
+    {
+        var harness = AgendaEnteredFromAMonth();
+
+        for (var i = 0; i < 10; i++)
+            harness.FireVerticalScrollRetryTimer();
+
+        var stoppedAt = harness.AgendaScrollY;
+
+        // Nothing is owed any more, so a scroll view that would now accept the offset is not asked
+        // for it: the reader is left where the platform put them rather than pulled back later.
+        harness.DeferVerticalScrollRequests = false;
+        harness.FireVerticalScrollRetryTimer();
+
+        Assert.That(harness.AgendaScrollY, Is.EqualTo(stoppedAt).Within(0.5));
+    }
+
     /// <summary>A month of appointments in June, which the host supplies once asked for it.</summary>
     /// <summary>
     /// An agenda whose rows state their own height, so nothing is measured or corrected.

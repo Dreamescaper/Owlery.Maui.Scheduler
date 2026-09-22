@@ -20,7 +20,8 @@ The agenda layout engine, surface and host integration are covered headlessly: g
 ordering, empty month/week/day rules, window slicing, measured-height reflow and compensation, cached
 measurements across rebuilds, bounded realized view count, identity-preserving reuse while windows
 overlap, forward and backward range growth with anchor preservation, section accessibility, mode
-cleanup, disabled paging and date navigation. Device verification on the Android emulator found the
+cleanup, disabled paging, date navigation, and entering the surface against a scroll view that
+clamps the offset away. Device verification on the Android emulator found the
 upward-scroll correction wobble discussed in [section 21](agenda.md), and the sample now avoids it by supplying a
 known row height; gesture arbitration with the shared drawing surface is still to be confirmed on a
 device.
@@ -32,12 +33,23 @@ of it. The month circle is painted on the canvas, where a centre that omits the 
 circle — just on the first week instead of today's — so the month appearance test pins its bounds rather
 than only its presence.
 
-**Known device defect, not yet diagnosed:** switching from the month surface to the agenda leaves the
-agenda blank until it is re-entered, on the iOS simulator. It reproduces on the release before the
-current-day circle was added, so it predates it. The agenda's rows are laid out far below the viewport
-with the scroll left at the top, and the range is a month wider than a fresh launch's — the backward
-growth appears to have run without the scroll being compensated. The headless suite does not cover the
-transition.
+**The blank agenda entering from a month was the entry offset being clamped away**, and the fix is
+covered headlessly; it has not yet been re-checked on the simulator. The symptom was that switching
+from the month surface to the agenda left the agenda blank until it was re-entered, with the rows laid
+out far below the viewport and the scroll left at the top. Nothing had failed to render. Entering the
+agenda navigates to `DisplayDate`, and the offset that answers it is asked of a scroll view that still
+measures the month — one viewport, so no room at all — which clamps the request to the top and reports
+nothing further. The agenda realizes only the rows around the offset it asked for, so the reader is
+shown the one stretch of the list that has no views in it. Re-entering worked because the failed visit
+had meanwhile dragged `DisplayDate` to the top of the range, where the offset asked for is zero — and
+that same drift, not an uncompensated growth, is what widened the range by a month.
+
+It is the clamp the timeline already retries through (§22), so entering the agenda now goes through
+the same retry. Reproducing it headlessly took modelling the platform rather than the arithmetic: the
+harness's deferred vertical scroll stands in for the clamp, and the assertion is where a realized row
+appears to the reader rather than what offset was requested, because every requested offset was right.
+Four requests go out during one entry, each lower than the last as the rows measure, which is why the
+retry re-reads what is owed instead of repeating the first.
 
 Fast downward scrolling has been profiled on the Android `sdk_gphone64_arm64` emulator with 5,000
 appointments per month in a linked Release build. Three identical 30-fling runs produced median

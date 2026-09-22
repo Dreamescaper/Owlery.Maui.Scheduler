@@ -537,7 +537,7 @@ internal sealed class SchedulerHarness
     public void FireAgendaNavigationSettleTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(250));
 
     /// <summary>Elapses one attempt at an offset the platform would not take the first time.</summary>
-    public void FireTimelineScrollRetryTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(50));
+    public void FireVerticalScrollRetryTimer() => Dispatcher.FireTimer(TimeSpan.FromMilliseconds(50));
 
     /// <summary>Where a day's header sits along the three-page strip.</summary>
     public double HeaderXAt(int slotIndex, int dayIndex) =>
@@ -617,12 +617,18 @@ internal sealed class SchedulerHarness
     /// <summary>The offset last asked for, whether or not it was applied.</summary>
     public double LastVerticalScrollRequest { get; private set; }
 
+    /// <summary>Every offset asked of the vertical scroll, in order, applied or not.</summary>
+    public List<double> VerticalScrollRequests { get; } = [];
+
     private void ShimScrolling(ScrollView scrollView)
     {
         scrollView.ScrollToRequested += (_, e) =>
         {
             if (scrollView.Orientation == ScrollOrientation.Vertical)
+            {
                 LastVerticalScrollRequest = e.ScrollY;
+                VerticalScrollRequests.Add(e.ScrollY);
+            }
 
             if (DeferVerticalScrollRequests && scrollView.Orientation == ScrollOrientation.Vertical)
                 return;

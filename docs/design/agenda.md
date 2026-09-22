@@ -184,6 +184,16 @@ range the reader just grew back to `DisplayDate`'s month, shifting every heading
 grows as the reader scrolls and resets only when navigation (a `DisplayDate` change via
 `ScrollToDate` or the step buttons) rebuilds around a new month.
 
+Entering the agenda navigates to `DisplayDate`, and that navigation has to survive being refused.
+The vertical scroll view is shared with the surface being left, and a month's content is exactly one
+viewport tall ([§22](grid-and-scrolling.md)), so an offset a month of rows down is clamped to the top
+and nothing reports that it was. The rows are realized around the offset that was asked for, so an
+unanswered request is not a list at the wrong place — it is a blank screen with the list a screenful
+below it. The entry therefore goes through the shared retry rather than writing the offset once, and
+each attempt re-reads what is owed, because measuring the rows the navigation just placed corrects it
+while it lands. A compensating shift deliberately does not retry: it runs on the scroll path, and
+re-asking there would write an offset per frame into a fling `ScrollToAsync` cancels.
+
 Approaching the bottom extends the existing range by one month and rebuilds the row table; because
 all new content is below the reader, the offset does not change and the fling is untouched.
 
