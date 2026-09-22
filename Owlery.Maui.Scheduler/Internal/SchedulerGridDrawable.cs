@@ -182,14 +182,14 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
             if (dayIndex < 0 || dayIndex >= geometry.VisibleDays)
                 continue;
 
-            var slotOffset = (float)(slot * geometry.PageSpan);
+            var dayLeft = (float)(slot * geometry.PageSpan) + dayIndex * dayWidth;
 
             canvas.StrokeColor = CurrentTimeIndicatorColor;
             canvas.StrokeSize = 2;
-            canvas.DrawLine(slotOffset, y, slotOffset + geometry.VisibleDays * dayWidth, y);
+            canvas.DrawLine(dayLeft, y, dayLeft + dayWidth, y);
 
             canvas.FillColor = CurrentTimeIndicatorColor;
-            canvas.FillCircle(slotOffset + dayIndex * dayWidth + 4, y, 4);
+            canvas.FillCircle(dayLeft + 4, y, 4);
         }
     }
 }

@@ -230,6 +230,35 @@ public class SchedulerAppearanceTests
     }
 
     [Test]
+    public void The_current_time_indicator_spans_today_column_only()
+    {
+        var recording = Draw(Timeline());
+
+        var line = recording.Lines.Single(candidate => candidate.Color == CurrentTime);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(line.Start, Is.EqualTo(new PointF(900, 100)), "the second day of the centre week");
+            Assert.That(line.End, Is.EqualTo(new PointF(1000, 100)));
+            Assert.That(recording.Ellipses, Has.Some.Matches<EllipseOperation>(dot => dot.Color == CurrentTime));
+        });
+    }
+
+    [Test]
+    public void Current_time_indicator_is_not_drawn_outside_the_day_window()
+    {
+        var drawable = Timeline(now: new DateTime(2026, 8, 26, 20, 0, 0));
+
+        var recording = Draw(drawable);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(recording.Lines, Has.None.Matches<LineOperation>(line => line.Color == CurrentTime));
+            Assert.That(recording.Ellipses, Has.None.Matches<EllipseOperation>(dot => dot.Color == CurrentTime));
+        });
+    }
+
+    [Test]
     public void Month_uses_working_days_and_current_day_flags_but_ignores_working_hours()
     {
         var geometry = new MonthGeometry
@@ -448,7 +477,7 @@ public class SchedulerAppearanceTests
 
     private const double HourHeight = 50;
 
-    private static SchedulerGridDrawable Timeline(int startHour = 8, int endHour = 18)
+    private static SchedulerGridDrawable Timeline(int startHour = 8, int endHour = 18, DateTime? now = null)
     {
         var geometry = new SchedulerGeometry
         {
@@ -458,7 +487,7 @@ public class SchedulerAppearanceTests
             HourHeight = HourHeight,
             StartHour = startHour,
             EndHour = endHour,
-            Now = new DateTime(2026, 8, 26, 10, 0, 0)
+            Now = now ?? new DateTime(2026, 8, 26, 10, 0, 0)
         };
         geometry.SlotStarts[0] = new DateOnly(2026, 8, 17);
         geometry.SlotStarts[1] = new DateOnly(2026, 8, 24);
