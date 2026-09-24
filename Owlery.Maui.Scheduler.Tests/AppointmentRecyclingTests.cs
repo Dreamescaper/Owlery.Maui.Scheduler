@@ -82,6 +82,68 @@ public class AppointmentRecyclingTests
     }
 
     [Test]
+    public void A_rotation_hands_a_recurring_session_the_view_already_standing_where_it_goes()
+    {
+        // The same four sessions every Tuesday, and one extra early on the week that is rotated away.
+        // Surplus and positions both come out in start order, so filling in order handed each session
+        // the view of the one before it — the extra shifts the whole day by one, and every view moves.
+        var sessions = new[] { "9:00", "11:00", "13:00", "15:00" };
+
+        var items = Enumerable.Range(-1, 4)
+            .SelectMany(week => sessions.Select(time => TestAppointment.At(Week.AddDays(week * 7 + 1), time, 1, time)))
+            .Append(TestAppointment.At(Week.AddDays(-6), "8:00", 1, "One-off"));
+
+        var harness = new SchedulerHarness(Week, [.. items]);
+
+        var boundsBefore = harness.AllAppointmentViews.ToDictionary(view => view, AbsoluteLayout.GetLayoutBounds);
+
+        Assume.That(boundsBefore, Has.Count.EqualTo(13), "three weeks of four, plus the extra");
+
+        // Act — the week holding the extra is the one rotated onto the week after next.
+        harness.SwipeToPage(2);
+
+        // Assert
+        var rotatedIn = harness.VisibleAppointments
+            .Where(view => ((TestAppointment)view.BindingContext).Start >= Week.AddDays(14))
+            .ToList();
+
+        Assert.That(rotatedIn, Has.Count.EqualTo(4), "the week rotated onto shows its four sessions");
+
+        Assert.That(
+            rotatedIn.Select(view => AbsoluteLayout.GetLayoutBounds(view) == boundsBefore[view]),
+            Is.All.True,
+            "each session took the view already standing at its time, so no bounds were rewritten");
+
+        Assert.That(harness.VisibleAppointments, Has.Count.EqualTo(12), "and the extra's view went back to the pool");
+        Assert.That(harness.OrphanedAppointments, Is.Empty);
+    }
+
+    [Test]
+    public void A_session_with_nothing_standing_at_its_bounds_is_still_given_a_view()
+    {
+        // The opposite shape: the extra is on the week rotated onto. Every surplus view is claimed by
+        // the session at its bounds, so the extra has to step past all of them to the pool.
+        var sessions = new[] { "9:00", "11:00", "13:00", "15:00" };
+
+        var items = Enumerable.Range(-1, 4)
+            .SelectMany(week => sessions.Select(time => TestAppointment.At(Week.AddDays(week * 7 + 1), time, 1, time)))
+            .Append(TestAppointment.At(Week.AddDays(15), "8:00", 1, "One-off"));
+
+        var harness = new SchedulerHarness(Week, [.. items]);
+
+        // Act
+        harness.SwipeToPage(2);
+
+        // Assert
+        var rotatedIn = harness.VisibleAppointments
+            .Where(view => ((TestAppointment)view.BindingContext).Start >= Week.AddDays(14))
+            .Select(view => ((TestAppointment)view.BindingContext).Subject);
+
+        Assert.That(rotatedIn, Is.EquivalentTo(sessions.Prepend("One-off")), "all five are drawn");
+        Assert.That(harness.OrphanedAppointments, Is.Empty);
+    }
+
+    [Test]
     public void A_bound_view_describes_itself_for_assistive_technology()
     {
         var harness = new SchedulerHarness(Week, [TestAppointment.At(Week.AddDays(1), "10:00", 1, "Lesson")]);

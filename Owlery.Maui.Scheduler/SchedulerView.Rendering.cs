@@ -228,27 +228,36 @@ public partial class SchedulerView
         // already showing keeps the very view it was showing in. A position that recognises nothing
         // leaves a gap rather than filling one, so the list stays in step with positions — and what
         // is left in `available` afterwards is what no position wanted.
+        var gaps = 0;
+
         foreach (var position in positions)
         {
-            available.Remove(position.Appointment.Key, out var view);
+            if (!available.Remove(position.Appointment.Key, out var view))
+                gaps++;
+
             arranged.Add(view!);
         }
 
-        // Copied out because the fill below hands these to positions one at a time, and indexing is
+        // Copied out because the passes below hand these to positions one at a time, and indexing is
         // the only way to say which are left over at the end.
         reusableSurplus.Clear();
         reusableSurplus.AddRange(available.Values);
 
-        // Second pass: fill the gaps from this page's own surplus before renting anything, then
-        // bind. A page rotated onto shares no appointment with the page its slot was showing, so
+        // Second pass: a gap takes a surplus view already standing at its bounds. See
+        // ReuseSurplusAtSameBounds for why; it only reorders which leftover fills which gap.
+        if (gaps > 0 && reusableSurplus.Count > 0)
+            ReuseSurplusAtSameBounds(arranged, positions);
+
+        // Third pass: fill the remaining gaps from this page's own surplus before renting anything,
+        // then bind. A page rotated onto shares no appointment with the page its slot was showing, so
         // without this every view on it went back to the pool and was rented straight out again —
         // hidden, unbound, its translation, opacity and z-order zeroed, then re-shown and bound and
         // positioned back. The resets are the expensive half: each is a write the rebind has to
         // undo, and the guards in PositionAppointmentView cannot skip a value the pool just cleared.
         //
-        // It has to be a *second* pass. Handing a leftover to the first position that wants one
-        // would give away a view a later position was going to recognise — the positional reuse this
-        // reconciliation exists to avoid, which repaints the appointment that kept its view and
+        // It has to come after matching by key. Handing a leftover to the first position that wants
+        // one would give away a view a later position was going to recognise — the positional reuse
+        // this reconciliation exists to avoid, which repaints the appointment that kept its view and
         // flashes the one that took it. Nothing recycled here was ever going to stay: it was on its
         // way to the pool, and the position taking it was on its way to renting one.
         var taken = 0;
@@ -257,9 +266,12 @@ public partial class SchedulerView
         {
             if (arranged[i] is null)
             {
+                while (taken < reusableSurplus.Count && reusableSurplus[taken] is null)
+                    taken++;
+
                 if (taken < reusableSurplus.Count)
                 {
-                    arranged[i] = reusableSurplus[taken++];
+                    arranged[i] = reusableSurplus[taken++]!;
                 }
                 else if (pool.Rent() is { } rented)
                 {
@@ -279,9 +291,13 @@ public partial class SchedulerView
             BindAppointmentView(arranged[i], positions[i], slot, slotIndex);
         }
 
-        // Surplus no position claimed is genuinely gone from this slot.
+        // Surplus no position claimed is genuinely gone from this slot. The second pass may have
+        // taken some from past `taken`, and those are placed now.
         for (var i = taken; i < reusableSurplus.Count; i++)
-            Discard(reusableSurplus[i]);
+        {
+            if (reusableSurplus[i] is { } unclaimed)
+                Discard(unclaimed);
+        }
 
         slot.Positions.Clear();
 
@@ -302,6 +318,42 @@ public partial class SchedulerView
 
         PopulateSections(slot, slotIndex);
         MeasureAgendaRows(slot, slotIndex);
+    }
+
+    /// <summary>Gives each gap a surplus view already standing at the gap's bounds.</summary>
+    /// <remarks>
+    /// On a rotation this is usually the same recurring session a week or a month earlier. Its bounds
+    /// do not change, so <see cref="PositionAppointmentView"/> skips the layout write, and a template
+    /// that sets its content from the appointment mostly writes values it already holds.
+    /// <para>
+    /// The in-order fill used to get this by accident when every week had the same sessions, since
+    /// surplus and positions both come out in start order. One cancelled, moved or extra event puts
+    /// the rest of that day out of step, so every later session moves onto a neighbour's view. With a
+    /// tenth of occurrences like that, the in-order fill kept 176 of the 440 views that could have
+    /// stayed put; docs/design/appointment-views.md (§6) has the measurements.
+    /// </para>
+    /// <para>
+    /// Nothing about it is visible: every view handed out here was on its way to some other appointment
+    /// anyway. Two views on one page do not share bounds — overlaps get columns, month chips get rows —
+    /// so a collision only means the later one is left to the in-order fill.
+    /// </para>
+    /// </remarks>
+    private void ReuseSurplusAtSameBounds(List<View> arranged, IReadOnlyList<IAppointmentPlacement> positions)
+    {
+        reusableSurplusByBounds.Clear();
+
+        for (var s = 0; s < reusableSurplus.Count; s++)
+            reusableSurplusByBounds.TryAdd(AbsoluteLayout.GetLayoutBounds(reusableSurplus[s]!), s);
+
+        for (var i = 0; i < arranged.Count; i++)
+        {
+            if (arranged[i] is null
+                && reusableSurplusByBounds.Remove(pageSurface.BoundsFor(positions[i]), out var s))
+            {
+                arranged[i] = reusableSurplus[s]!;
+                reusableSurplus[s] = null;
+            }
+        }
     }
 
     /// <summary>Hands back everything still placed from <paramref name="from"/> on, and drops it.</summary>

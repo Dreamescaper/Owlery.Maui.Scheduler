@@ -439,3 +439,21 @@ named time itself has still only been exercised headlessly.
 Neither did anything here prove the clamp: the offsets asked for were reached, and whether that took
 one attempt or three is not visible from the outside. The retry remains insurance whose necessity is
 established by the pager's measurement above rather than by this one.
+
+## Recycling surplus by bounds, on an Android emulator and an iOS simulator
+
+The rule in [section 6](appointment-views.md) — a gap takes a leftover already standing at its
+bounds — was measured before it shipped, with a probe on a throwaway branch: the rule behind an
+`AppContext` switch, the sample generating one weekly pattern with a share of exceptions, and a run
+that alternated the switch off and on for two rounds of 24 page changes per case.
+
+The counts of views kept in place are identical on both platforms and do not depend on timing. The
+timings do. The Android emulator (x86_64, Release) was too erratic to judge a page change by —
+500–1,100ms across the four frames after a write, drifting between rounds by as much as the effect.
+The iPhone 17 simulator on iOS 26.5, Release, was steady enough: frames after a write fell in both
+rounds of every case with something to gain, and the table in section 6 quotes it.
+
+Not covered: a real device, and templates heavier than the sample's `AppointmentBox` and
+`AppointmentChip`. The saving from content writes depends on the template setting values it already
+holds; one that does real work on every binding-context change keeps only the layout saving.
+

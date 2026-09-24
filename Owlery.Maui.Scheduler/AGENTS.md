@@ -240,7 +240,11 @@ Everything here was learned by measuring this control, usually after guessing wr
   `AppointmentViewPool.Return` zeroes translation, opacity and z-order, which defeats the guards
   above: `PositionAppointmentView` cannot skip a write to a value the pool has just cleared. Reuse a
   page's own surplus in place where the alternative is a same-pass round trip; `PopulateSlot`'s
-  second pass is that, and §6 has the measurements.
+  passes after matching by key are that, and §6 has the measurements.
+- **Which leftover fills which gap matters.** A gap takes a surplus view already standing at its
+  bounds before anything is filled in order, so a recurring session keeps the view it had a week
+  earlier and its layout write is skipped. The in-order fill only lined up while every week was
+  identical; one exception shifted the rest of the day (§6).
 - **Measure with the display, not only with a stopwatch.** `Owlery.Maui.Scheduler.Sample` carries
   `PerfRun` and `FrameMeter` for this: launch it with `OWLERY_PERF=1` and it runs a matrix of
   surfaces and volumes unattended, reporting managed milliseconds *and* the frame intervals
