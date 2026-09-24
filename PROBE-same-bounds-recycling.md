@@ -64,7 +64,33 @@ What is established:
   leave 60% of the achievable matches on the table.
 - A rebind that keeps its bounds costs ~1–2 ms; one that moves ~4–13 ms (month chips: ~1.1 vs ~2 ms).
 
-What is **not** established:
+### iOS simulator
+
+iPhone 17 simulator, iOS 26.5, Release, run on 2026-09-25 (about 4 minutes for the full run). Gap and
+match counts are identical to Android. Each cell is round 1; round 2, off → on. Frame times are
+quantised to 16.7 ms, so four clean frames read 66.7.
+
+| Data | Surface | Same bounds off → on | Managed mean ms/page | 4 frames after write, mean ms |
+|---|---|---|---|---|
+| Pure weekly repeat | Week, 100/mo | 552 → 552 | 8.0 → 8.3; 6.3 → 8.3 | 72.9 → 72.9; 72.2 → 71.5 |
+| 30% exceptions | Week, 25/mo | 62 → 92 | 7.8 → 7.4; 7.4 → 8.1 | 77.1 → 72.9; 73.6 → 77.1 |
+| 30% exceptions | Week, 100/mo | 100 → 288 | 18.4 → 15.1; 19.0 → 13.6 | 102.1 → 93.8; 102.8 → 96.5 |
+| 30% exceptions | Week, 250/mo | 158 → 560 | 39.6 → 34.4; 46.1 → 42.9 | 152.8 → 139.6; 173.6 → 156.9 |
+| 30% exceptions | Month, 100/mo | 430 → 1,504 | 79.9 → 62.4; 83.5 → 73.4 | 238.9 → 185.4; 229.9 → 206.9 |
+| 10% exceptions | Week, 100/mo | 176 → 440 | 42.1 → 13.9; 40.8 → 23.2 | 145.1 → 100.0; 138.9 → 101.8 |
+
+- Page changes get faster in every case that has something to gain: in both rounds, frames after the
+  write drop 7–10% (Week 100/mo and 250/mo), 10–22% (Month) and 27–31% (10%). 25/mo is noise, as on
+  Android.
+- Round-to-round drift is small except at 250/mo, where round 2 is ~15% slower on both sides. The
+  on/off ordering holds within each round, so per-page alternation was not needed.
+- The pure repeat shows what the lookup costs when it buys nothing: about +0.3 to +2 ms managed per page
+  change. Most of that should be the per-call allocation the real implementation must not have.
+- The 10% case reports 1,713 loaded because it runs after the Month case, which pages through many
+  months. The visible pages are the same (gaps 553, as on Android), but its absolute numbers are not
+  directly comparable with the 30%/100/mo row.
+
+What is **not** established on Android (the iOS simulator run above settles the first point):
 
 - **Whether a page change actually gets faster.** This emulator is erratic — 500–1,100 ms across the
   four frames after a write, with round-to-round drift as large as the effects. Median managed ms per
