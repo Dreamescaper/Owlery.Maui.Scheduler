@@ -175,6 +175,90 @@ public static class PerfRun
         report("--- matrix done ---");
     }
 
+    // PROBE: A/B of preferring a surplus view already at the target bounds.
+    public static async Task RunRecycleProbeAsync(
+        SchedulerView scheduler, AppointmentSource source, Action<string> report)
+    {
+        (bool Recurring, double Exceptions, SchedulerViewMode Mode, int Days, int PerMonth)[] cases =
+        [
+            (true, 0.0, SchedulerViewMode.Timeline, 7, 100),
+            (true, 0.3, SchedulerViewMode.Timeline, 7, 25),
+            (true, 0.3, SchedulerViewMode.Timeline, 7, 100),
+            (true, 0.3, SchedulerViewMode.Timeline, 7, 250),
+            (true, 0.3, SchedulerViewMode.Month, 7, 100),
+            (true, 0.1, SchedulerViewMode.Timeline, 7, 100),
+        ];
+
+        var probe = (Func<bool, string>)AppContext.GetData("Owlery.Probe.Report")!;
+
+        foreach (var (recurring, exceptions, mode, days, perMonth) in cases)
+        {
+            SampleDataGenerator.Recurring = recurring;
+            SampleDataGenerator.ExceptionRate = exceptions;
+            scheduler.ViewMode = mode;
+            scheduler.VisibleDays = days;
+            source.SetCount(perMonth);
+            source.Regenerate();
+            await Task.Delay(1500);
+
+            report($"--- {(recurring ? $"recurring, {exceptions:P0} exceptions" : "random")} {mode} {days}d, {perMonth}/mo, {source.LoadedAppointmentCount} loaded ---");
+
+            for (var round = 0; round < 2; round++)
+            {
+                foreach (var prefer in new[] { false, true })
+                {
+                    AppContext.SetSwitch("Owlery.Probe.PreferSameBounds", prefer);
+
+                    // Page there and back once untimed, so every page the timed run visits is loaded.
+                    await PageAsync(scheduler, steps: 24);
+                    probe(true);
+
+                    report($"{(prefer ? "prefer" : "plain ")} {await PagedFramesAsync(scheduler, steps: 24)}");
+                    report($"       {probe(true)}");
+                }
+            }
+        }
+
+        AppContext.SetSwitch("Owlery.Probe.PreferSameBounds", false);
+        SampleDataGenerator.Recurring = false;
+        report("--- probe done ---");
+    }
+
+    /// <summary>Pages, and reports the managed pass and the worst frame in the few after each write.</summary>
+    private static async Task<string> PagedFramesAsync(SchedulerView scheduler, int steps)
+    {
+        var meter = new FrameMeter();
+        var managed = new List<double>();
+        var pageFrames = new List<double>();
+
+        await Task.Delay(400);
+        meter.Start();
+        await Task.Delay(100);
+
+        for (var i = 0; i < steps; i++)
+        {
+            var direction = i < steps / 2 ? 1 : -1;
+            var before = meter.Intervals.Count;
+
+            var watch = Stopwatch.StartNew();
+            scheduler.DisplayDate = scheduler.ViewMode is SchedulerViewMode.Month
+                ? scheduler.DisplayDate.AddMonths(direction)
+                : scheduler.DisplayDate.AddDays(direction * scheduler.VisibleDays);
+            watch.Stop();
+            managed.Add(watch.Elapsed.TotalMilliseconds);
+
+            await Task.Delay(200);
+
+            // The write lands inside one interval and its layout and draw in the next few.
+            pageFrames.Add(meter.Intervals.Skip(before).Take(4).DefaultIfEmpty(0).Sum());
+        }
+
+        meter.Stop();
+
+        return $"managed p50 {Median(managed):F2} mean {managed.Average():F2} | "
+            + $"4 frames after write p50 {Median(pageFrames):F1} mean {pageFrames.Average():F1} ms";
+    }
+
     private static double Median(List<double> values)
     {
         var sorted = values.OrderBy(value => value).ToArray();

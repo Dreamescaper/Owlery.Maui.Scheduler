@@ -46,6 +46,11 @@
     <PackageReference Include="Microsoft.Maui.DevFlow.Agent" />
   </ItemGroup>
 
+  <!-- PROBE -->
+  <ItemGroup Condition="$(TargetFramework.Contains('android'))">
+    <AndroidEnvironment Include="Platforms\Android\probe.env" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Owlery.Maui.Scheduler\Owlery.Maui.Scheduler.csproj" />
   </ItemGroup>

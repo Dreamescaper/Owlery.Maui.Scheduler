@@ -116,6 +116,14 @@ public sealed class PlaygroundPage : ContentPage
 
         if (Environment.GetEnvironmentVariable("OWLERY_PERF") == "1")
             Dispatcher.Dispatch(() => _ = MeasureMatrixAsync());
+
+        // PROBE
+        if (Environment.GetEnvironmentVariable("OWLERY_PROBE") == "1")
+            Dispatcher.Dispatch(async () =>
+            {
+                await Task.Delay(2000);
+                await PerfRun.RunRecycleProbeAsync(scheduler, source, Announce);
+            });
     }
 
     private async Task MeasureMatrixAsync()

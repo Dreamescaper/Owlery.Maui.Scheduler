@@ -28,8 +28,17 @@ public static class SampleDataGenerator
     /// Whether to stamp the times as instants. Floating is the default and the simple case; UTC shows
     /// what a host with an instant-storing backend supplies, and moves when the view's zone changes.
     /// </param>
+    // PROBE: weekly-recurring data for the same-bounds recycling experiment.
+    public static bool Recurring;
+
+    /// <summary>PROBE: share of occurrences that are cancelled, moved, or joined by a one-off (a third each).</summary>
+    public static double ExceptionRate;
+
     public static List<SampleAppointment> GenerateMonth(int count, int seed, DateOnly month, bool asUtc = false)
     {
+        if (Recurring)
+            return GenerateRecurringMonth(count, seed, month);
+
         var appointments = new List<SampleAppointment>(count);
         var monthStart = new DateOnly(month.Year, month.Month, 1);
         var days = DateTime.DaysInMonth(monthStart.Year, monthStart.Month);
@@ -58,6 +67,80 @@ public static class SampleDataGenerator
                 person,
                 Palette: Math.Abs(id % SamplePalette.Count),
                 IsLocked: random.Next(10) == 0));
+        }
+
+        appointments.Sort(static (a, b) => a.Start.CompareTo(b.Start));
+        return appointments;
+    }
+
+    /// <summary>PROBE: the same weekly pattern repeated through the month — every occurrence a new instance.</summary>
+    private static List<SampleAppointment> GenerateRecurringMonth(int count, int seed, DateOnly month)
+    {
+        var monthStart = new DateOnly(month.Year, month.Month, 1);
+        var days = DateTime.DaysInMonth(monthStart.Year, monthStart.Month);
+        var monthOrdinal = (monthStart.Year - 2000) * 12 + monthStart.Month - 1;
+        var random = new Random(seed);
+        var perWeek = Math.Max(1, (int)Math.Round(count * 7.0 / 30));
+
+        var pattern = Enumerable.Range(0, perWeek).Select(_ => (
+            Day: (DayOfWeek)random.Next(7),
+            Minutes: (random.Next(8, 21) * 60) + (random.Next(4) * 15),
+            Duration: TimeSpan.FromMinutes(Durations[random.Next(Durations.Length)]),
+            Subject: Subjects[random.Next(Subjects.Length)],
+            Person: People[random.Next(People.Length)],
+            Palette: random.Next(SamplePalette.Count),
+            Locked: random.Next(10) == 0)).ToArray();
+
+        var appointments = new List<SampleAppointment>();
+        var index = 0;
+        var exceptions = new Random(unchecked(seed * 1_000_003 + monthStart.Year * 397 + monthStart.Month * 17));
+        var share = ExceptionRate / 3;
+
+        for (var d = 0; d < days; d++)
+        {
+            var day = monthStart.AddDays(d);
+
+            foreach (var session in pattern)
+            {
+                if (session.Day != day.DayOfWeek)
+                    continue;
+
+                var roll = exceptions.NextDouble();
+
+                if (roll < share)
+                    continue; // cancelled
+
+                var minutes = roll < 2 * share
+                    ? (exceptions.Next(8, 21) * 60) + (exceptions.Next(4) * 15) // moved within the day
+                    : session.Minutes;
+
+                appointments.Add(new SampleAppointment(
+                    checked(monthOrdinal * 10_000 + index++),
+                    day.ToDateTime(TimeOnly.MinValue).AddMinutes(minutes),
+                    session.Duration,
+                    session.Subject,
+                    session.Person,
+                    session.Palette,
+                    session.Locked));
+            }
+
+            // One-offs, about as many as each other kind of exception.
+            var expected = pattern.Count(session => session.Day == day.DayOfWeek) * share;
+
+            for (var extra = expected; extra > 0; extra--)
+            {
+                if (extra < 1 && exceptions.NextDouble() >= extra)
+                    break;
+
+                appointments.Add(new SampleAppointment(
+                    checked(monthOrdinal * 10_000 + index++),
+                    day.ToDateTime(TimeOnly.MinValue).AddMinutes((exceptions.Next(8, 21) * 60) + (exceptions.Next(4) * 15)),
+                    TimeSpan.FromMinutes(Durations[exceptions.Next(Durations.Length)]),
+                    Subjects[exceptions.Next(Subjects.Length)],
+                    People[exceptions.Next(People.Length)],
+                    exceptions.Next(SamplePalette.Count),
+                    false));
+            }
         }
 
         appointments.Sort(static (a, b) => a.Start.CompareTo(b.Start));

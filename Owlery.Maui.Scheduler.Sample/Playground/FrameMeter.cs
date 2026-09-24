@@ -25,6 +25,9 @@ public sealed class FrameMeter : IDisposable
 
     public bool IsRunning { get; private set; }
 
+    // PROBE: raw intervals, so a run can pick out the frames right after each write.
+    public IReadOnlyList<double> Intervals => intervals;
+
     public void Start()
     {
         if (IsRunning)

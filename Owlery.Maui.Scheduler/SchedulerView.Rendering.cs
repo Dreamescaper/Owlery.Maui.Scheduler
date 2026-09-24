@@ -251,19 +251,61 @@ public partial class SchedulerView
         // reconciliation exists to avoid, which repaints the appointment that kept its view and
         // flashes the one that took it. Nothing recycled here was ever going to stay: it was on its
         // way to the pool, and the position taking it was on its way to renting one.
+        // PROBE: optionally hand each gap a surplus view already sitting at its bounds, showing the
+        // same subject, before the arbitrary fill below.
+        var preferSame = AppContext.TryGetSwitch("Owlery.Probe.PreferSameBounds", out var on) && on;
+        var used = new bool[reusableSurplus.Count];
+        var origin = new byte[arranged.Count]; // 0 keyed, 1 surplus, 2 rented
+        var surplusBySpot = new Dictionary<(Rect, string?), Stack<int>>();
+
+        for (var s = 0; s < reusableSurplus.Count; s++)
+        {
+            var spot = (AbsoluteLayout.GetLayoutBounds(reusableSurplus[s]), appointmentsByView[reusableSurplus[s]].Subject);
+            if (!surplusBySpot.TryGetValue(spot, out var stack))
+                surplusBySpot[spot] = stack = new Stack<int>();
+            stack.Push(s);
+        }
+
+        for (var i = 0; i < arranged.Count; i++)
+        {
+            if (arranged[i] is not null)
+                continue;
+
+            RecycleProbe.Gaps++;
+
+            if (surplusBySpot.TryGetValue((pageSurface.BoundsFor(positions[i]), positions[i].Appointment.Subject), out var stack) && stack.Count > 0)
+            {
+                RecycleProbe.Matchable++;
+
+                if (preferSame)
+                {
+                    var s = stack.Pop();
+                    used[s] = true;
+                    arranged[i] = reusableSurplus[s];
+                    origin[i] = 1;
+                }
+            }
+        }
+
         var taken = 0;
 
         for (var i = 0; i < arranged.Count; i++)
         {
             if (arranged[i] is null)
             {
+                while (taken < reusableSurplus.Count && used[taken])
+                    taken++;
+
                 if (taken < reusableSurplus.Count)
                 {
+                    used[taken] = true;
                     arranged[i] = reusableSurplus[taken++];
+                    origin[i] = 1;
                 }
                 else if (pool.Rent() is { } rented)
                 {
                     arranged[i] = rented;
+                    origin[i] = 2;
                 }
                 else
                 {
@@ -276,12 +318,18 @@ public partial class SchedulerView
                 }
             }
 
+            var sameBounds = AbsoluteLayout.GetLayoutBounds(arranged[i]) == pageSurface.BoundsFor(positions[i]);
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
             BindAppointmentView(arranged[i], positions[i], slot, slotIndex);
+            RecycleProbe.Record(origin[i], sameBounds, System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         }
 
         // Surplus no position claimed is genuinely gone from this slot.
-        for (var i = taken; i < reusableSurplus.Count; i++)
-            Discard(reusableSurplus[i]);
+        for (var i = 0; i < reusableSurplus.Count; i++)
+        {
+            if (!used[i])
+                Discard(reusableSurplus[i]);
+        }
 
         slot.Positions.Clear();
 
