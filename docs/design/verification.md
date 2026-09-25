@@ -457,3 +457,15 @@ Not covered: a real device, and templates heavier than the sample's `Appointment
 `AppointmentChip`. The saving from content writes depends on the template setting values it already
 holds; one that does real work on every binding-context change keeps only the layout saving.
 
+
+## The pager's opening offset, on an Android emulator
+
+On the Android emulator (`medium_phone`, 1080×2400, Debug), a cold start of the sample opened the week
+view on the leading page. The title read 21–27 Sep, while the day headers and the grid showed 14–20.
+Logging `MauiPagingScrollView.SetOffset` and its layout showed why: the third recentre found the pager
+laid out and its content measured wide enough, wrote the offset at once, and `scrollTo` clamped it to
+the content's laid-out width, which was still zero ([section 19](pager.md)). With the range read off
+the laid-out width, the same request is deferred, and the next layout scrolls from 0 to 944px. Title,
+headers and grid then agree on 21–27 Sep, with today marked.
+
+Not covered: iOS, which already measured against its real `ContentSize`, and a physical device.
