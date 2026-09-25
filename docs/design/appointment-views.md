@@ -138,10 +138,11 @@ The round trip is not free, and the resets are the expensive half rather than th
 value the pool has just zeroed. A rotation therefore paid for two binding-context changes, two
 visibility changes and a full set of transform writes per view, to arrive where it started.
 
-`PopulateSlot` now reconciles in two passes. The first matches by key and leaves a gap wherever a
-position recognised nothing; the second fills those gaps from this page's own surplus before renting
-anything, and binds as it goes. Nothing about it is visible to the reader: a view recycled this way
-was on its way to the pool, and the position taking it was on its way to renting one.
+`PopulateSlot` now reconciles in passes. The first matches by key and leaves a gap wherever a
+position recognised nothing; the later ones fill those gaps from this page's own surplus before
+renting anything, and bind as they go — first a leftover already standing at the gap's bounds (see
+below), then any leftover in order. Nothing about it is visible to the reader: a view recycled this
+way was on its way to the pool, and the position taking it was on its way to renting one.
 
 The split is deliberate. Handing a leftover to the first position that asks would give away a view a
 later position was going to recognise by key — which is the positional reuse this reconciliation
@@ -168,6 +169,50 @@ twelve month rotations at 1,100 loaded, returning and renting fell from 1,316ms 
 `PositionAppointmentView`, writing back what the pool had just zeroed, from 1,086ms to 78ms. What did
 not move was binding a view to an appointment it had never shown, at 483ms and 576ms: that is the
 template's own work, and it is now most of what a page change costs.
+
+### A recurring session keeps the view standing at its bounds
+
+Which leftover fills which gap does not matter to the reader, but it matters to the cost. A view
+that lands where it already stood skips the layout write — `PositionAppointmentView` finds nothing
+to change — and a template that sets its content from the appointment mostly writes values it
+already holds, which MAUI compares by value and skips. On a rotation that view is usually the same
+recurring session a week, or a month, earlier.
+
+The in-order fill got this by accident while every week held the same sessions: surplus and
+positions both come out in start order, so the two lists lined up. Any exception breaks it. One
+cancelled, moved or extra event early in a day shifts every later session in that day onto its
+neighbour's view, and all of them are rewritten. So the gaps now take a leftover at their exact
+bounds first, and only what remains is filled in order.
+
+Bounds are the whole key. Two views on one page never share bounds — overlapping appointments get
+columns, month chips get rows — so there is nothing for a tie-break such as the subject to decide.
+A month chip at the same bounds with a different subject still saves the layout write, which is most
+of what a chip costs.
+
+Measured with a probe of this rule in the sample, paging by `DisplayDate` through one weekly pattern
+repeated with a share of its occurrences turned into exceptions — cancelled, moved within the day,
+or joined by a one-off, a third each. "Kept" is the number of gaps, over 24 page changes, filled
+without their bounds changing:
+
+| Exceptions | Surface | Gaps | Could keep | Kept in order | Kept by bounds |
+|---|---|---|---|---|---|
+| None | Week, 100/mo | 552 | 552 | 552 | 552 |
+| 10% | Week, 100/mo | 553 | 440 | 176 | 440 |
+| 30% | Week, 100/mo | 557 | 288 | 100 | 288 |
+| 30% | Week, 250/mo | 1,400 | 560 | 158 | 560 |
+| 30% | Month, 100/mo | 2,729 | 1,324 | 430 | 1,504 |
+
+On the iOS simulator, the four frames after each page change — which is where the layout the pass
+only queues is paid for — came out lower in both rounds of every case with something to gain: by
+7–10% on the week at 100 and 250 a month, 10–22% on the month, and 27–31% with a tenth of occurrences
+as exceptions, where the managed pass also fell from about 41ms to 14–23ms. A rebind that kept its
+bounds cost about 1–2ms against 4–13ms for one that moved. [Section 15](verification.md) has the
+method and what it does not cover.
+
+The probe matched on bounds *and* subject and allocated its index per call, so its costs were on
+both sides of every comparison; the shipped rule matches on bounds alone and reuses its scratch
+collections, so it keeps at least as many views in place for less. The index is skipped entirely
+when a page has no gaps or no surplus, which is every rebuild that changed nothing.
 
 ### What is left, and where it is
 

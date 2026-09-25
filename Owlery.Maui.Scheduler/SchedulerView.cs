@@ -105,7 +105,12 @@ public partial class SchedulerView : ContentView
     private readonly List<View> reusableArrangedViews = [];
 
     /// <summary>Views this page kept that no position claimed, ready to be rebound where they stand.</summary>
-    private readonly List<View> reusableSurplus = [];
+    /// <remarks>An entry is nulled once a position takes it, so the list keeps its indexes.</remarks>
+    private readonly List<View?> reusableSurplus = [];
+
+    /// <summary>Where in <see cref="reusableSurplus"/> the view standing at each bounds is.</summary>
+    private readonly Dictionary<Rect, int> reusableSurplusByBounds = [];
+
     private readonly Dictionary<(DateTime Date, SchedulerAgendaSectionKind Kind), View> reusableSections = [];
     private readonly Dictionary<View, PageSlot> slotsByView = [];
 
