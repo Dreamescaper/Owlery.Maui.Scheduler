@@ -87,6 +87,10 @@ internal sealed class SchedulerHarness
         var (application, dispatcher) = TestApplication.Create();
         Dispatcher = dispatcher;
 
+        // Without a context, the rest of a slide whose scroll was held back resumes on the thread
+        // pool and races the assertions. On a device it resumes on the main thread, in order.
+        SynchronizationContext.SetSynchronizationContext(InlineSynchronizationContext.Instance);
+
         Scheduler = new SchedulerView
         {
             AppointmentTemplate = new DataTemplate(() => new TestAppointmentView()),
@@ -283,14 +287,20 @@ internal sealed class SchedulerHarness
     }
 
     /// <summary>The appointments on the page currently on screen, ignoring the two either side.</summary>
-    public IReadOnlyList<TestAppointmentView> CentrePageAppointments =>
+    public IReadOnlyList<TestAppointmentView> CentrePageAppointments => AppointmentsOnPage(1);
+
+    /// <summary>The appointments on one of the three rendered pages, counted from the left.</summary>
+    public IReadOnlyList<TestAppointmentView> AppointmentsOnPage(int page) =>
     [
         .. VisibleAppointments.Where(view =>
         {
             var x = BoundsOf(view).X;
-            return x >= PageStride && x < PageStride * 2;
+            return x >= PageStride * page && x < PageStride * (page + 1);
         })
     ];
+
+    /// <summary>Whether the pager would take a swipe. <see cref="SwipeToPage"/> does not ask.</summary>
+    public bool PagerAcceptsSwipes => pagerScroll.IsScrollEnabled;
 
     /// <summary>The column labels of each rendered page's header, left to right.</summary>
     /// <summary>
@@ -516,13 +526,28 @@ internal sealed class SchedulerHarness
     public bool DeferPagerScrolls { get; set; }
 
     /// <summary>Lets every held-back pager scroll report as finished, settling the slide.</summary>
+    /// <remarks>
+    /// Repeats until nothing is left, since a slide asks for its animated scroll only once the jump
+    /// before it has finished.
+    /// </remarks>
     public void CompletePendingScrolls()
     {
-        var completions = pendingScrollCompletions.ToArray();
-        pendingScrollCompletions.Clear();
+        while (pendingScrollCompletions.Count > 0)
+        {
+            var completions = pendingScrollCompletions.ToArray();
+            pendingScrollCompletions.Clear();
 
-        foreach (var complete in completions)
-            complete();
+            foreach (var complete in completions)
+                complete();
+        }
+    }
+
+    /// <summary>Lets only the oldest held-back pager scroll report as finished.</summary>
+    public void CompleteOldestPendingScroll()
+    {
+        var complete = pendingScrollCompletions[0];
+        pendingScrollCompletions.RemoveAt(0);
+        complete();
     }
 
     /// <summary>Moves the pager, as a frame of the slide edge paging performs would.</summary>

@@ -110,20 +110,47 @@ Three things move the calendar by one period, and all three go through the same 
 |---|---|
 | A swipe settling on a page either side | `OnPageSettled` |
 | Holding a dragged appointment against an edge | `PageDuringDragAsync` |
-| The host setting `DisplayDate` to the adjacent period | `TrySlideToPage` |
+| The host setting `DisplayDate` to any other period | `TrySlideToPage` |
 
 The last of those used to call `RebuildAll` — which repopulates all three pages, and lands on the new
-period with no motion at all. Both halves of that are wrong for a destination that is *already
-rendered one page away*: its appointment views exist and are bound, and rebuilding discards them only
-to rent replacements for the same data; and a calendar that changes contents where it stands gives no
-clue which direction it moved in. A host's "next week" button is one page forward exactly as much as a
+period with no motion at all. That is wrong twice over for a destination *already rendered one page
+away*: its appointment views exist and are bound, and rebuilding discards them only to rent
+replacements for the same data; and a calendar that changes contents where it stands gives no clue
+which direction it moved in. A host's "next week" button is one page forward exactly as much as a
 swipe is.
 
-`SlideToAdjacentPageAsync` is the shared implementation: rotate, then jump to where the outgoing page
-has landed — visually identical to the frame before — and animate across to the centre. The jump is
-unanimated and the slide is not, which is what turns a rotation into a swipe the user did not make.
-Sliding through pages that were never rendered would be a lie, so anything further off than the two
-neighbours is still `RebuildAll`.
+Both paths rotate, then jump to where the outgoing page has landed — visually identical to the frame
+before — and animate across to the centre. The jump is unanimated and the slide is not, which is what
+turns a rotation into a swipe the user did not make. Edge paging uses `SlideToAdjacentPageAsync`,
+which lays out the recycled page as it rotates, as a swipe does. A host's navigation uses
+`SlideToPageAsync`, which differs in two ways.
+
+**It slides onto any page, not only a neighbour.** The direction cue matters as much for a jump of a
+year as for one of a week, and a cut to a far date left a host's "Today" button feeling unlike every
+other way of moving. It is still one page of motion: the destination is laid out in the slot on the
+side it lies — unless that slot already holds it — and slid onto. The pages in between are not slid
+through; they were never rendered, and animating across them would only be a delay.
+
+**The neighbours are laid out after the slide, not before it.** Until the slide finishes, the page
+behind the centre is the one just left and the page beyond it is whatever the rotation recycled.
+Laying them out first would put two pages of work between the request and the first frame of motion,
+for pages that are off screen the whole time. `FinishNavigationSlide` lays them out once the animated
+scroll completes, skipping any slot that already holds the right page — which is every slot, for an
+adjacent destination.
+
+That leaves the ring buffer briefly out of order, which has three consequences:
+
+- *The pager takes no swipe during the slide.* A swipe back mid-slide would land on the page just
+  left while the control believed it was the week before the destination. Repairing it on touch was
+  rejected: the outgoing page is partly on screen at that moment, and swapping its contents shows as
+  a jump. The slide lasts a few hundred milliseconds, so waiting it out is cheaper than anything
+  that could be seen. A drag ending mid-slide respects this through `SetScrollingEnabled`.
+- *`VisibleDatesChanged` derives the range from the centre page*, not from the slots either side.
+  Reading them mid-slide after a jump of a year would ask the host for the whole year in between.
+- *Only the latest slide finishes.* A second navigation mid-slide cuts the first one's scroll short,
+  and the first one resuming would re-lay the page the second is sliding away from while it is on
+  screen. A counter lets only the latest put the neighbours back. A slide cut off by unloading is
+  finished there, because its scroll may never report back and the pager would stay locked.
 
 Note the asymmetry with `OnPageSettled`, which must stay synchronous and recentres with
 `PagingScrollView.ScrollTo`: there the user has *already* moved the pages, so a frame drawn between

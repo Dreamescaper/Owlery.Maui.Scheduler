@@ -98,16 +98,19 @@ public partial class SchedulerView
     }
 
     /// <summary>
-    /// Moves to a page the ring buffer already holds by sliding onto it, the way a swipe would.
+    /// Moves to another page by sliding onto it, the way a swipe would, however far off it is.
     /// </summary>
     /// <remarks>
-    /// A date set from outside — a "next week" button, a mini-calendar, a deep link — is most often
-    /// the period either side of the one showing, and that period is already rendered and one page
-    /// away. Rebuilding all three to arrive at it, with no motion to say where it came from, discards
-    /// both the views and the only cue that tells the user which direction they moved in.
+    /// A date set from outside — a "next week" button, a mini-calendar, a deep link — lands on a page
+    /// either before or after the one showing. Rebuilding all three to arrive at it, with no motion to
+    /// say where it came from, discards the only cue that tells the user which direction they moved
+    /// in. So the destination is always slid in from the side it lies on: forward from the right,
+    /// back from the left.
     /// <para>
-    /// Anything further off is still a rebuild: the pages in between were never rendered, so there is
-    /// nothing to slide through and an animation would only be a delay.
+    /// This is a one-page slide whatever the distance, not a pass through the pages in between —
+    /// those were never rendered. Only the destination is laid out before the slide starts, and only
+    /// if the page beside the centre is not already it; its neighbours are laid out once the slide has
+    /// finished. See <see cref="SlideToPageAsync"/>.
     /// </para>
     /// </remarks>
     private bool TrySlideToPage(DateOnly target)
@@ -120,17 +123,131 @@ public partial class SchedulerView
         if (dragArmed || ActiveGeometry.ViewportWidth <= 0)
             return false;
 
-        var centre = slots[1].PageStart;
-        var forward = target == pageSurface.NextPage(centre);
-
-        if (!forward && target != pageSurface.PreviousPage(centre))
-            return false;
-
         // Not awaited: the rotation and the date sync both happen before the first yield, so
         // everything the caller depends on has already been done by the time this returns.
-        _ = SlideToAdjacentPageAsync(forward);
+        _ = SlideToPageAsync(target, forward: target > slots[1].PageStart);
 
         return true;
+    }
+
+    /// <summary>
+    /// Brings a page in beside the centre, slides onto it, and only then lays out its neighbours.
+    /// </summary>
+    /// <remarks>
+    /// Until the slide has finished, the page left behind the centre is the one just slid away from,
+    /// and the page on the far side is whatever the rotation recycled — neither is the destination's
+    /// neighbour unless it happened to be adjacent. Laying them out first would put two pages of work
+    /// between the request and the first frame of motion, for pages that are off screen throughout.
+    /// <para>
+    /// The price is that the ring buffer is briefly not contiguous, so the pager takes no swipe until
+    /// it is again: a swipe back mid-slide would land on the page the user had just left, labelled as
+    /// a page they had not. Waiting a few hundred milliseconds for the slide to finish is cheaper than
+    /// any repair — swapping the partly visible outgoing page for the right one shows as a jump.
+    /// </para>
+    /// <para>
+    /// A second navigation arriving mid-slide supersedes the first. Its rotation carries on from
+    /// wherever the pages are, and only the latest slide puts the neighbours back: the earlier one
+    /// finishing would otherwise re-lay the page the later one is sliding away from, while it is on
+    /// screen.
+    /// </para>
+    /// </remarks>
+    private async Task SlideToPageAsync(DateOnly target, bool forward)
+    {
+        var slide = ++navigationSlide;
+        var incoming = forward ? SchedulerGeometry.SlotCount - 1 : 0;
+
+        if (slots[incoming].PageStart != target)
+        {
+            slots[incoming].PageStart = target;
+            PopulateSlot(slots[incoming], incoming);
+        }
+
+        navigationSliding = true;
+        pagerScroll.IsScrollEnabled = false;
+
+        var viewportWidth = ActiveGeometry.ViewportWidth;
+
+        Rotate(forward);
+
+        SyncSlotStarts();
+        UpdateSelectionView();
+        SyncDisplayDate();
+        RaiseVisibleDatesChanged();
+
+        var outgoing = forward ? 0 : ActiveGeometry.SurfaceWidth - viewportWidth;
+
+        await pagerScroll.ScrollToAsync(outgoing, false);
+
+        // Superseded before it could start moving: the later slide owns the pager now.
+        if (slide != navigationSlide)
+            return;
+
+        await pagerScroll.ScrollToAsync(viewportWidth, true);
+
+        if (slide == navigationSlide)
+            FinishNavigationSlide();
+    }
+
+    /// <summary>Lays out the centre page's neighbours and hands the pager back to the user.</summary>
+    /// <remarks>
+    /// Also called on unloading, since a slide cut off there may never report that it finished — and
+    /// would leave the pager refusing every swipe once the view came back.
+    /// </remarks>
+    private void FinishNavigationSlide()
+    {
+        // Anything still awaiting an earlier slide is now stale.
+        navigationSlide++;
+        navigationSliding = false;
+
+        // Whatever happened to the pages meanwhile — a mode switch, a rebuild — they are laid out
+        // around the centre page as it now is, and a slot already holding its neighbour is left alone.
+        if (Paged)
+        {
+            PopulateNeighbour(0, pageSurface.PreviousPage(slots[1].PageStart));
+            PopulateNeighbour(SchedulerGeometry.SlotCount - 1, pageSurface.NextPage(slots[1].PageStart));
+
+            SyncSlotStarts();
+            UpdateSelectionView();
+
+            if (!dragArmed)
+                pagerScroll.IsScrollEnabled = true;
+        }
+    }
+
+    /// <summary>Moves the ring buffer by one page without laying anything out.</summary>
+    /// <remarks>
+    /// The recycled slot keeps the page it held, placed on the far side, until the slide that
+    /// asked for the rotation lays it out afresh. Moved all the same, because it was just on screen
+    /// behind the outgoing page and would otherwise be drawn there, over it.
+    /// </remarks>
+    private void Rotate(bool forward)
+    {
+        if (forward)
+        {
+            var recycled = slots[0];
+            slots[0] = slots[1];
+            slots[1] = slots[2];
+            slots[2] = recycled;
+        }
+        else
+        {
+            var recycled = slots[2];
+            slots[2] = slots[1];
+            slots[1] = slots[0];
+            slots[0] = recycled;
+        }
+
+        for (var i = 0; i < slots.Length; i++)
+            ShiftSlot(slots[i], i);
+    }
+
+    private void PopulateNeighbour(int slotIndex, DateOnly page)
+    {
+        if (slots[slotIndex].PageStart == page)
+            return;
+
+        slots[slotIndex].PageStart = page;
+        PopulateSlot(slots[slotIndex], slotIndex);
     }
 
     /// <summary>
@@ -211,8 +328,12 @@ public partial class SchedulerView
             // Taken from the rendered dates rather than from the page starts, because a page does
             // not have to begin on the first date it shows — a month grid opens on the tail of the
             // previous month, and the host has to be told to fetch that far back.
-            first = pageSurface.DatesOn(slots[0].PageStart)[0];
-            last = pageSurface.DatesOn(slots[2].PageStart)[^1];
+            //
+            // The neighbours are derived from the centre rather than read off the slots either side,
+            // which during a navigation slide still hold the page just left and a recycled one. After
+            // a jump of a year, reading them would ask the host for the whole year in between.
+            first = pageSurface.DatesOn(pageSurface.PreviousPage(slots[1].PageStart))[0];
+            last = pageSurface.DatesOn(pageSurface.NextPage(slots[1].PageStart))[^1];
         }
 
         var key = new VisibleDatesReportKey(

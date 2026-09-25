@@ -54,10 +54,14 @@ in step with it.
 **NAV-11** The host can jump to any date. The view then shows the week containing that date. Jumping
 to a date inside the week already shown changes nothing.
 
-**NAV-11a** Jumping to the week either side of the one shown slides across to it, in the direction it
-lies, rather than cutting to it. A "next week" button moves the calendar the same way a swipe does, so
-it is clear which way it went. Jumping further than that cuts, because there is nothing in between to
-travel through.
+**NAV-11a** Jumping to another week slides across to it, in the direction it lies, rather than cutting
+to it. A "next week" button moves the calendar the same way a swipe does, so it is clear which way it
+went. A week further off than the one either side slides in the same way, by one page: a date in the
+future comes in from the right and one in the past from the left, whatever the distance. The weeks in
+between are not travelled through.
+
+**NAV-11b** While a jump is sliding, the calendar takes no swipe; it answers one again as soon as the
+slide has finished. The week being left keeps its appointments on screen until it has slid away.
 
 **NAV-29** Tapping the header above a day reports that day, so a host can offer the usual way into a
 single day from a week. A month does not report it: its header names weekdays rather than dates, and
