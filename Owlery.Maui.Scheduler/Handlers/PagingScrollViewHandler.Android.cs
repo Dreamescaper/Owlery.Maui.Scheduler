@@ -198,6 +198,8 @@ internal class MauiPagingScrollView : HorizontalScrollView
     private readonly int minimumFlingVelocity;
 
     private bool animating;
+    private int? animationStartPendingX;
+    private bool animationStartFrameDrawn;
     private bool flungOnRelease;
     private int? deferredOffsetX;
 
@@ -242,6 +244,8 @@ internal class MauiPagingScrollView : HorizontalScrollView
         // Whatever snap was running no longer describes where the content should be.
         animator.ForceFinished(true);
         animating = false;
+        animationStartPendingX = null;
+        animationStartFrameDrawn = false;
 
         if (Width <= 0 || MaximumScrollX < x)
         {
@@ -251,8 +255,14 @@ internal class MauiPagingScrollView : HorizontalScrollView
 
         if (animated)
         {
+            // Started a frame late rather than now. A programmatic slide usually follows new content
+            // being placed on the page it slides to, and laying that out is the next frame. A
+            // scroller started here would spend its whole duration inside that frame, so the one
+            // after would already be at the end: a slide that reads as a cut, and on a slow device
+            // reliably does. Starting in that frame's draw is not late enough either — the scroller
+            // takes its start time from the frame's vsync, which is before its layout.
             animating = true;
-            animator.StartScroll(ScrollX, 0, x - ScrollX, 0, SnapDurationMs);
+            animationStartPendingX = x;
             PostInvalidateOnAnimation();
         }
         else
@@ -365,6 +375,8 @@ internal class MauiPagingScrollView : HorizontalScrollView
         var target = Math.Clamp(page * PageWidthPx, 0, Math.Max(0, MaximumScrollX));
 
         animator.ForceFinished(true);
+        animationStartPendingX = null;
+        animationStartFrameDrawn = false;
 
         if (target == ScrollX)
         {
@@ -383,6 +395,24 @@ internal class MauiPagingScrollView : HorizontalScrollView
         if (!animating)
         {
             base.ComputeScroll();
+            return;
+        }
+
+        // Called while drawing. The first frame after the request carries its layout; the clock
+        // starts on the one after that.
+        if (animationStartPendingX is { } pending)
+        {
+            if (!animationStartFrameDrawn)
+            {
+                animationStartFrameDrawn = true;
+                PostInvalidateOnAnimation();
+                return;
+            }
+
+            animationStartPendingX = null;
+            animationStartFrameDrawn = false;
+            animator.StartScroll(ScrollX, 0, pending - ScrollX, 0, SnapDurationMs);
+            PostInvalidateOnAnimation();
             return;
         }
 

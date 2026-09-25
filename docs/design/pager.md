@@ -74,6 +74,19 @@ flight" flag only once that await comes back, so the flag stayed set and the dro
 resolved again — the appointment followed the finger and refused to snap, for the rest of the drag.
 The handler now completes any pending request when its own animator stops.
 
+**A programmatic slide on Android starts a frame late, on purpose.** A host's navigation lays out the
+page it is about to slide onto and then asks for the slide, so the next frame carries that layout.
+The scroller used to start the moment it was asked, and it takes its start time from the frame's
+vsync — before that frame's layout — so the whole 250ms elapsed inside the one expensive frame and
+the frame after it was already at rest. On a software-rendered emulator that frame measured 1.4s
+(598ms of layout), and the slide came out as a cut; a device only shortens the problem into a slide
+that begins with a jump. The request now records its target, lets one frame draw, and starts the
+scroller in the draw after that. A swipe's snap is unaffected: nothing is laid out ahead of it.
+
+This does not make a slide visible on that emulator. The frame after the layout still spent 430ms
+rasterising the new content in software, longer than the whole slide. That cost is the emulator's GPU
+rather than the control's, so it was not designed around.
+
 **Android draws scroll content outside the scroll view.** MAUI leaves `ClipChildren` off on its
 Android layout views so shadows can spill, which means the pager is drawn without being clipped to
 its own bounds — and the pager's content is three pages wide with an opaque background, so the page
