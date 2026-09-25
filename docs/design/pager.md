@@ -53,10 +53,18 @@ surface from one viewport to three ([section 2](paging.md)), and the recentre on
 while the platform view still measures the agenda's single page: a frame and a content size, both
 real, neither wide enough. iOS took the offset and clamped it to the old content on the next layout,
 leaving the pager at rest between two pages with nothing outstanding to put it right — a day header
-naming the wrong day, and every chip on the page clipped by the gutter's width. Android had tested
-its scroll range for this all along; iOS was the one asking only whether the numbers were non-zero,
+naming the wrong day, and every chip on the page clipped by the gutter's width. Android tested its
+scroll range for this from the start; iOS was the one asking only whether the numbers were non-zero,
 and now asks Android's question instead — which is also the one its own re-apply on layout was
 already asking. §15 has the measurements.
+
+Android's range, though, was read off the content's *measured* width, and `HorizontalScrollView.scrollTo`
+clamps against its *laid-out* one. Between a measure and the layout that follows it, those differ. On
+a cold start the recentre arrived with the pager 1080px wide and its content measured at 2831px but
+still laid out at 0. The offset was judged to fit, written straight away, and clamped to zero. Nothing
+was held back to re-apply, so the calendar opened on the leading page: the header and grid showed the
+week before the one the title named, until the first navigation. The range is now read off the laid-out
+width, which is what the clamp uses, so that request is deferred and applied by the layout that follows.
 
 **State reset on `ACTION_DOWN` is never reset.** A `ViewGroup` does not intercept the down event —
 the drawing surface underneath consumes it, which is how long-press-to-drag gets its touch-down — and

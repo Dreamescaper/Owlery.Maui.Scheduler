@@ -345,8 +345,15 @@ internal class MauiPagingScrollView : HorizontalScrollView
         SnapTo(PageNearest(predictor.FinalX));
     }
 
+    /// <summary>How far the content can be scrolled right now.</summary>
+    /// <remarks>
+    /// The child's laid-out width, not its measured one: <c>ScrollTo</c> clamps against the former.
+    /// Between a measure and the layout that follows it the two differ, and an offset judged to fit
+    /// against the new measurement was written, clamped to the old layout, and never re-applied —
+    /// which on a cold start left the pager on the leading page.
+    /// </remarks>
     private int MaximumScrollX =>
-        ChildCount == 0 ? 0 : Math.Max(0, GetChildAt(0)!.MeasuredWidth - Width);
+        ChildCount == 0 ? 0 : Math.Max(0, GetChildAt(0)!.Width - Width);
 
     private int PageNearest(int offset)
     {
