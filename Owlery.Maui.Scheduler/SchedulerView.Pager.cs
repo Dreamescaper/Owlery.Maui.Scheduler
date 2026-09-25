@@ -131,7 +131,8 @@ public partial class SchedulerView
     }
 
     /// <summary>
-    /// Brings a page in beside the centre, slides onto it, and only then lays out its neighbours.
+    /// Brings a page in beside the centre, slides onto it, and only then lays out its neighbours and
+    /// raises <see cref="VisibleDatesChanged"/>.
     /// </summary>
     /// <remarks>
     /// Until the slide has finished, the page left behind the centre is the one just slid away from,
@@ -172,7 +173,6 @@ public partial class SchedulerView
         SyncSlotStarts();
         UpdateSelectionView();
         SyncDisplayDate();
-        RaiseVisibleDatesChanged();
 
         var outgoing = forward ? 0 : ActiveGeometry.SurfaceWidth - viewportWidth;
 
@@ -188,7 +188,9 @@ public partial class SchedulerView
             FinishNavigationSlide();
     }
 
-    /// <summary>Lays out the centre page's neighbours and hands the pager back to the user.</summary>
+    /// <summary>
+    /// Lays out the centre page's neighbours, hands the pager back to the user, and tells the host.
+    /// </summary>
     /// <remarks>
     /// Also called on unloading, since a slide cut off there may never report that it finished — and
     /// would leave the pager refusing every swipe once the view came back.
@@ -207,6 +209,7 @@ public partial class SchedulerView
 
         SyncSlotStarts();
         UpdateSelectionView();
+        RaiseVisibleDatesChanged();
     }
 
     /// <summary>Stops a navigation slide from doing anything further, and gives swipes back.</summary>
@@ -340,12 +343,8 @@ public partial class SchedulerView
             // Taken from the rendered dates rather than from the page starts, because a page does
             // not have to begin on the first date it shows — a month grid opens on the tail of the
             // previous month, and the host has to be told to fetch that far back.
-            //
-            // The neighbours are derived from the centre rather than read off the slots either side,
-            // which during a navigation slide still hold the page just left and a recycled one. After
-            // a jump of a year, reading them would ask the host for the whole year in between.
-            first = pageSurface.DatesOn(pageSurface.PreviousPage(slots[1].PageStart))[0];
-            last = pageSurface.DatesOn(pageSurface.NextPage(slots[1].PageStart))[^1];
+            first = pageSurface.DatesOn(slots[0].PageStart)[0];
+            last = pageSurface.DatesOn(slots[2].PageStart)[^1];
         }
 
         var key = new VisibleDatesReportKey(

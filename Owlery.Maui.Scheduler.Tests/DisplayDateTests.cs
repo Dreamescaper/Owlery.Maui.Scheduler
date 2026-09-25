@@ -218,20 +218,27 @@ public class DisplayDateTests
     }
 
     [Test]
-    public void Sliding_a_long_way_asks_the_host_only_for_the_data_around_the_destination()
+    public void The_host_is_asked_for_a_distant_week_only_once_the_slide_has_finished()
     {
-        // Mid-slide the pages either side still hold the week just left and a recycled one. Reading
-        // the range off them would ask the host for everything in between.
+        // Told first, a host loading the new range synchronously — and the repopulate that follows —
+        // lands between the tap and the slide's first frame, and the slide arrives late or as a cut.
+        // Told afterwards, it loads while the calendar is already standing on the destination.
         var destination = Monday.AddDays(364);
         var harness = new SchedulerHarness(Monday);
         harness.DeferPagerScrolls = true;
+        var reportsBefore = harness.VisibleDatesReports.Count;
 
         harness.Scheduler.DisplayDate = destination;
+
+        Assert.That(harness.VisibleDatesReports, Has.Count.EqualTo(reportsBefore), "mid-slide");
+
+        harness.CompletePendingScrolls();
 
         var report = harness.VisibleDatesReports.Last();
 
         Assert.Multiple(() =>
         {
+            Assert.That(harness.VisibleDatesReports, Has.Count.EqualTo(reportsBefore + 1), "settled");
             Assert.That(report.VisibleDates[0].WallClock, Is.EqualTo(destination));
             Assert.That(report.PrefetchFrom.WallClock, Is.EqualTo(destination.AddDays(-7)));
             Assert.That(report.PrefetchTo.WallClock.Date, Is.EqualTo(destination.AddDays(13)));
