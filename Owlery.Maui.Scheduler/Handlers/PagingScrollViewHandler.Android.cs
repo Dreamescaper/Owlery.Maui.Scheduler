@@ -192,6 +192,7 @@ internal class MauiPagingContentViewGroup(Context context) : ViewGroup(context)
 internal class MauiPagingScrollView : HorizontalScrollView
 {
     private const int SnapDurationMs = 250;
+    private const int MaxSlideRearms = 3;
 
     private readonly OverScroller predictor;
     private readonly OverScroller animator;
@@ -200,6 +201,11 @@ internal class MauiPagingScrollView : HorizontalScrollView
     private bool animating;
     private int? animationStartPendingX;
     private bool animationStartFrameDrawn;
+
+    /// <summary>Where a programmatic slide is going, while it has not finished. Null for a snap.</summary>
+    private int? slideTargetX;
+    private int slideFromX;
+    private int slideRearmsLeft;
     private bool flungOnRelease;
     private int? deferredOffsetX;
 
@@ -246,6 +252,7 @@ internal class MauiPagingScrollView : HorizontalScrollView
         animating = false;
         animationStartPendingX = null;
         animationStartFrameDrawn = false;
+        slideTargetX = null;
 
         if (Width <= 0 || MaximumScrollX < x)
         {
@@ -263,6 +270,9 @@ internal class MauiPagingScrollView : HorizontalScrollView
             // takes its start time from the frame's vsync, which is before its layout.
             animating = true;
             animationStartPendingX = x;
+            slideTargetX = x;
+            slideFromX = ScrollX;
+            slideRearmsLeft = MaxSlideRearms;
             PostInvalidateOnAnimation();
         }
         else
@@ -277,11 +287,37 @@ internal class MauiPagingScrollView : HorizontalScrollView
     {
         base.OnLayout(changed, left, top, right, bottom);
 
+        RearmSlideAfterLayout();
+
         if (deferredOffsetX is not { } pending || MaximumScrollX < pending)
             return;
 
         ScrollTo(pending, 0);
         deferredOffsetX = null;
+    }
+
+    /// <summary>
+    /// Restarts a programmatic slide's clock after a layout pass that landed before it moved.
+    /// </summary>
+    /// <remarks>
+    /// Waiting one frame is not always enough: the content laid out for the destination can take a
+    /// second pass, and one arriving just after the scroller started swallows the start of the slide.
+    /// The scroller front-loads its motion, so a pass of 100ms on a 250ms slide leaves the first
+    /// frame drawn already four-fifths of the way there — measured on an emulator, where the slide
+    /// read as a cut followed by a small settle. Only a slide that has not moved at all is restarted,
+    /// so nothing already on screen jumps back; and only a few times, so a view that lays out every
+    /// frame delays a slide rather than holding it forever.
+    /// </remarks>
+    private void RearmSlideAfterLayout()
+    {
+        if (!animating || slideTargetX is not { } target || ScrollX != slideFromX || slideRearmsLeft <= 0)
+            return;
+
+        slideRearmsLeft--;
+        animator.ForceFinished(true);
+        animationStartPendingX = target;
+        animationStartFrameDrawn = false;
+        PostInvalidateOnAnimation();
     }
 
     public event EventHandler? ScrollOffsetChanged;
@@ -384,6 +420,7 @@ internal class MauiPagingScrollView : HorizontalScrollView
         animator.ForceFinished(true);
         animationStartPendingX = null;
         animationStartFrameDrawn = false;
+        slideTargetX = null;
 
         if (target == ScrollX)
         {
@@ -431,6 +468,7 @@ internal class MauiPagingScrollView : HorizontalScrollView
         }
 
         animating = false;
+        slideTargetX = null;
         PageSettled?.Invoke(this, EventArgs.Empty);
     }
 

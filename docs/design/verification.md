@@ -469,3 +469,20 @@ the laid-out width, the same request is deferred, and the next layout scrolls fr
 headers and grid then agree on 21–27 Sep, with today marked.
 
 Not covered: iOS, which already measured against its real `ContentSize`, and a physical device.
+
+## Distant navigation slides, on an Android emulator
+
+On the Android emulator (`medium_phone`, 1080×2400, Release, rendering on the host's Intel GPU), the
+sample at 100 appointments a month jumped three weeks back to today and, separately, three weeks
+forward to today. Before these changes both jumps cut: frame timings showed the host's range load and
+the repopulate it queued, about 2.5s together, between the tap and the slide
+([section 2](paging.md)). With `VisibleDatesChanged` raised after the slide, logging the pager showed
+the destination laid out in two passes, 290ms then 110ms, the second landing after the scroller had
+started, so the first frame drawn was already 80% of the way across ([section 19](pager.md)). With a
+layout pass re-arming a slide that has not moved, a recording of the backward jump shows two frames
+mid-slide, with 23–27 Sep coming in from the left. The forward jump showed only the tail of its slide:
+its second pass arrived after the slide had started moving, which is deliberately not re-armed.
+Adjacent slides and swipes animated throughout.
+
+Not covered: iOS, which animates programmatic scrolls in Core Animation rather than in a scroller the
+control owns, and a physical device.
