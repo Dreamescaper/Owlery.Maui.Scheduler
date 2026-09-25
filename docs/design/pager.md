@@ -91,9 +91,17 @@ the frame after it was already at rest. On a software-rendered emulator that fra
 that begins with a jump. The request now records its target, lets one frame draw, and starts the
 scroller in the draw after that. A swipe's snap is unaffected: nothing is laid out ahead of it.
 
-This does not make a slide visible on that emulator. The frame after the layout still spent 430ms
-rasterising the new content in software, longer than the whole slide. That cost is the emulator's GPU
-rather than the control's, so it was not designed around.
+One frame is not always enough, so a layout pass also re-arms the slide. On the same emulator running
+on the host's GPU, a three-week jump laid the destination out in two passes, 290ms and then 110ms, and
+the second landed just after the scroller had started. The scroller front-loads its motion, so the
+first frame drawn after that pass was already four-fifths of the way across: a cut followed by a
+small settle. A layout pass that arrives while a programmatic slide has armed but not yet moved now
+restarts its clock the same way, a frame after the pass. A slide that has started moving is left
+alone, so nothing on screen jumps back, and a slide is re-armed at most three times, so a view that
+lays out on every frame delays one rather than holding it. On that emulator this turned one of two
+recorded distant jumps from a cut into a visible slide; the other had a pass land after it started
+moving. That remainder is the cost of laying out a page, which a device pays in tens of milliseconds
+rather than hundreds.
 
 **Android draws scroll content outside the scroll view.** MAUI leaves `ClipChildren` off on its
 Android layout views so shadows can spill, which means the pager is drawn without being clipped to

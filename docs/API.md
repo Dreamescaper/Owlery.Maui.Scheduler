@@ -352,7 +352,7 @@ rebind appointment views.
 | `AppointmentDropped` | `SchedulerAppointmentDroppedEventArgs` | A dragged appointment is released. Apply the move to your data before returning. |
 | `HeaderTapped` | `SchedulerHeaderTappedEventArgs` | The header above a timeline day column is tapped. Silent outside `Timeline`. |
 | `TimeGutterTapped` | `SchedulerTimeGutterTappedEventArgs` | The timeline hour gutter is tapped. Silent outside `Timeline`. |
-| `VisibleDatesChanged` | `SchedulerVisibleDatesChangedEventArgs` | The visible period changes, including on first layout and when an agenda extends at either edge. This is the data-loading hook. |
+| `VisibleDatesChanged` | `SchedulerVisibleDatesChangedEventArgs` | The visible period changes, including on first layout and when an agenda extends at either edge. This is the data-loading hook. When a `DisplayDate` change slides to the new period, it is raised once the slide has finished — `DisplayDate` itself changes at once — so a period you have not loaded yet slides in empty and fills when your collection changes. |
 
 ### Methods
 
