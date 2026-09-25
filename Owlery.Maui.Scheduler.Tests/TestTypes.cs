@@ -160,3 +160,11 @@ internal sealed class TestDispatcherTimer : MauiDispatching.IDispatcherTimer
         Tick?.Invoke(this, EventArgs.Empty);
     }
 }
+
+/// <summary>Runs posted work at once, on the thread that posted it, as the UI thread would in order.</summary>
+internal sealed class InlineSynchronizationContext : SynchronizationContext
+{
+    public static InlineSynchronizationContext Instance { get; } = new();
+
+    public override void Post(SendOrPostCallback d, object? state) => d(state);
+}

@@ -4,8 +4,9 @@ namespace Owlery.Maui.Scheduler.Tests;
 /// What happens when the host moves the calendar itself, rather than the user swiping it.
 /// </summary>
 /// <remarks>
-/// The interesting case is the adjacent period: it is already rendered on the page beside the one
-/// showing, so it is reached by sliding onto it rather than by rebuilding all three.
+/// Any other period is reached by sliding onto it from the side it lies on, as a swipe would. The
+/// adjacent one is already rendered on the page beside the one showing; anything further off is laid
+/// out there first, and its neighbours only once the slide has finished.
 /// </remarks>
 [TestFixture]
 public class DisplayDateTests
@@ -65,10 +66,9 @@ public class DisplayDateTests
     }
 
     [Test]
-    public void A_week_further_off_than_the_pages_either_side_is_still_rebuilt()
+    public void A_week_further_off_than_the_pages_either_side_slides_in_from_ahead()
     {
-        // Nothing between here and there was ever rendered, so there is no page to slide through and
-        // an animation would only be a delay.
+        // One page of motion whatever the distance — the direction is the cue, not the journey.
         var harness = new SchedulerHarness(Monday);
         harness.PagerScrolls.Clear();
 
@@ -77,8 +77,176 @@ public class DisplayDateTests
         Assert.Multiple(() =>
         {
             Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(Monday.AddDays(21)));
-            Assert.That(harness.PagerScrolls, Is.EqualTo(new[] { (Centre, false) }));
+            Assert.That(harness.PagerScrolls, Is.EqualTo(new[] { (Leading, false), (Centre, true) }));
         });
+    }
+
+    [Test]
+    public void A_week_further_back_slides_in_from_behind()
+    {
+        var harness = new SchedulerHarness(Monday);
+        harness.PagerScrolls.Clear();
+
+        harness.Scheduler.DisplayDate = Monday.AddDays(-35);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(Monday.AddDays(-35)));
+            Assert.That(harness.PagerScrolls, Is.EqualTo(new[] { (Trailing, false), (Centre, true) }));
+        });
+    }
+
+    [Test]
+    public void A_distant_week_is_laid_out_before_the_slide_and_its_neighbours_after_it()
+    {
+        var destination = Monday.AddDays(21);
+        var harness = new SchedulerHarness(Monday,
+        [
+            TestAppointment.At(Monday.AddDays(1), "10:00", 1, "showing"),
+            TestAppointment.At(destination.AddDays(-7).AddDays(1), "10:00", 1, "before"),
+            TestAppointment.At(destination.AddDays(1), "10:00", 1, "destination"),
+            TestAppointment.At(destination.AddDays(7).AddDays(1), "10:00", 1, "after")
+        ]);
+        harness.DeferPagerScrolls = true;
+
+        harness.Scheduler.DisplayDate = destination;
+
+        Assert.Multiple(() =>
+        {
+            // The page being left keeps what it was showing while it slides out.
+            Assert.That(Subjects(harness.AppointmentsOnPage(0)), Is.EqualTo(new[] { "showing" }), "mid-slide, leading");
+            Assert.That(Subjects(harness.AppointmentsOnPage(1)), Is.EqualTo(new[] { "destination" }), "mid-slide, centre");
+            Assert.That(Subjects(harness.AppointmentsOnPage(2)), Is.Empty, "mid-slide, trailing");
+        });
+
+        harness.CompletePendingScrolls();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Subjects(harness.AppointmentsOnPage(0)), Is.EqualTo(new[] { "before" }), "settled, leading");
+            Assert.That(Subjects(harness.AppointmentsOnPage(1)), Is.EqualTo(new[] { "destination" }), "settled, centre");
+            Assert.That(Subjects(harness.AppointmentsOnPage(2)), Is.EqualTo(new[] { "after" }), "settled, trailing");
+        });
+    }
+
+    [Test]
+    public void The_pager_takes_no_swipe_until_a_slide_has_laid_out_its_neighbours()
+    {
+        // A swipe back mid-slide would land on the page just left, while the calendar believed it was
+        // the week before the destination.
+        var harness = new SchedulerHarness(Monday);
+        harness.DeferPagerScrolls = true;
+
+        harness.Scheduler.DisplayDate = Monday.AddDays(21);
+
+        Assert.That(harness.PagerAcceptsSwipes, Is.False, "mid-slide");
+
+        harness.CompletePendingScrolls();
+
+        Assert.That(harness.PagerAcceptsSwipes, Is.True, "settled");
+    }
+
+    [Test]
+    public void A_slide_cut_off_by_unloading_still_hands_the_pager_back()
+    {
+        var harness = new SchedulerHarness(Monday);
+        harness.DeferPagerScrolls = true;
+
+        harness.Scheduler.DisplayDate = Monday.AddDays(21);
+        harness.DetachFromWindow();
+        harness.ReattachToWindow();
+
+        Assert.That(harness.PagerAcceptsSwipes, Is.True);
+    }
+
+    [Test]
+    public void A_second_navigation_mid_slide_lays_out_the_neighbours_of_its_own_destination()
+    {
+        var first = Monday.AddDays(21);
+        var second = Monday.AddDays(70);
+        var harness = new SchedulerHarness(Monday,
+        [
+            TestAppointment.At(first.AddDays(1), "10:00", 1, "first"),
+            TestAppointment.At(second.AddDays(-7).AddDays(1), "10:00", 1, "before"),
+            TestAppointment.At(second.AddDays(1), "10:00", 1, "destination"),
+            TestAppointment.At(second.AddDays(7).AddDays(1), "10:00", 1, "after")
+        ]);
+        harness.DeferPagerScrolls = true;
+
+        // The first slide is moving when the second arrives and cuts its scroll short.
+        harness.Scheduler.DisplayDate = first;
+        harness.CompleteOldestPendingScroll();
+        harness.Scheduler.DisplayDate = second;
+
+        Assert.Multiple(() =>
+        {
+            // The first slide finishing must not re-lay the page the second is sliding away from.
+            Assert.That(Subjects(harness.AppointmentsOnPage(0)), Is.EqualTo(new[] { "first" }), "mid-slide, leading");
+            Assert.That(harness.PagerAcceptsSwipes, Is.False, "mid-slide");
+        });
+
+        harness.CompletePendingScrolls();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(second));
+            Assert.That(Subjects(harness.AppointmentsOnPage(0)), Is.EqualTo(new[] { "before" }));
+            Assert.That(Subjects(harness.AppointmentsOnPage(1)), Is.EqualTo(new[] { "destination" }));
+            Assert.That(Subjects(harness.AppointmentsOnPage(2)), Is.EqualTo(new[] { "after" }));
+            Assert.That(harness.PagerAcceptsSwipes, Is.True);
+        });
+    }
+
+    [Test]
+    public void A_rebuild_before_a_slide_starts_moving_leaves_the_pager_on_the_new_centre()
+    {
+        // A host opening a date in the month view sets the date and the mode in one handler. The
+        // month rebuild recentres on its own page width; the slide resuming afterwards must not then
+        // animate to the timeline's.
+        var harness = new SchedulerHarness(Monday);
+        harness.DeferPagerScrolls = true;
+
+        harness.Scheduler.DisplayDate = Monday.AddDays(21);
+        harness.Scheduler.ViewMode = SchedulerViewMode.Month;
+        harness.CompletePendingScrolls();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.PagerScrolls.Last(), Is.EqualTo((SchedulerHarness.ViewWidth, false)));
+            Assert.That(harness.PagerAcceptsSwipes, Is.True);
+        });
+    }
+
+    [Test]
+    public void Sliding_a_long_way_asks_the_host_only_for_the_data_around_the_destination()
+    {
+        // Mid-slide the pages either side still hold the week just left and a recycled one. Reading
+        // the range off them would ask the host for everything in between.
+        var destination = Monday.AddDays(364);
+        var harness = new SchedulerHarness(Monday);
+        harness.DeferPagerScrolls = true;
+
+        harness.Scheduler.DisplayDate = destination;
+
+        var report = harness.VisibleDatesReports.Last();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(report.VisibleDates[0].WallClock, Is.EqualTo(destination));
+            Assert.That(report.PrefetchFrom.WallClock, Is.EqualTo(destination.AddDays(-7)));
+            Assert.That(report.PrefetchTo.WallClock.Date, Is.EqualTo(destination.AddDays(13)));
+        });
+    }
+
+    [Test]
+    public void Swiping_carries_on_from_where_a_distant_slide_left_the_pages()
+    {
+        var harness = new SchedulerHarness(Monday);
+
+        harness.Scheduler.DisplayDate = Monday.AddDays(21);
+        harness.SwipeToPage(0);
+
+        Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(Monday.AddDays(14)));
     }
 
     [Test]
@@ -142,14 +310,14 @@ public class DisplayDateTests
     }
 
     [Test]
-    public void A_week_ahead_of_a_three_day_page_is_two_pages_off_and_is_rebuilt()
+    public void A_week_ahead_of_a_three_day_page_is_two_pages_off_and_still_slides()
     {
         var harness = new SchedulerHarness(Monday, visibleDays: 3);
         harness.PagerScrolls.Clear();
 
         harness.Scheduler.DisplayDate = Monday.AddDays(7);
 
-        Assert.That(harness.PagerScrolls, Is.EqualTo(new[] { (Centre, false) }));
+        Assert.That(harness.PagerScrolls, Is.EqualTo(new[] { (Leading, false), (Centre, true) }));
     }
 
     [Test]
@@ -201,4 +369,7 @@ public class DisplayDateTests
             }));
         });
     }
+
+    private static string?[] Subjects(IEnumerable<TestAppointmentView> views) =>
+        [.. views.Select(view => ((TestAppointment)view.BindingContext).Subject)];
 }

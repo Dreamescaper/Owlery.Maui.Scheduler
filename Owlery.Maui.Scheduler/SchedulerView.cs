@@ -142,6 +142,16 @@ public partial class SchedulerView : ContentView
     private IDispatcherTimer? currentTimeTimer;
 
     private bool recentring;
+
+    /// <summary>Counts navigation slides, so only the latest one puts the neighbouring pages back.</summary>
+    private int navigationSlide;
+
+    /// <summary>
+    /// Set while a navigation slide is in flight and the pages either side of the centre may not yet
+    /// be its neighbours. The pager takes no swipe until they are.
+    /// </summary>
+    private bool navigationSliding;
+
     private bool suppressDisplayDateSync;
     private bool agendaNavigationInProgress;
     private double? pendingAgendaScrollTarget;
@@ -689,6 +699,9 @@ public partial class SchedulerView : ContentView
         agendaBackwardGrowTimer?.Stop();
         agendaNavigationSettleTimer?.Stop();
         EndTimelineScroll();
+
+        if (navigationSliding)
+            FinishNavigationSlide();
         verticalScrollRetryTimer = null;
     }
 

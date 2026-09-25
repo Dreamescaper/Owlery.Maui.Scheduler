@@ -390,7 +390,8 @@ public partial class SchedulerView
     /// </remarks>
     private void SetScrollingEnabled(bool enabled)
     {
-        pagerScroll.IsScrollEnabled = enabled;
+        // A drag ending mid-slide must not hand the pager back while its neighbours are still stale.
+        pagerScroll.IsScrollEnabled = enabled && !navigationSliding;
 
 #if IOS || MACCATALYST
         if (verticalScroll.Handler?.PlatformView is UIKit.UIScrollView verticalPlatformScroll)
