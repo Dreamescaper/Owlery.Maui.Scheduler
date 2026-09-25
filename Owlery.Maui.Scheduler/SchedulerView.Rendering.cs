@@ -117,6 +117,9 @@ public partial class SchedulerView
 
     private void RebuildAll(DateOnly centrePage)
     {
+        if (navigationSliding)
+            EndNavigationSlide();
+
         slots[0].PageStart = pageSurface.PreviousPage(centrePage);
         slots[1].PageStart = centrePage;
         slots[2].PageStart = pageSurface.NextPage(centrePage);

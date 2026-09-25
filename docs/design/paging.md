@@ -151,6 +151,11 @@ That leaves the ring buffer briefly out of order, which has three consequences:
   and the first one resuming would re-lay the page the second is sliding away from while it is on
   screen. A counter lets only the latest put the neighbours back. A slide cut off by unloading is
   finished there, because its scroll may never report back and the pager would stay locked.
+- *A rebuild ends the slide.* `RebuildAll` lays out all three pages and recentres on its own, so a
+  slide still waiting to animate — the jump has completed, the animated scroll is posted behind it —
+  is stopped rather than allowed to resume. It captured the page width from before the rebuild, and
+  a host setting the date and switching to the month in one handler would otherwise have the pager
+  slide to the timeline's page width across the month's pages.
 
 Note the asymmetry with `OnPageSettled`, which must stay synchronous and recentres with
 `PagingScrollView.ScrollTo`: there the user has *already* moved the pages, so a frame drawn between

@@ -195,23 +195,35 @@ public partial class SchedulerView
     /// </remarks>
     private void FinishNavigationSlide()
     {
+        EndNavigationSlide();
+
+        // Whatever happened to the pages meanwhile — a mode switch, a rebuild — they are laid out
+        // around the centre page as it now is, and a slot already holding its neighbour is left alone.
+        if (!Paged)
+            return;
+
+        PopulateNeighbour(0, pageSurface.PreviousPage(slots[1].PageStart));
+        PopulateNeighbour(SchedulerGeometry.SlotCount - 1, pageSurface.NextPage(slots[1].PageStart));
+
+        SyncSlotStarts();
+        UpdateSelectionView();
+    }
+
+    /// <summary>Stops a navigation slide from doing anything further, and gives swipes back.</summary>
+    /// <remarks>
+    /// Called on its own by <see cref="RebuildAll"/>, which lays out all three pages and recentres
+    /// itself. A slide still waiting to animate captured the page width from before the rebuild, so
+    /// letting it carry on would slide the pager to an offset the new pages no longer sit at — a
+    /// host setting the date and switching to the month in one handler is exactly that.
+    /// </remarks>
+    private void EndNavigationSlide()
+    {
         // Anything still awaiting an earlier slide is now stale.
         navigationSlide++;
         navigationSliding = false;
 
-        // Whatever happened to the pages meanwhile — a mode switch, a rebuild — they are laid out
-        // around the centre page as it now is, and a slot already holding its neighbour is left alone.
-        if (Paged)
-        {
-            PopulateNeighbour(0, pageSurface.PreviousPage(slots[1].PageStart));
-            PopulateNeighbour(SchedulerGeometry.SlotCount - 1, pageSurface.NextPage(slots[1].PageStart));
-
-            SyncSlotStarts();
-            UpdateSelectionView();
-
-            if (!dragArmed)
-                pagerScroll.IsScrollEnabled = true;
-        }
+        if (Paged && !dragArmed)
+            pagerScroll.IsScrollEnabled = true;
     }
 
     /// <summary>Moves the ring buffer by one page without laying anything out.</summary>

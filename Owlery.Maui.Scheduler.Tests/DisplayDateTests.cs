@@ -198,6 +198,26 @@ public class DisplayDateTests
     }
 
     [Test]
+    public void A_rebuild_before_a_slide_starts_moving_leaves_the_pager_on_the_new_centre()
+    {
+        // A host opening a date in the month view sets the date and the mode in one handler. The
+        // month rebuild recentres on its own page width; the slide resuming afterwards must not then
+        // animate to the timeline's.
+        var harness = new SchedulerHarness(Monday);
+        harness.DeferPagerScrolls = true;
+
+        harness.Scheduler.DisplayDate = Monday.AddDays(21);
+        harness.Scheduler.ViewMode = SchedulerViewMode.Month;
+        harness.CompletePendingScrolls();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.PagerScrolls.Last(), Is.EqualTo((SchedulerHarness.ViewWidth, false)));
+            Assert.That(harness.PagerAcceptsSwipes, Is.True);
+        });
+    }
+
+    [Test]
     public void Sliding_a_long_way_asks_the_host_only_for_the_data_around_the_destination()
     {
         // Mid-slide the pages either side still hold the week just left and a recycled one. Reading
