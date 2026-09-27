@@ -145,8 +145,14 @@ That leaves the ring buffer briefly out of order, which has three consequences:
   rejected: the outgoing page is partly on screen at that moment, and swapping its contents shows as
   a jump. The slide lasts a few hundred milliseconds, so waiting it out is cheaper than anything
   that could be seen. A drag ending mid-slide respects this through `SetScrollingEnabled`.
-- *`VisibleDatesChanged` derives the range from the centre page*, not from the slots either side.
-  Reading them mid-slide after a jump of a year would ask the host for the whole year in between.
+- *`VisibleDatesChanged` is raised when the slide finishes*, alongside the neighbours, rather than
+  when it starts. Raised first, it put the host's reaction between the tap and the slide's first
+  frame: a host loading the new range synchronously, and the repopulate its collection change
+  queues, measured about 2.5s on an emulator for a three-week jump, so the slide arrived late or as
+  a cut. Raised afterwards, it is also raised once the slots are consistent again, so the range can
+  be read straight off them. The cost is that a destination the host had not loaded slides in empty
+  and fills when the host answers; one it had loaded slides in complete, and the host's reply
+  changes nothing on screen. A swipe already reports in this order.
 - *Only the latest slide finishes.* A second navigation mid-slide cuts the first one's scroll short,
   and the first one resuming would re-lay the page the second is sliding away from while it is on
   screen. A counter lets only the latest put the neighbours back. A slide cut off by unloading is
