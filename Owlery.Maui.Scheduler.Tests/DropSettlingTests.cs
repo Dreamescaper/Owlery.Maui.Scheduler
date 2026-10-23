@@ -1,3 +1,5 @@
+using Owlery.Maui.Scheduler.Internal;
+
 namespace Owlery.Maui.Scheduler.Tests;
 
 /// <summary>
@@ -42,7 +44,7 @@ public class DropSettlingTests
         Assert.Multiple(() =>
         {
             Assert.That(harness.Drops[0].DropStart.WallClock, Is.EqualTo(Monday.AddDays(2).AddHours(12)));
-            Assert.That(harness.BoundsOf(harness.VisibleAppointments.Single()).Y, Is.EqualTo(TenAmY + TwoHoursDown).Within(0.01));
+            Assert.That(harness.BoundsOf(harness.VisibleAppointments.Single()).Y, Is.EqualTo(TenAmY + TwoHoursDown + TimelineSurface.AppointmentGap).Within(0.01));
             Assert.That(harness.OrphanedAppointments, Is.Empty);
         });
     }
@@ -58,7 +60,7 @@ public class DropSettlingTests
         Assert.Multiple(() =>
         {
             Assert.That(harness.Drops, Has.Count.EqualTo(1), "the host is still told where it was dropped");
-            Assert.That(harness.BoundsOf(harness.VisibleAppointments.Single()).Y, Is.EqualTo(TenAmY).Within(0.01));
+            Assert.That(harness.BoundsOf(harness.VisibleAppointments.Single()).Y, Is.EqualTo(TenAmY + TimelineSurface.AppointmentGap).Within(0.01));
             Assert.That(harness.OrphanedAppointments, Is.Empty);
         });
     }

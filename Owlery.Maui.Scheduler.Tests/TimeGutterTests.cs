@@ -56,7 +56,7 @@ public class TimeGutterTests
         // underneath it — and an obscured-label calculation to get wrong.
         var harness = new SchedulerHarness(Week, [TestAppointment.At(Week.AddDays(1), "10:00", 1)]);
 
-        harness.BeginDrag(harness.PointAt(1, 1, TimeSpan.FromHours(10)));
+        harness.BeginDrag(harness.PointAt(1, 1, TimeSpan.Parse("10:30")));
         harness.DragTo(harness.PointAt(1, 1, TimeSpan.FromHours(12)));
 
         Assert.That(harness.DragTimeIndicator, Is.Not.Null);
@@ -74,7 +74,7 @@ public class TimeGutterTests
         // chip — so without this the hour text shows through it.
         var harness = new SchedulerHarness(Week, [TestAppointment.At(Week.AddDays(1), "10:00", 1)]);
 
-        harness.BeginDrag(harness.PointAt(1, 1, TimeSpan.FromHours(10)));
+        harness.BeginDrag(harness.PointAt(1, 1, TimeSpan.Parse("10:30")));
         harness.DragTo(harness.PointAt(1, 1, TimeSpan.FromHours(12)));
 
         Assert.That(
@@ -87,7 +87,7 @@ public class TimeGutterTests
     {
         var harness = new SchedulerHarness(Week, [TestAppointment.At(Week.AddDays(1), "10:00", 1)]);
 
-        harness.BeginDrag(harness.PointAt(1, 1, TimeSpan.FromHours(10)));
+        harness.BeginDrag(harness.PointAt(1, 1, TimeSpan.Parse("10:30")));
         harness.DragTo(harness.PointAt(1, 1, TimeSpan.FromHours(12)));
         harness.Release(harness.PointAt(1, 1, TimeSpan.FromHours(12)));
 
