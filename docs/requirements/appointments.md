@@ -5,7 +5,8 @@ How existing items are placed and presented on the grid.
 ## Placement
 
 **APT-1** An appointment appears in the column for its day, with its top edge at its start time and
-its bottom edge at its end time, so its position and length can be read directly off the timeline.
+its bottom edge at its end time, less the one-pixel inset described in APT-16, so its position and
+length can be read directly off the timeline.
 
 **APT-2** An appointment shorter than a slot is still drawn large enough to be seen and
 comfortably tapped.
@@ -16,6 +17,11 @@ to the visible hours. Its remaining portion stays in the correct position.
 **APT-4** An appointment continuing past midnight is shown only on the day it starts.
 
 **APT-5** Appointments outside the visible week are not drawn.
+
+**APT-16** An appointment's box keeps a one-pixel inset on all four edges — the same breathing space
+vertically as horizontally. Where one appointment ends as another begins, both boxes pull back from
+the shared edge, so the grid line they meet on stays visible instead of being covered from both
+sides.
 
 ## Overlapping appointments
 

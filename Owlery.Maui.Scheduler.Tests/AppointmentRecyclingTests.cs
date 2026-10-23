@@ -276,7 +276,7 @@ public class AppointmentRecyclingTests
         // while a drag is armed. It survived into a pool that no longer matched it.
         var harness = new SchedulerHarness(Week, [TestAppointment.At(Week.AddDays(1), "10:00", 1)]);
 
-        harness.BeginDrag(harness.PointAt(1, 1, TimeSpan.FromHours(10)));
+        harness.BeginDrag(harness.PointAt(1, 1, TimeSpan.Parse("10:30")));
         Assert.That(harness.DraggedAppointment, Is.Not.Null, "the drag is armed");
 
         harness.Scheduler.AppointmentTemplate =

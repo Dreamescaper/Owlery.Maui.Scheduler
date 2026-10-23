@@ -1,3 +1,5 @@
+using Owlery.Maui.Scheduler.Internal;
+
 namespace Owlery.Maui.Scheduler.Tests;
 
 [TestFixture]
@@ -94,7 +96,7 @@ public class DragAcrossWeeksTests
         {
             Assert.That(ghost, Is.Not.Null);
             Assert.That(ghost!.Opacity, Is.EqualTo(0.5).Within(0.001));
-            Assert.That(harness.BoundsOf(ghost).Y, Is.EqualTo(100).Within(0.01), "the ghost stays at the original time");
+            Assert.That(harness.BoundsOf(ghost).Y, Is.EqualTo(100 + TimelineSurface.AppointmentGap).Within(0.01), "the ghost stays at the original time");
             Assert.That(harness.DraggedAppointment, Is.Not.Null, "the follower lives on the overlay");
         });
     }
@@ -223,9 +225,11 @@ public class DragAcrossWeeksTests
         harness.FireEdgePagingTimer();
         harness.DragTo(new Point(edge.X, edge.Y + 50));
 
+        // Within a pixel: at rest the follower is snapped to the drop target, while during a slide it
+        // tracks the finger, and the box's one-pixel inset puts the two a pixel apart.
         Assert.That(
             harness.DraggedAppointmentBounds.Y,
-            Is.EqualTo(beforeSlide.Y + 50).Within(0.01),
+            Is.EqualTo(beforeSlide.Y + 50).Within(1),
             "the finger's position on screen is the touch point less the live scroll offsets, which "
             + "holds whatever the pager is doing — freezing it left the appointment sitting still "
             + "while the calendar moved under it");
@@ -299,7 +303,7 @@ public class DragAcrossWeeksTests
         Assert.Multiple(() =>
         {
             Assert.That(bounds.X, Is.EqualTo(2 * SchedulerHarness.DayWidth).Within(2));
-            Assert.That(bounds.Y, Is.EqualTo(100).Within(0.01));
+            Assert.That(bounds.Y, Is.EqualTo(100 + TimelineSurface.AppointmentGap).Within(0.01));
         });
     }
 

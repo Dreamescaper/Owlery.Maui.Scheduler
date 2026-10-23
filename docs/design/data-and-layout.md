@@ -120,6 +120,16 @@ the day, so a cluster of three renders as three equal columns.
 Positions are produced as **fractions** of a day column rather than pixels, so a viewport resize
 re-positions views without recomputing overlaps.
 
+`TimelineSurface.BoundsFor` turns a position into a rectangle with a one-pixel gap on all four sides.
+The horizontal gap keeps side-by-side columns apart; the vertical one does the same job on the time
+axis. An appointment ending at 13:00 and one starting at 13:00 would otherwise meet exactly on the
+13:00 grid line and cover it from both sides, and the line would disappear even though neither box is
+hiding a line inside itself. The inset is applied unconditionally, so the result does not depend on
+what else happens to be in the day.
+
+It is only edges this fixes: an hour line that falls inside a single long appointment is still covered
+by that appointment's box.
+
 Appointments shorter than 15 minutes are still given a 15-minute box so they stay tappable, and an
 appointment running past midnight is clipped to the visible window of its own day.
 

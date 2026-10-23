@@ -1,3 +1,5 @@
+using Owlery.Maui.Scheduler.Internal;
+
 namespace Owlery.Maui.Scheduler.Tests;
 
 [TestFixture]
@@ -33,8 +35,8 @@ public class SchedulerViewTests
             // Wednesday is the third column of the centre week.
             Assert.That(bounds.X, Is.EqualTo(CentreSlot * SchedulerHarness.PageWidth + 2 * SchedulerHarness.DayWidth).Within(2));
             // 10:00 is two hours below an 08:00 window start, at 50px an hour.
-            Assert.That(bounds.Y, Is.EqualTo(100).Within(0.01));
-            Assert.That(bounds.Height, Is.EqualTo(50).Within(0.01));
+            Assert.That(bounds.Y, Is.EqualTo(100 + TimelineSurface.AppointmentGap).Within(0.01));
+            Assert.That(bounds.Height, Is.EqualTo(50 - TimelineSurface.AppointmentGap * 2).Within(0.01));
         });
     }
 
@@ -184,7 +186,7 @@ public class SchedulerViewTests
         {
             // Wednesday of the original week, which the swipe has made the leading page.
             Assert.That(bounds.X, Is.EqualTo(2 * SchedulerHarness.DayWidth).Within(2));
-            Assert.That(bounds.Y, Is.EqualTo(100).Within(0.01));
+            Assert.That(bounds.Y, Is.EqualTo(100 + TimelineSurface.AppointmentGap).Within(0.01));
         });
     }
 

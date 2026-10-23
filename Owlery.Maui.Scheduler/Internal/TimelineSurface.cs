@@ -6,7 +6,10 @@ namespace Owlery.Maui.Scheduler.Internal;
 /// </summary>
 internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snapMinutes) : ISchedulerSurface
 {
-    /// <summary>Space left either side of an appointment so touching columns stay distinguishable.</summary>
+    /// <summary>
+    /// Breathing space left around an appointment, so touching boxes stay distinguishable and a grid
+    /// line where two of them meet is not covered.
+    /// </summary>
     public const double AppointmentGap = 1;
 
     /// <summary>Appointments shorter than this still get a box big enough to hit.</summary>
@@ -53,8 +56,14 @@ internal sealed class TimelineSurface(SchedulerGeometry geometry, Func<int> snap
         var dayWidth = geometry.DayWidth;
         var x = position.DayIndex * dayWidth + position.LeftFraction * dayWidth + AppointmentGap;
         var width = Math.Max(1, position.WidthFraction * dayWidth - AppointmentGap * 2);
-        var y = geometry.YFromMinutes(position.StartMinutes);
-        var height = Math.Max(MinimumAppointmentHeight, geometry.YFromMinutes(position.EndMinutes) - y);
+
+        // Inset vertically as well as horizontally. Without it a box meets the next appointment
+        // exactly on the hour line and covers it from both sides; the inset leaves the line in the gap.
+        var startY = geometry.YFromMinutes(position.StartMinutes);
+        var y = startY + AppointmentGap;
+        var height = Math.Max(
+            MinimumAppointmentHeight,
+            geometry.YFromMinutes(position.EndMinutes) - startY - AppointmentGap * 2);
 
         return new Rect(x, y, width, height);
     }
