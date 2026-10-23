@@ -162,6 +162,9 @@ public partial class SchedulerView
     /// </remarks>
     private void PopulateSlot(PageSlot slot, int slotIndex)
     {
+        // Placed by the geometry as it stands, which may put it on screen mid-transition.
+        transitionPlacement.Moved(slotIndex);
+
         if (ViewMode is SchedulerViewMode.Agenda && slotIndex != CentreSlot)
         {
             ReleaseSlot(slot);
@@ -761,6 +764,8 @@ public partial class SchedulerView
     private void ShiftSlot(PageSlot slot, int slotIndex)
     {
         var offset = slotIndex * ActiveGeometry.PageSpan;
+
+        transitionPlacement.Moved(slotIndex);
 
         foreach (var view in slot.Views)
             view.TranslationX = offset;

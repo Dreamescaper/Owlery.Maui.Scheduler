@@ -190,6 +190,9 @@ public partial class SchedulerView : ContentView
     /// <summary>The day-count change currently easing into place, or null while none is.</summary>
     private DayCountTransition? dayCountTransition;
 
+    /// <summary>Which pages that transition still has to re-place frame by frame.</summary>
+    private readonly TransitionPagePlacement transitionPlacement = new();
+
     /// <summary>Whether the day count has changed in this tick and the date may still be following it.</summary>
     private bool dayCountChangePending;
 
@@ -885,13 +888,16 @@ public partial class SchedulerView : ContentView
         transition.AimAt(slots[CentreSlot].PageStart, geometry.VisibleDays);
         dayCountTransition = transition;
 
+        // The rebuild above placed every page at rest, which is not where the first frame puts them.
+        transitionPlacement.MovedAll();
+
         new Animation(
             progress =>
             {
                 transition.Progress = progress;
                 geometry.DayWidthOverride = transition.DayWidth;
                 geometry.AnimationOffsetX = transition.OffsetX;
-                ApplyDayWidth();
+                ApplyDayWidth(onScreenOnly: true);
             },
             0,
             1,
@@ -906,11 +912,22 @@ public partial class SchedulerView : ContentView
     }
 
     /// <summary>Re-places what is already laid out at the current column width, without re-laying it out.</summary>
-    private void ApplyDayWidth()
+    /// <param name="onScreenOnly">
+    /// Leave alone a page that is off screen and was left off screen, which is what a frame of the
+    /// transition asks for. The transition's last call places every page, so the skipped ones end up
+    /// at rest with the rest.
+    /// </param>
+    private void ApplyDayWidth(bool onScreenOnly = false)
     {
         for (var i = 0; i < slots.Length; i++)
         {
             var slot = slots[i];
+
+            if (onScreenOnly && !transitionPlacement.ShouldPlace(
+                    i, TransitionPagePlacement.IsOnScreen(geometry, i, pagerScroll.ScrollX)))
+            {
+                continue;
+            }
 
             for (var v = 0; v < slot.Views.Count && v < slot.Positions.Count; v++)
                 PositionAppointmentView(slot.Views[v], slot.Positions[v], i);

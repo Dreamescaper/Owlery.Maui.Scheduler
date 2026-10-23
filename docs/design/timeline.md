@@ -84,7 +84,11 @@ The other thing that does not fall out for free is the pages either side. They a
 apart — and mid-animation a page is not a viewport wide, so spacing them by the viewport would have
 them overlap the centre page or leave a gap beside it. `SchedulerGeometry.PageSpan` is therefore
 `VisibleDays × DayWidth` rather than `ViewportWidth`: identical at rest, and correct throughout the
-animation, so the neighbours stay exactly one page away and off screen without anything being hidden.
+animation, so the neighbours stay exactly one page away without anything being hidden. Whether that
+keeps them off screen depends on the direction. Growing a day into a week, the neighbouring weeks are
+never less than a full page away. Shrinking a week onto a day, the new pages are a day wide, so the
+days either side of the one being opened sit on screen beside it as it widens, and leave only on the
+last frame.
 
 An earlier version did hide them, by toggling `IsVisible` on their views. That was a mistake worth
 recording: `IsVisible` is *also* how the pool marks a view as spare, so the two uses collided. A view
@@ -96,6 +100,23 @@ Appointment views are re-placed from the positions each page already stores, so 
 write per view and one canvas invalidation — no re-layout of the data. The selected-cell affordance is
 re-placed on the same pass: it is anchored to a column like everything else, so it has to widen and
 travel with the day it marks rather than sit still while the grid moves under it.
+
+A bounds write is not where a frame's cost lies, though. Every view gets a new width, and the platform
+then measures and lays each one out again, text and all. On the iOS simulator that was 40–50ms a frame
+for a hundred appointments a month growing a day into a week, while the managed side of the frame was
+under a millisecond and the canvas repaint 0.04ms ([section 15](verification.md)). So a frame re-places
+only the pages that are on screen, plus any page it left on screen last time, which has to be moved off.
+`TransitionPagePlacement` decides that from the frame's own geometry rather than by direction, because
+the direction is not enough: shrinking onto a day keeps both neighbours on screen to the end, and a
+rule of "skip the side pages" would freeze them there. Anything else that moves a page mid-transition
+— a rebuild re-aimed at a date, a rotation — marks it moved, and the next frame places it whatever it
+asks. The transition's finishing call places every page, so a skipped page ends at rest with the rest.
+
+Growing a day into a week is the direction that gains, and the expensive one: three weeks of views
+against three days. Shrinking gains nothing and costs little. What it does not help is the frame the
+transition starts on. The rebuild beforehand lays out three pages for the new count, and the platform's
+first layout of them lands after the clock has started; at five hundred appointments a month that
+frame alone outlasts the 220ms animation, which then arrives finished.
 
 The animation is skipped when the control has no handler, which also keeps it out of the headless
 tests. That guard is load-bearing rather than tidy: MAUI's animation ticker does not run without a
