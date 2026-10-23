@@ -148,6 +148,10 @@ public partial class SchedulerView
         nameof(WorkingHoursEnd), typeof(TimeOnly), typeof(SchedulerView), new TimeOnly(17, 0),
         propertyChanged: OnAppearanceChanged);
 
+    public static readonly BindableProperty WeeklyWorkingHoursProperty = BindableProperty.Create(
+        nameof(WeeklyWorkingHours), typeof(IReadOnlyCollection<SchedulerWorkingInterval>), typeof(SchedulerView), null,
+        propertyChanged: OnAppearanceChanged);
+
     public static readonly BindableProperty GridLineColorProperty = AppearanceColor(
         nameof(GridLineColor), "#E0E0E0");
 
@@ -438,7 +442,10 @@ public partial class SchedulerView
         set => SetValue(GridBackgroundColorProperty, value);
     }
 
-    /// <summary>Whether days outside <see cref="WorkingDays"/> receive a distinct background.</summary>
+    /// <summary>
+    /// Whether days outside <see cref="WorkingDays"/>, or without an entry in <see cref="WeeklyWorkingHours"/>
+    /// when that is set, receive a distinct background.
+    /// </summary>
     public bool ShowNonWorkingDaysShading
     {
         get => (bool)GetValue(ShowNonWorkingDaysShadingProperty);
@@ -502,6 +509,21 @@ public partial class SchedulerView
     {
         get => (TimeOnly)GetValue(WorkingHoursEndProperty);
         set => SetValue(WorkingHoursEndProperty, value);
+    }
+
+    /// <summary>Working intervals per weekday, for a week whose days do not share one interval.</summary>
+    /// <remarks>
+    /// When set, it replaces <see cref="WorkingDays"/>, <see cref="WorkingHoursStart"/> and
+    /// <see cref="WorkingHoursEnd"/>: a weekday with at least one interval is a working day, every other
+    /// day is non-working, and time outside a working day's intervals is non-working time. A weekday may
+    /// have several intervals; overlapping ones are merged. Entries whose end is not after their start
+    /// are ignored. Replace the collection to report a change; in-place mutations are not observed.
+    /// <see langword="null"/>, the default, uses <see cref="WorkingDays"/> and the shared interval.
+    /// </remarks>
+    public IReadOnlyCollection<SchedulerWorkingInterval>? WeeklyWorkingHours
+    {
+        get => (IReadOnlyCollection<SchedulerWorkingInterval>?)GetValue(WeeklyWorkingHoursProperty);
+        set => SetValue(WeeklyWorkingHoursProperty, value);
     }
 
     public Color GridLineColor

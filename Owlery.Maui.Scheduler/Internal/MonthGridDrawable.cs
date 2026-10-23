@@ -45,7 +45,7 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
 
     public bool ShowCurrentDayCircle { get; set; }
 
-    public IReadOnlyCollection<DayOfWeek> WorkingDays { get; set; } = [];
+    public SchedulerWorkingTime WorkingTime { get; set; } = null!;
 
     /// <summary>Composed with the number a cell could not show, e.g. <c>"+3 more"</c>.</summary>
     public string OverflowFormat { get; set; } = "+{0} more";
@@ -87,7 +87,7 @@ internal sealed class MonthGridDrawable(MonthGeometry geometry, PageSlot[] slots
                 ? CurrentDayBackgroundColor
                 : isAdjacent
                     ? AdjacentMonthBackgroundColor
-                    : ShowNonWorkingDaysShading && !SchedulerWorkingTime.IsWorkingDay(date, WorkingDays)
+                    : ShowNonWorkingDaysShading && !WorkingTime.IsWorkingDay(date)
                         ? NonWorkingDaysBackgroundColor
                         : null;
 

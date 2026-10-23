@@ -129,6 +129,11 @@ interval draws no hour shading.
 **NAV-24b** Changing shading, working-time or colour settings redraws the visible chrome without
 rebuilding appointment content.
 
+**NAV-24c** A host may instead give each weekday its own working intervals, including several on one
+day. A weekday with at least one interval is a working day, and time outside its intervals is shaded
+when non-working-hour shading is enabled; every other day is a non-working day. A reversed interval is
+ignored.
+
 ## Time zone
 
 **NAV-25** The whole calendar — appointment positions, today, the current-time line — is drawn in one
