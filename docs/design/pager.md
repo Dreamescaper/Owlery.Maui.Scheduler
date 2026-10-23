@@ -101,10 +101,13 @@ always did: `RebuildAll` recentred, the request was deferred because the new vie
 yet, and the layout that came next applied it. Two orderings leave it at zero instead, and they match
 the two states seen on a device. If the recentre is deferred after the view's last layout pass, nothing
 applies it — and the deferral reports the offset the view is at, so the headers follow the grid to the
-week before. If the recentre arrives while no handler is connected, nothing receives it, the control
-keeps believing the centre page, and the headers stay there while the grid shows the week before. A
-newly connected handler now applies the offset the control already holds, and a deferred offset asks
-for the layout that applies it rather than waiting for one to happen.
+week before. If no recentre follows the reconnect at all, the control keeps believing the centre page,
+and the headers stay there while the grid shows the week before. That second state reproduces on both
+platforms when a host disconnects the handlers itself and puts the view back, which is followed by no
+rebuild. A newly connected handler on either platform now applies the offset the control already holds,
+and a deferred offset on iOS asks for the layout that applies it rather than waiting for one to happen.
+Android needs no counterpart to that half: a view with a deferred offset is always laid out again once
+its content is.
 
 **A programmatic slide on Android starts a frame late, on purpose.** A host's navigation lays out the
 page it is about to slide onto and then asks for the slide, so the next frame carries that layout.

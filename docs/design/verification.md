@@ -531,9 +531,18 @@ at the centre offset. No handler was disconnected, and header and grid agreed on
 slide started just before a flyout switch had already finished by the time the page was detached,
 because the flyout navigation takes longer than a slide.
 
-Not covered: the device ordering that left the offset at zero, which the simulator never produced, so
-the fix for it is reasoned from the log rather than shown failing and then passing; the host app on
-Android, whose emulator had too little storage left to install the build, so whether MAUI 11 replaces
-the platform view there as it does on iOS is unknown — the Android handler does not re-apply the
-offset on connect; and a physical device.
+A temporary sample button then forced the reconnect directly: it removed the `SchedulerView`, called
+`DisconnectHandlers`, and put it back, which builds new platform views and is followed by no rebuild.
+With the connect-time offset switched off, it reproduced the reported state on both platforms. On the
+iOS simulator and on the `Medium_Phone` emulator, the title and day headers stayed on 19–25 Oct with
+today marked while the grid showed 12–18 Oct, and the log showed the new view connecting at 0 with the
+control at the centre page and no recentre after it. With the connect-time offset on, the same button
+brought the grid back to 19–25 Oct on both, and on Android the log showed the deferred offset applied
+by the first layout.
+
+Not covered: the iOS ordering in which a recentre deferred after the last layout pass is never applied,
+which the simulator never produced, so `SetNeedsLayout` on deferral is reasoned from the log rather
+than shown failing and then passing; the host app on Android, whose emulator had too little storage
+left to install the build, so whether MAUI 11 replaces the platform view on a flyout visit there is
+unknown; and a physical device.
 
