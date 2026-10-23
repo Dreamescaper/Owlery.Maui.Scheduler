@@ -78,6 +78,9 @@ public partial class SchedulerView
 
     private void Advance()
     {
+        // Only reachable mid-transition by edge paging during a drag; swipes are locked meanwhile.
+        PopulateStalePages();
+
         var recycled = slots[0];
         slots[0] = slots[1];
         slots[1] = slots[2];
@@ -92,6 +95,8 @@ public partial class SchedulerView
 
     private void Retreat()
     {
+        PopulateStalePages();
+
         var recycled = slots[2];
         slots[2] = slots[1];
         slots[1] = slots[0];
@@ -164,7 +169,7 @@ public partial class SchedulerView
         var slide = ++navigationSlide;
         var incoming = forward ? SchedulerGeometry.SlotCount - 1 : 0;
 
-        if (slots[incoming].PageStart != target)
+        if (slots[incoming].PageStart != target || slots[incoming].Stale)
         {
             slots[incoming].PageStart = target;
             PopulateSlot(slots[incoming], incoming);
@@ -232,7 +237,7 @@ public partial class SchedulerView
         navigationSlide++;
         navigationSliding = false;
 
-        if (Paged && !dragArmed)
+        if (Paged && !dragArmed && !HasStalePages)
             pagerScroll.IsScrollEnabled = true;
     }
 
@@ -265,7 +270,7 @@ public partial class SchedulerView
 
     private void PopulateNeighbour(int slotIndex, DateOnly page)
     {
-        if (slots[slotIndex].PageStart == page)
+        if (slots[slotIndex].PageStart == page && !slots[slotIndex].Stale)
             return;
 
         slots[slotIndex].PageStart = page;

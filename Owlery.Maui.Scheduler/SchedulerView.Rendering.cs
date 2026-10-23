@@ -124,14 +124,76 @@ public partial class SchedulerView
         slots[1].PageStart = centrePage;
         slots[2].PageStart = pageSurface.NextPage(centrePage);
 
+        var centreOnly = rebuildCentreOnly && Paged;
+
         for (var i = 0; i < slots.Length; i++)
-            PopulateSlot(slots[i], i);
+        {
+            if (centreOnly && i != CentreSlot)
+                slots[i].Stale = true;
+            else
+                PopulateSlot(slots[i], i);
+        }
 
         SyncSlotStarts();
         UpdateSelectionView();
-        RaiseVisibleDatesChanged();
+
+        // Reported once the neighbours are laid out, as a navigation slide does: a host answering
+        // here would queue a repopulate of all three pages into the middle of the transition.
+        if (centreOnly)
+            pagerScroll.IsScrollEnabled = false;
+        else
+            RaiseVisibleDatesChanged();
+
         ApplyContentExtent();
         Recentre();
+    }
+
+    private bool HasStalePages => slots.Any(slot => slot.Stale);
+
+    /// <summary>Lays out whatever pages a growing transition left stale. Nothing else.</summary>
+    private void PopulateStalePages()
+    {
+        for (var i = 0; i < slots.Length; i++)
+        {
+            if (slots[i].Stale)
+                PopulateSlot(slots[i], i);
+        }
+    }
+
+    /// <summary>
+    /// Lays out the pages a growing transition left stale, hands the pager back, and tells the host
+    /// the range it now shows.
+    /// </summary>
+    /// <remarks>
+    /// Runs whether or not anything is still stale: a repopulate may already have laid them out, but
+    /// only this gives swipes back and reports the range.
+    /// </remarks>
+    private void FillStalePages()
+    {
+        var anyStale = HasStalePages;
+
+        PopulateStalePages();
+
+        if (anyStale)
+        {
+            SyncSlotStarts();
+            UpdateSelectionView();
+        }
+
+        RaiseVisibleDatesChanged();
+
+        if (Paged && !dragArmed && !navigationSliding)
+            pagerScroll.IsScrollEnabled = true;
+    }
+
+    /// <summary>Fills the stale pages now if the transition would bring either of them on screen.</summary>
+    private void FillStalePagesUnlessOffScreen(DayCountTransition transition)
+    {
+        if (HasStalePages && !TransitionPagePlacement.NeighboursStayOffScreen(
+                transition, geometry.ViewportWidth, geometry.VisibleDays, pagerScroll.ScrollX))
+        {
+            FillStalePages();
+        }
     }
 
     private void SyncSlotStarts()
@@ -162,6 +224,10 @@ public partial class SchedulerView
     /// </remarks>
     private void PopulateSlot(PageSlot slot, int slotIndex)
     {
+        // Placed by the geometry as it stands, which may put it on screen mid-transition.
+        transitionPlacement.Moved(slotIndex);
+        slot.Stale = false;
+
         if (ViewMode is SchedulerViewMode.Agenda && slotIndex != CentreSlot)
         {
             ReleaseSlot(slot);
@@ -761,6 +827,8 @@ public partial class SchedulerView
     private void ShiftSlot(PageSlot slot, int slotIndex)
     {
         var offset = slotIndex * ActiveGeometry.PageSpan;
+
+        transitionPlacement.Moved(slotIndex);
 
         foreach (var view in slot.Views)
             view.TranslationX = offset;

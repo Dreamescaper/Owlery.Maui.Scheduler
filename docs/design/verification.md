@@ -546,3 +546,53 @@ than shown failing and then passing; the host app on Android, whose emulator had
 left to install the build, so whether MAUI 11 replaces the platform view on a flyout visit there is
 unknown; and a physical device.
 
+
+## Day-count transition frames, on an iOS simulator
+
+The week↔day transition was measured on the iPhone 17 Pro simulator, iOS 26.5, a Release build of the
+sample, with its `AppointmentBox` template. A temporary probe, not kept, timed `ApplyGeometry` and each
+animation tick and logged the sample's `CADisplayLink` frames, over six recorded round trips per case:
+open a Wednesday from the week, then go back to seven days.
+
+A first run turned each per-frame write off in turn. Removing the appointment views' bounds writes
+alone took a hundred appointments a month, day to week, from 50ms frames to a steady 17ms; removing
+the canvas invalidation, the header bounds or the selected-cell update changed nothing measurable. The
+canvas draw itself was 0.04ms. The cost is the platform laying out views that have changed width, not
+the managed frame, which was under a millisecond.
+
+Re-placing only the pages on screen ([section 16](timeline.md)), against the same build with the skip
+turned off and the two interleaved:
+
+| per month | direction | distinct frames, skip off → on | median step, off → on | longest step, off → on |
+|---|---|---|---|---|
+| 25 | day → week | 13 → 14 | 16.7 → 16.7ms | 42 → 37ms |
+| 100 | day → week | 6 → 10 | 47.1 → 17.2ms | 74 → 71ms |
+| 500 | day → week | 2 → 2 | 209 → 216ms | 261 → 245ms |
+| 100 | week → day | 14 → 14 | 16.7 → 16.7ms | 33 → 34ms |
+| 500 | week → day | 8 → 9 | 32.5 → 28.8ms | 52 → 50ms |
+
+Shrinking onto a day is unchanged, as it has to be: both neighbours are on screen until the last frame.
+The longest step that remains at a hundred a month is the first, where the rebuild's views are laid out
+for the first time. At five hundred that first frame is 200–260ms, the whole animation elapses inside
+it, and the transition is still a cut — the setup, 195–200ms of managed work going to a week, is what
+that case needs next, and this change does not touch it.
+
+Not covered: Android, and a physical device. A simulator on a Mac CPU understates what a phone pays;
+the split between the parts is what carries over.
+
+### Deferring the neighbouring pages
+
+The same probe, with the on-screen skip kept and the deferral of the neighbours' layout
+([section 16](timeline.md)) turned on and off, interleaved, six recorded round trips per case. Day
+to week:
+
+| per month | setup, off → on | tap to first motion | frames of motion | longest step | pause after the last frame | tap to settled |
+|---|---|---|---|---|---|---|
+| 25 | 41 → 40ms | 77 → 68ms | 13 → 13 | 39 → 33ms | 17 → 33ms | 283 → 300ms |
+| 100 | 52 → 31ms | 114 → 61ms | 11 → 13 | 62 → 33ms | 40 → 67ms | 326 → 333ms |
+| 500 | 199 → 100ms | 420 → 188ms | 2 → 4 | 221 → 85ms | 167 → 308ms | 615 → 664ms |
+
+Week to day is unaffected, since a shrinking change never defers. `VisibleDatesChanged` arrived 199ms
+after the tap without the deferral and 527ms after it with, at five hundred a month. At that volume the
+four frames of motion are still about 80ms apart: the centre page alone is some 115 views, and each is
+laid out again every frame.
