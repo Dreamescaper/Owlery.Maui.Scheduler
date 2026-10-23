@@ -500,8 +500,15 @@ window, the same steps came back with the title, headers and grid all on the wee
 and `VisibleDatesChanged` raised for it. That held for backward and forward flings, and for tab
 switches and pushes.
 
-Not covered: Android, whose snap is driven from `ComputeScroll` while drawing and so may behave
-differently off-window, and a physical device.
+On the Android emulator (`OwleryPhone36`, 1080×2400, Debug), the same harness did not need the fix. A
+Shell tab switch does not detach the page there. It hides it, so the snap, which advances from
+`ComputeScroll` while drawing, pauses. A sample button that started an animated slide and switched tab
+50ms later left the pager at rest mid-slide while hidden. On returning, the slide resumed, reported
+settled, and title, headers and grid agreed on the destination week, with `VisibleDatesChanged`
+raised. A push did not detach the page either.
+
+Not covered: a user's swipe cut off by a tab switch on Android, since `adb` input could not land a tap
+inside a 250ms snap (the slide exercises the same animator), and a physical device.
 
 ## Shell flyout navigation, in a host app on an iOS simulator
 
@@ -517,7 +524,16 @@ the held offset on connect, the log showed the new view taking the centre offset
 grid agreed after each round-trip to Clients and Recurring Sessions, from the current week and from a
 swiped one.
 
+On the Android emulator (`Medium_Phone`, 1080×2400, Debug), the sample was put temporarily under a
+Shell flyout shaped like the host's: `ShellContent` items holding page instances. Moving to another
+item and back detached and re-attached the pager, but it was the same `HorizontalScrollView`, still
+at the centre offset. No handler was disconnected, and header and grid agreed on the swiped week. A
+slide started just before a flyout switch had already finished by the time the page was detached,
+because the flyout navigation takes longer than a slide.
+
 Not covered: the device ordering that left the offset at zero, which the simulator never produced, so
-the fix for it is reasoned from the log rather than shown failing and then passing; Android, whose
-handler does not re-apply the offset on connect either; and a physical device.
+the fix for it is reasoned from the log rather than shown failing and then passing; the host app on
+Android, whose emulator had too little storage left to install the build, so whether MAUI 11 replaces
+the platform view there as it does on iOS is unknown — the Android handler does not re-apply the
+offset on connect; and a physical device.
 
