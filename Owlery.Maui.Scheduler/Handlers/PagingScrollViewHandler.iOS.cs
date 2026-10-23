@@ -86,8 +86,15 @@ internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, M
         platformView.ScrollAnimationEnded += OnScrollAnimationEnded;
         platformView.DecelerationEnded += OnSettled;
         platformView.DraggingEnded += OnDraggingEnded;
+        platformView.SettledOffWindow += OnSettledOffWindow;
 
         VirtualView.ScrollToRequested += OnScrollToRequested;
+
+        // A handler can be reconnected to a view that already has an offset — a Shell flyout item does
+        // it on every visit, keeping the page and replacing the platform views — and a fresh
+        // UIScrollView starts at zero. Nothing else re-applies the offset unless a rebuild happens to
+        // follow, and without one the grid sits on the page before the one its headers still mirror.
+        platformView.SetOffset(VirtualView.ScrollX, animated: false);
     }
 
     protected override void DisconnectHandler(MauiPagingScrollView platformView)
@@ -96,6 +103,7 @@ internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, M
         platformView.ScrollAnimationEnded -= OnScrollAnimationEnded;
         platformView.DecelerationEnded -= OnSettled;
         platformView.DraggingEnded -= OnDraggingEnded;
+        platformView.SettledOffWindow -= OnSettledOffWindow;
 
         VirtualView.ScrollToRequested -= OnScrollToRequested;
 
@@ -117,6 +125,20 @@ internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, M
     {
         if (!e.Decelerate)
             VirtualView?.SendPageSettled();
+    }
+
+    /// <summary>
+    /// Reports a settle UIKit never did, reading the offset it settled at rather than trusting the
+    /// last one reported.
+    /// </summary>
+    /// <remarks>
+    /// The jump arrives as a <c>Scrolled</c> on the simulator, but nothing depends on it having been
+    /// delivered: settling from a stale offset would rotate the wrong way or not at all.
+    /// </remarks>
+    private void OnSettledOffWindow(object? sender, EventArgs e)
+    {
+        VirtualView?.SetScrolledPosition(PlatformView.ContentOffset.X);
+        VirtualView?.SendPageSettled();
     }
 
     private void OnScrollToRequested(object? sender, PagingScrollRequestedEventArgs e)
@@ -159,8 +181,24 @@ internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, M
 internal class MauiPagingScrollView : UIScrollView
 {
     private double? deferredOffsetX;
+    private bool scrollingWhenRemoved;
 
     public IContentView? CrossPlatformLayout { get; set; }
+
+    /// <summary>
+    /// Raised once the view is back in a window, if it left one while the user's scroll was still
+    /// moving.
+    /// </summary>
+    /// <remarks>
+    /// Leaving the window mid-fling — switching a tab, pushing a page — makes UIKit stop the
+    /// deceleration and jump the offset to the page it was heading for, with a <c>Scrolled</c> for
+    /// the jump but no <c>scrollViewDidEndDecelerating</c>. Nothing then reports the page settled, so
+    /// the control never rotated onto it: the pager came back resting on an outer page — the week
+    /// before or after — while <c>DisplayDate</c> and the host still described the centre one, until a
+    /// swipe back onto the centre page happened to put them in step. Raised on the way back rather
+    /// than on the way out, because the jump arrives after the view has already left.
+    /// </remarks>
+    public event EventHandler? SettledOffWindow;
 
     /// <summary>
     /// Moves the offset, remembering it if the content is not yet wide enough to allow it.
@@ -186,11 +224,34 @@ internal class MauiPagingScrollView : UIScrollView
         if (!PagingOffset.Fits(x, Bounds.Width, ContentSize.Width))
         {
             deferredOffsetX = x;
+
+            // The deferred offset is applied by the next layout, and nothing else guarantees there is
+            // one. A request deferred after the last pass — a recentre reaching a reconnected view
+            // before its content had been measured — would sit unapplied with the pager at zero, the
+            // page before the one the control had rotated to.
+            SetNeedsLayout();
             return;
         }
 
         SetContentOffset(new CGPoint(x, ContentOffset.Y), animated);
         deferredOffsetX = null;
+    }
+
+    public override void MovedToWindow()
+    {
+        base.MovedToWindow();
+
+        if (Window is null)
+        {
+            scrollingWhenRemoved = Dragging || Decelerating;
+            return;
+        }
+
+        if (!scrollingWhenRemoved)
+            return;
+
+        scrollingWhenRemoved = false;
+        SettledOffWindow?.Invoke(this, EventArgs.Empty);
     }
 
     public override void LayoutSubviews()

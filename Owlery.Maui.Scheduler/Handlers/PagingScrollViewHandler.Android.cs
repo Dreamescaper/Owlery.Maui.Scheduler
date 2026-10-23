@@ -60,6 +60,11 @@ internal partial class PagingScrollViewHandler : ViewHandler<PagingScrollView, M
         platformView.PageSettled += OnPlatformPageSettled;
 
         VirtualView.ScrollToRequested += OnScrollToRequested;
+
+        // A handler can be reconnected to a view that already has an offset, and the fresh scroll view
+        // starts at zero. A Shell flyout does it on iOS; on Android it has been seen only when a host
+        // disconnects the handlers itself, but without this nothing puts the offset back there either.
+        platformView.SetOffset((int)Math.Round(VirtualView.ScrollX * Density), animated: false);
     }
 
     protected override void DisconnectHandler(MauiPagingScrollView platformView)

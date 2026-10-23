@@ -486,3 +486,63 @@ Adjacent slides and swipes animated throughout.
 
 Not covered: iOS, which animates programmatic scrolls in Core Animation rather than in a scroller the
 control owns, and a physical device.
+
+## A fling interrupted by leaving the page, on an iOS simulator
+
+On the iOS 26.5 simulator (iPhone 17 Pro, Debug), the sample was put temporarily under a Shell with a
+second tab and a button that pushed a page. A fling followed straight away by a tab switch or a push
+reproduced the reported desynchronisation every time. Logging the pager showed it leaving the window
+with `Dragging` and `Decelerating` both still set, then a single `Scrolled` jumping to the page the
+fling was heading for, and no `DecelerationEnded`. Back on the tab, the title read 19–25 Oct while
+the grid showed 12–18 Oct, and a fling forward instead left the pager on the trailing page with
+nothing to rotate it ([section 19](pager.md)). With the settle reported once the view is back in a
+window, the same steps came back with the title, headers and grid all on the week the fling reached,
+and `VisibleDatesChanged` raised for it. That held for backward and forward flings, and for tab
+switches and pushes.
+
+On the Android emulator (`OwleryPhone36`, 1080×2400, Debug), the same harness did not need the fix. A
+Shell tab switch does not detach the page there. It hides it, so the snap, which advances from
+`ComputeScroll` while drawing, pauses. A sample button that started an animated slide and switched tab
+50ms later left the pager at rest mid-slide while hidden. On returning, the slide resumed, reported
+settled, and title, headers and grid agreed on the destination week, with `VisibleDatesChanged`
+raised. A push did not detach the page either.
+
+Not covered: a user's swipe cut off by a tab switch on Android, since `adb` input could not land a tap
+inside a 250ms snap (the slide exercises the same animator), and a physical device.
+
+## Shell flyout navigation, in a host app on an iOS simulator
+
+The report this answers came with a recording from a host built on Shell and BlazorBindings, on .NET 11
+RC2 and MAUI 11 RC2. It showed no fling. After moving to another flyout item and back, the grid showed
+the week before while the day headers still marked today's week. Earlier in the same recording, header
+and grid had both come back on the week before. The host was run on the iOS 26.5 simulator against a
+build of the control that logged the pager. Every flyout round-trip disconnected the pager's handler
+and connected a new `UIScrollView` at offset 0, while the `SchedulerView` kept `ScrollX` at the centre
+page ([section 19](pager.md)). On the simulator a `RebuildAll` always followed, and the layout after it
+applied the deferred recentre, so the desynchronised state did not reproduce. With the handler applying
+the held offset on connect, the log showed the new view taking the centre offset immediately. Header and
+grid agreed after each round-trip to Clients and Recurring Sessions, from the current week and from a
+swiped one.
+
+On the Android emulator (`Medium_Phone`, 1080×2400, Debug), the sample was put temporarily under a
+Shell flyout shaped like the host's: `ShellContent` items holding page instances. Moving to another
+item and back detached and re-attached the pager, but it was the same `HorizontalScrollView`, still
+at the centre offset. No handler was disconnected, and header and grid agreed on the swiped week. A
+slide started just before a flyout switch had already finished by the time the page was detached,
+because the flyout navigation takes longer than a slide.
+
+A temporary sample button then forced the reconnect directly: it removed the `SchedulerView`, called
+`DisconnectHandlers`, and put it back, which builds new platform views and is followed by no rebuild.
+With the connect-time offset switched off, it reproduced the reported state on both platforms. On the
+iOS simulator and on the `Medium_Phone` emulator, the title and day headers stayed on 19–25 Oct with
+today marked while the grid showed 12–18 Oct, and the log showed the new view connecting at 0 with the
+control at the centre page and no recentre after it. With the connect-time offset on, the same button
+brought the grid back to 19–25 Oct on both, and on Android the log showed the deferred offset applied
+by the first layout.
+
+Not covered: the iOS ordering in which a recentre deferred after the last layout pass is never applied,
+which the simulator never produced, so `SetNeedsLayout` on deferral is reasoned from the log rather
+than shown failing and then passing; the host app on Android, whose emulator had too little storage
+left to install the build, so whether MAUI 11 replaces the platform view on a flyout visit there is
+unknown; and a physical device.
+

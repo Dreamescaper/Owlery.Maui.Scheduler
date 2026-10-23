@@ -377,6 +377,31 @@ public class DisplayDateTests
         });
     }
 
+    [Test]
+    public void A_settle_arriving_mid_slide_does_not_turn_the_slide_back()
+    {
+        // A fling still decelerating when the host navigates: the slide's jump stops it, and the
+        // platform may report it settled on the page the jump landed on.
+        var destination = Monday.AddDays(21);
+        var harness = new SchedulerHarness(Monday,
+        [
+            TestAppointment.At(Monday.AddDays(1), "10:00", 1, "showing"),
+            TestAppointment.At(destination.AddDays(1), "10:00", 1, "destination")
+        ]);
+        harness.DeferPagerScrolls = true;
+
+        harness.Scheduler.DisplayDate = destination;
+        harness.SettlePager();
+        harness.CompletePendingScrolls();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(harness.Scheduler.DisplayDate, Is.EqualTo(destination));
+            Assert.That(Subjects(harness.AppointmentsOnPage(1)), Is.EqualTo(new[] { "destination" }));
+            Assert.That(harness.PagerAcceptsSwipes, Is.True);
+        });
+    }
+
     private static string?[] Subjects(IEnumerable<TestAppointmentView> views) =>
         [.. views.Select(view => ((TestAppointment)view.BindingContext).Subject)];
 }

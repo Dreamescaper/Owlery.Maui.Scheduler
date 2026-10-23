@@ -34,7 +34,7 @@ scroller inside `HorizontalScrollView`, which cannot be reached to stop — so t
 follows a settle was overwritten on the scroller's next frame, and one swipe compounded into
 several. Owning it also makes "has it arrived" exact instead of polled for.
 
-## Six things that were only found by running it
+## Things that were only found by running it
 
 **Plain properties do not reach a handler.** `PageWidth` and `IsScrollEnabled` are not bindable —
 nothing binds to them — so the mapper ran once at connect time, while `PageWidth` was still 0, and
@@ -81,6 +81,33 @@ finishing through `scrollViewDidEndScrollingAnimation`; Android has no counterpa
 flight" flag only once that await comes back, so the flag stayed set and the drop target was never
 resolved again — the appointment followed the finger and refused to snap, for the rest of the drag.
 The handler now completes any pending request when its own animator stops.
+
+**A fling cut short by leaving the window never settles on iOS.** Switching a Shell tab or pushing a
+page while the pager is still decelerating takes it out of the window, and UIKit stops the
+deceleration there: the offset jumps to the page the fling was heading for, and `Scrolled` reports the
+jump, but `scrollViewDidEndDecelerating` never comes. With no `PageSettled` the control never rotated,
+so it came back resting on an outer page — the week before or after — while the title, `DisplayDate`
+and the host all still described the centre one. A swipe onto the centre page put them back in step,
+since that page needs no rotation, which is what made it look intermittent. The platform view now notes whether the user's scroll was still
+moving when it left the window and, once it is back in one, the handler reads the offset afresh and
+reports the page settled — a no-op if it is the centre page. §15 has the simulator run.
+
+**A Shell flyout replaces the pager's platform view, and the new one starts at zero.** Moving between
+flyout items in a host built on Shell keeps the page and the `SchedulerView` — its pages, its
+`ScrollX`, the header strip's translation — but disconnects every handler and connects new ones, so
+the pager comes back as a fresh `UIScrollView` at offset 0: the page before the centre one. Whether
+anything moved it to the centre depended on what happened to follow. On the simulator a geometry pass
+always did: `RebuildAll` recentred, the request was deferred because the new view had no content size
+yet, and the layout that came next applied it. Two orderings leave it at zero instead, and they match
+the two states seen on a device. If the recentre is deferred after the view's last layout pass, nothing
+applies it — and the deferral reports the offset the view is at, so the headers follow the grid to the
+week before. If no recentre follows the reconnect at all, the control keeps believing the centre page,
+and the headers stay there while the grid shows the week before. That second state reproduces on both
+platforms when a host disconnects the handlers itself and puts the view back, which is followed by no
+rebuild. A newly connected handler on either platform now applies the offset the control already holds,
+and a deferred offset on iOS asks for the layout that applies it rather than waiting for one to happen.
+Android needs no counterpart to that half: a view with a deferred offset is always laid out again once
+its content is.
 
 **A programmatic slide on Android starts a frame late, on purpose.** A host's navigation lays out the
 page it is about to slide onto and then asks for the slide, so the next frame carries that layout.

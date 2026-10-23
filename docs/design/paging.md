@@ -138,7 +138,7 @@ for pages that are off screen the whole time. `FinishNavigationSlide` lays them 
 scroll completes, skipping any slot that already holds the right page — which is every slot, for an
 adjacent destination.
 
-That leaves the ring buffer briefly out of order, which has three consequences:
+That leaves the ring buffer briefly out of order, which has these consequences:
 
 - *The pager takes no swipe during the slide.* A swipe back mid-slide would land on the page just
   left while the control believed it was the week before the destination. Repairing it on touch was
@@ -162,6 +162,12 @@ That leaves the ring buffer briefly out of order, which has three consequences:
   is stopped rather than allowed to resume. It captured the page width from before the rebuild, and
   a host setting the date and switching to the month in one handler would otherwise have the pager
   slide to the timeline's page width across the month's pages.
+- *A settle mid-slide is ignored.* The slide has already rotated onto its destination, so a
+  `PageSettled` arriving meanwhile — a fling still decelerating when the host navigated, stopped by
+  the slide's jump — would rotate a second time, back onto the page being left, and recentre under
+  the slide. Its animated scroll would then ask for an offset the pager is already at, which UIKit
+  never reports finished, so the slide would never hand the pager back. The slide lands on the
+  centre page whatever was reported, so there is nothing for the settle to do.
 
 Note the asymmetry with `OnPageSettled`, which must stay synchronous and recentres with
 `PagingScrollView.ScrollTo`: there the user has *already* moved the pages, so a frame drawn between
