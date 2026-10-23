@@ -42,6 +42,13 @@ public partial class SchedulerView
         if (!Paged || recentring || dragArmed || ActiveGeometry.ViewportWidth <= 0)
             return;
 
+        // A navigation slide has already rotated onto its page and is sliding to the centre. A settle
+        // arriving meanwhile — a fling cut short by the slide's jump — would rotate a second time, back
+        // onto the page being left, and recentre under the slide so that its animated scroll became a
+        // no-op that UIKit never reports finished: the slide would never hand the pager back.
+        if (navigationSliding)
+            return;
+
         var page = Math.Clamp(e.Page, 0, SchedulerGeometry.SlotCount - 1);
 
         if (page == 1)
