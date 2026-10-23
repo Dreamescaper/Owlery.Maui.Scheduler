@@ -201,6 +201,37 @@ public readonly record struct SchedulerTimeSlot(SchedulerMoment Start, TimeSpan 
     public DateOnly Date => DateOnly.FromDateTime(Start.WallClock);
 }
 
+/// <summary>
+/// One same-day working interval on a recurring weekday, an entry of
+/// <see cref="SchedulerView.WeeklyWorkingHours"/>.
+/// </summary>
+/// <remarks>
+/// Settable members rather than a positional record so it can be written in XAML; the endpoints take
+/// invariant <c>HH:mm</c> text there, as <see cref="SchedulerView.WorkingHoursStart"/> does.
+/// </remarks>
+public sealed record SchedulerWorkingInterval
+{
+    public SchedulerWorkingInterval()
+    {
+    }
+
+    public SchedulerWorkingInterval(DayOfWeek day, TimeOnly start, TimeOnly end)
+    {
+        Day = day;
+        Start = start;
+        End = end;
+    }
+
+    public DayOfWeek Day { get; init; }
+
+    [System.ComponentModel.TypeConverter(typeof(Internal.TimeOnlyTypeConverter))]
+    public TimeOnly Start { get; init; }
+
+    /// <remarks>Equal or earlier than <see cref="Start"/> makes the entry ignored rather than throwing.</remarks>
+    [System.ComponentModel.TypeConverter(typeof(Internal.TimeOnlyTypeConverter))]
+    public TimeOnly End { get; init; }
+}
+
 public sealed class SchedulerCellTappedEventArgs(SchedulerTimeSlot slot) : EventArgs
 {
     public SchedulerTimeSlot Slot { get; } = slot;

@@ -28,11 +28,7 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
 
     public bool ShowNonWorkingHoursShading { get; set; }
 
-    public IReadOnlyCollection<DayOfWeek> WorkingDays { get; set; } = [];
-
-    public TimeOnly WorkingHoursStart { get; set; }
-
-    public TimeOnly WorkingHoursEnd { get; set; }
+    public SchedulerWorkingTime WorkingTime { get; set; } = null!;
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
@@ -71,7 +67,7 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
 
                 var fill = ShowCurrentDayBackground && date == today
                     ? CurrentDayBackgroundColor
-                    : ShowNonWorkingDaysShading && !SchedulerWorkingTime.IsWorkingDay(date, WorkingDays)
+                    : ShowNonWorkingDaysShading && !WorkingTime.IsWorkingDay(date)
                         ? NonWorkingDaysBackgroundColor
                         : null;
 
@@ -86,14 +82,8 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
 
     private void DrawNonWorkingHours(ICanvas canvas, float dayWidth)
     {
-        if (!ShowNonWorkingHoursShading
-            || !SchedulerWorkingTime.HasSameDayInterval(WorkingHoursStart, WorkingHoursEnd))
-        {
+        if (!ShowNonWorkingHoursShading)
             return;
-        }
-
-        var workingStart = SchedulerWorkingTime.Minutes(WorkingHoursStart);
-        var workingEnd = SchedulerWorkingTime.Minutes(WorkingHoursEnd);
 
         for (var slot = 0; slot < SchedulerGeometry.SlotCount; slot++)
         {
@@ -102,13 +92,19 @@ internal sealed class SchedulerGridDrawable(SchedulerGeometry geometry) : IDrawa
             for (var day = 0; day < geometry.VisibleDays; day++)
             {
                 var date = geometry.SlotStarts[slot].AddDays(day);
-                if (!SchedulerWorkingTime.IsWorkingDay(date, WorkingDays))
+                if (!WorkingTime.IsWorkingDay(date))
                     continue;
 
                 var x = slotOffset + day * dayWidth;
 
-                FillMinuteRange(canvas, x, dayWidth, geometry.WindowStartMinutes, workingStart);
-                FillMinuteRange(canvas, x, dayWidth, workingEnd, geometry.WindowEndMinutes);
+                // Shade every gap around the day's working intervals, which arrive sorted and merged.
+                var cursor = geometry.WindowStartMinutes;
+                foreach (var (start, end) in WorkingTime.WorkingMinutes(date))
+                {
+                    FillMinuteRange(canvas, x, dayWidth, cursor, start);
+                    cursor = end;
+                }
+                FillMinuteRange(canvas, x, dayWidth, cursor, geometry.WindowEndMinutes);
             }
         }
     }

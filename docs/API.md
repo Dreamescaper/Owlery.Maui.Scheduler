@@ -201,13 +201,17 @@ rebuilds nothing and is read the next time the timeline appears.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `ShowNonWorkingDaysShading` | `bool` | `true` | Whether days absent from `WorkingDays` have a distinct background in timeline and month views. |
+| `ShowNonWorkingDaysShading` | `bool` | `true` | Whether non-working days have a distinct background in timeline and month views: days absent from `WorkingDays`, or, when `WeeklyWorkingHours` is set, days without an entry there. |
 | `ShowCurrentDayBackground` | `bool` | `true` | Whether today's column, cell or agenda rows receive `CurrentDayBackgroundColor`. Independent of `ShowCurrentDayCircle` and of the current-time indicator. |
 | `ShowCurrentDayCircle` | `bool` | `true` | Whether today's day number is drawn inside a filled circle on every surface. The circle is filled with `CurrentDayCircleColor` and the number drawn in `CurrentDayTextColor`. Independent of `ShowCurrentDayBackground`: mark the day without shading its cells, or the reverse. |
-| `ShowNonWorkingHoursShading` | `bool` | `false` | Whether time before and after the working interval is shaded on working days. Ignored in month view. |
+| `ShowNonWorkingHoursShading` | `bool` | `false` | Whether time outside working hours is shaded on working days: before and after the shared interval, or, when `WeeklyWorkingHours` is set, everywhere outside that day's intervals, including the gaps of a split day. Ignored in month view. |
 | `WorkingDays` | `IReadOnlyCollection<DayOfWeek>` | Monday–Friday | Days regarded as working. Replace the collection to report a change; in-place mutations are not observed. An empty collection makes every day non-working, and `null` restores the default week rather than throwing later from inside a draw. |
 | `WorkingHoursStart` | `TimeOnly` | `09:00` | Beginning of the same-day working interval. |
 | `WorkingHoursEnd` | `TimeOnly` | `17:00` | End of the same-day working interval. Equal or earlier than `WorkingHoursStart` suppresses hour shading rather than throwing. |
+| `WeeklyWorkingHours` | `IReadOnlyCollection<SchedulerWorkingInterval>?` | `null` | Working intervals per weekday, for a week whose days do not share one interval. When set it replaces `WorkingDays`, `WorkingHoursStart` and `WorkingHoursEnd`: a weekday with at least one interval is a working day and time outside its intervals is non-working time; every other day is non-working. A weekday may have several intervals, and overlapping ones merge. An entry whose `End` is not after its `Start` is ignored rather than thrown on. Replace the collection to report a change; in-place mutations are not observed. `null` uses the shared properties. |
+
+`SchedulerWorkingInterval` has `Day` (`DayOfWeek`), `Start` and `End` (`TimeOnly`), settable through its
+constructor or as properties. Its endpoints take the same invariant `HH:mm` text in XAML.
 
 On a working current day, non-working-hour bands are painted over the current-day background so both
 states remain visible. A current non-working day keeps the current-day background. Overnight working
@@ -232,6 +236,20 @@ same on every device regardless of the phone's locale:
 ```
 
 with `xmlns:sys="clr-namespace:System;assembly=System.Runtime"`.
+
+A week with different hours on different days:
+
+```csharp
+scheduler.WeeklyWorkingHours =
+[
+    new(DayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(18, 0)),
+    new(DayOfWeek.Tuesday, new TimeOnly(9, 0), new TimeOnly(18, 0)),
+    new(DayOfWeek.Friday, new TimeOnly(10, 0), new TimeOnly(15, 0)),
+    // A split day: two intervals on one weekday.
+    new(DayOfWeek.Saturday, new TimeOnly(10, 0), new TimeOnly(12, 0)),
+    new(DayOfWeek.Saturday, new TimeOnly(14, 0), new TimeOnly(16, 0))
+];
+```
 
 ### Month layout
 

@@ -1380,9 +1380,10 @@ public partial class SchedulerView : ContentView
         gridDrawable.ShowNonWorkingDaysShading = ShowNonWorkingDaysShading;
         gridDrawable.ShowCurrentDayBackground = ShowCurrentDayBackground;
         gridDrawable.ShowNonWorkingHoursShading = ShowNonWorkingHoursShading;
-        gridDrawable.WorkingDays = WorkingDays;
-        gridDrawable.WorkingHoursStart = WorkingHoursStart;
-        gridDrawable.WorkingHoursEnd = WorkingHoursEnd;
+        var workingTime = WeeklyWorkingHours is { } weekly
+            ? SchedulerWorkingTime.FromWeeklyHours(weekly)
+            : SchedulerWorkingTime.FromSharedInterval(WorkingDays, WorkingHoursStart, WorkingHoursEnd);
+        gridDrawable.WorkingTime = workingTime;
 
         monthDrawable.GridLineColor = GridLineColor;
         monthDrawable.NonWorkingDaysBackgroundColor = NonWorkingDaysBackgroundColor;
@@ -1396,7 +1397,7 @@ public partial class SchedulerView : ContentView
         monthDrawable.ShowNonWorkingDaysShading = ShowNonWorkingDaysShading;
         monthDrawable.ShowCurrentDayBackground = ShowCurrentDayBackground;
         monthDrawable.ShowCurrentDayCircle = ShowCurrentDayCircle;
-        monthDrawable.WorkingDays = WorkingDays;
+        monthDrawable.WorkingTime = workingTime;
         monthDrawable.OverflowFormat = MonthOverflowFormat;
 
         gutter.UpdateAppearance(

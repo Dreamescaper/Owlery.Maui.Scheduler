@@ -11,6 +11,22 @@ same-day `TimeOnly` interval. It covers the visual distinction the control owns 
 control into a holiday calendar or availability engine. Date exceptions and overnight intervals can
 be added when a concrete host needs their semantics rather than guessed here.
 
+A host whose days differ — 09:00–18:00 Monday to Thursday, 10:00–15:00 on Friday — sets
+`WeeklyWorkingHours`, a flat collection of `SchedulerWorkingInterval` entries, each a weekday and a
+same-day interval. It is added beside the shared properties rather than replacing them: renaming or
+removing `WorkingDays` and the two endpoints would break every existing consumer for a case most of
+them do not have. When set it wins outright; mixing the two — per-day entries for some days, the shared
+interval for the rest — was rejected because which one applies to a given day would be a rule a host
+has to look up. A flat list rather than a weekday-keyed map is what allows a split day without another
+shape later, and it reads the same in C# and in XAML. The entry is a record with settable members, not
+a positional one, because XAML can only construct it through a parameterless constructor.
+
+Both forms are resolved once per appearance change into per-weekday working minutes (sorted and
+merged), so the timeline and month drawables read one shape and neither knows which form the host
+used. The shared form's reversed interval keeps its old meaning — no hour shading — by resolving to a
+whole working day; a reversed per-day entry is ignored instead, because one bad entry should not make
+its weekday read as working all day.
+
 A `TimeOnly` property cannot be set from XAML on its own. MAUI's XAML loader does not consult the
 converter the framework registers for the type, and fails the load with "mismatching type between
 value and property" — so `WorkingHoursStart` and `WorkingHoursEnd` carry a `TypeConverterAttribute`

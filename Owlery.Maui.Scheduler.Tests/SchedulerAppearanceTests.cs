@@ -62,7 +62,7 @@ public class SchedulerAppearanceTests
     {
         var drawable = Timeline();
         drawable.ShowCurrentDayBackground = false;
-        drawable.WorkingDays = [];
+        drawable.WorkingTime = Shared([]);
 
         Assert.That(
             Draw(drawable).Fills.Count(fill => fill.Color == NonWorkingDay && fill.Bounds.Height == 500),
@@ -110,14 +110,14 @@ public class SchedulerAppearanceTests
         Assert.That(Draw(drawable).Fills, Is.Empty);
 
         drawable.ShowNonWorkingDaysShading = true;
-        drawable.WorkingDays =
+        drawable.WorkingTime = Shared(
         [
             DayOfWeek.Sunday,
             DayOfWeek.Monday,
             DayOfWeek.Tuesday,
             DayOfWeek.Wednesday,
             DayOfWeek.Thursday
-        ];
+        ]);
 
         var recording = Draw(drawable);
 
@@ -133,8 +133,7 @@ public class SchedulerAppearanceTests
         drawable.ShowCurrentDayBackground = false;
         drawable.ShowNonWorkingDaysShading = false;
         drawable.ShowNonWorkingHoursShading = true;
-        drawable.WorkingHoursStart = new TimeOnly(9, 0);
-        drawable.WorkingHoursEnd = new TimeOnly(17, 0);
+        drawable.WorkingTime = Shared(Weekdays, new TimeOnly(9, 0), new TimeOnly(17, 0));
 
         var recording = Draw(drawable);
         var centreMonday = recording.Fills
@@ -161,10 +160,113 @@ public class SchedulerAppearanceTests
 
         Assert.That(Draw(drawable).Fills, Is.Empty, "the whole visible window is inside 09:00-17:00");
 
-        drawable.WorkingHoursStart = new TimeOnly(17, 0);
-        drawable.WorkingHoursEnd = new TimeOnly(9, 0);
+        drawable.WorkingTime = Shared(Weekdays, new TimeOnly(17, 0), new TimeOnly(9, 0));
 
         Assert.That(Draw(drawable).Fills, Is.Empty, "overnight intervals are outside this change");
+    }
+
+    [Test]
+    public void Weekly_working_hours_shade_each_day_around_its_own_interval()
+    {
+        var drawable = Timeline();
+        drawable.ShowCurrentDayBackground = false;
+        drawable.ShowNonWorkingDaysShading = false;
+        drawable.ShowNonWorkingHoursShading = true;
+        drawable.WorkingTime = SchedulerWorkingTime.FromWeeklyHours(
+        [
+            new(DayOfWeek.Thursday, new TimeOnly(9, 0), new TimeOnly(17, 0)),
+            new(DayOfWeek.Friday, new TimeOnly(10, 0), new TimeOnly(15, 0))
+        ]);
+
+        var recording = Draw(drawable);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(CentreBands(recording, x: 1000), Is.EqualTo(new[]
+            {
+                new RectF(1000, 0, 100, 50),
+                new RectF(1000, 450, 100, 50)
+            }), "Thursday 09:00-17:00");
+            Assert.That(CentreBands(recording, x: 1100), Is.EqualTo(new[]
+            {
+                new RectF(1100, 0, 100, 100),
+                new RectF(1100, 350, 100, 150)
+            }), "Friday 10:00-15:00");
+            Assert.That(CentreBands(recording, x: 700), Is.Empty, "Monday has no entry, so no hours are shaded");
+        });
+    }
+
+    [Test]
+    public void Weekly_working_hours_shade_the_gaps_of_a_split_day()
+    {
+        var drawable = Timeline();
+        drawable.ShowCurrentDayBackground = false;
+        drawable.ShowNonWorkingDaysShading = false;
+        drawable.ShowNonWorkingHoursShading = true;
+        drawable.WorkingTime = SchedulerWorkingTime.FromWeeklyHours(
+        [
+            new(DayOfWeek.Monday, new TimeOnly(13, 0), new TimeOnly(17, 0)),
+            new(DayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(12, 0)),
+            new(DayOfWeek.Monday, new TimeOnly(10, 0), new TimeOnly(11, 0))
+        ]);
+
+        Assert.That(CentreBands(Draw(drawable), x: 700), Is.EqualTo(new[]
+        {
+            new RectF(700, 0, 100, 50),
+            new RectF(700, 200, 100, 50),
+            new RectF(700, 450, 100, 50)
+        }), "out of order and overlapping entries merge into 09:00-12:00 and 13:00-17:00");
+    }
+
+    [Test]
+    public void Weekly_working_hours_make_days_without_a_valid_entry_non_working()
+    {
+        var drawable = Timeline();
+        drawable.ShowCurrentDayBackground = false;
+        drawable.WorkingTime = SchedulerWorkingTime.FromWeeklyHours(
+        [
+            new(DayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(17, 0)),
+            new(DayOfWeek.Tuesday, new TimeOnly(17, 0), new TimeOnly(9, 0))
+        ]);
+
+        Assert.That(
+            Draw(drawable).Fills.Count(fill => fill.Color == NonWorkingDay && fill.Bounds.Height == 500),
+            Is.EqualTo(18), "every day but Monday across three pages; Tuesday's reversed entry is ignored");
+    }
+
+    [Test]
+    public void Weekly_working_hours_replace_the_working_days_until_cleared()
+    {
+        var harness = new SchedulerHarness(new DateTime(2026, 8, 24));
+        var nonWorkingDay = Color.FromArgb("#123456");
+        harness.Scheduler.ShowCurrentDayBackground = false;
+        harness.Scheduler.NonWorkingDaysBackgroundColor = nonWorkingDay;
+
+        int NonWorkingDayFills() => Draw(harness.SurfaceDrawable).Fills.Count(fill => fill.Color == nonWorkingDay);
+
+        harness.Scheduler.WeeklyWorkingHours = [new(DayOfWeek.Saturday, new TimeOnly(10, 0), new TimeOnly(15, 0))];
+        var weekly = NonWorkingDayFills();
+
+        harness.Scheduler.WeeklyWorkingHours = null;
+        var shared = NonWorkingDayFills();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(weekly, Is.EqualTo(18), "only Saturday works, on each of three pages");
+            Assert.That(shared, Is.EqualTo(6), "the default Monday-Friday week is back");
+        });
+    }
+
+    [Test]
+    public void Weekly_working_interval_endpoints_are_reachable_from_xaml()
+    {
+        foreach (var name in new[] { nameof(SchedulerWorkingInterval.Start), nameof(SchedulerWorkingInterval.End) })
+        {
+            var converter = typeof(SchedulerWorkingInterval).GetProperty(name)!
+                .GetCustomAttribute<System.ComponentModel.TypeConverterAttribute>();
+
+            Assert.That(converter?.ConverterTypeName, Does.Contain(nameof(TimeOnlyTypeConverter)), name);
+        }
     }
 
     [Test]
@@ -285,14 +387,14 @@ public class SchedulerAppearanceTests
             OverflowTextColor = Color.FromArgb("#BBBBBB"),
             ShowNonWorkingDaysShading = true,
             ShowCurrentDayBackground = false,
-            WorkingDays =
+            WorkingTime = Shared(
             [
                 DayOfWeek.Sunday,
                 DayOfWeek.Monday,
                 DayOfWeek.Tuesday,
                 DayOfWeek.Wednesday,
                 DayOfWeek.Thursday
-            ]
+            ])
         };
 
         var recording = Draw(drawable);
@@ -331,7 +433,7 @@ public class SchedulerAppearanceTests
             ShowNonWorkingDaysShading = false,
             ShowCurrentDayBackground = false,
             ShowCurrentDayCircle = true,
-            WorkingDays = Weekdays
+            WorkingTime = Shared(Weekdays)
         };
 
         var drawn = Draw(drawable).Ellipses.Single(ellipse => ellipse.Color == circle);
@@ -505,11 +607,18 @@ public class SchedulerAppearanceTests
             ShowNonWorkingDaysShading = true,
             ShowCurrentDayBackground = true,
             ShowNonWorkingHoursShading = false,
-            WorkingDays = Weekdays,
-            WorkingHoursStart = new TimeOnly(9, 0),
-            WorkingHoursEnd = new TimeOnly(17, 0)
+            WorkingTime = Shared(Weekdays)
         };
     }
+
+    /// <summary>Non-working-hour bands drawn in one column of the centre page, top to bottom.</summary>
+    private static RectF[] CentreBands(RecordingCanvas recording, float x) =>
+    [
+        .. recording.Fills
+            .Where(fill => fill.Color == NonWorkingHour && fill.Bounds.X == x)
+            .Select(fill => fill.Bounds)
+            .OrderBy(bounds => bounds.Y)
+    ];
 
     /// <summary>The horizontal minor-grid lines a timeline draws over one page's worth of hours.</summary>
     private static IReadOnlyList<LineOperation> MinorLines(int minutes)
@@ -521,6 +630,10 @@ public class SchedulerAppearanceTests
             .Where(line => line.Color == MinorGrid)
             .DistinctBy(line => line.Start.Y)];
     }
+
+    private static SchedulerWorkingTime Shared(
+        IReadOnlyCollection<DayOfWeek> days, TimeOnly? start = null, TimeOnly? end = null) =>
+        SchedulerWorkingTime.FromSharedInterval(days, start ?? new TimeOnly(9, 0), end ?? new TimeOnly(17, 0));
 
     private static RecordingCanvas Draw(IDrawable drawable)
     {

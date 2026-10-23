@@ -100,6 +100,9 @@ public sealed class KnobsPanel : ContentView
                         DayOfWeek.Wednesday, DayOfWeek.Thursday)),
                     ("Every day", () => SetWorkingDays(Enum.GetValues<DayOfWeek>()))),
                 Knobs.Actions(
+                    ("Weekly: Mon–Thu 09–18, Fri–Sat 10–15", SetWeeklyWorkingHours),
+                    ("Shared hours", () => scheduler.WeeklyWorkingHours = null)),
+                Knobs.Actions(
                     ("ScrollToTime 06:00", () => scheduler.ScrollToTime(TimeSpan.FromHours(6))),
                     ("12:00", () => scheduler.ScrollToTime(TimeSpan.FromHours(12))),
                     ("20:00", () => scheduler.ScrollToTime(TimeSpan.FromHours(20)))),
@@ -225,6 +228,14 @@ public sealed class KnobsPanel : ContentView
     private void SetTimesAreUtc(bool utc) => source.SetTimesAreUtc(utc);
 
     private void SetWorkingDays(params DayOfWeek[] days) => scheduler.WorkingDays = days;
+
+    private void SetWeeklyWorkingHours() => scheduler.WeeklyWorkingHours =
+    [
+        .. new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday }
+            .Select(day => new SchedulerWorkingInterval(day, new TimeOnly(9, 0), new TimeOnly(18, 0))),
+        new SchedulerWorkingInterval(DayOfWeek.Friday, new TimeOnly(10, 0), new TimeOnly(15, 0)),
+        new SchedulerWorkingInterval(DayOfWeek.Saturday, new TimeOnly(10, 0), new TimeOnly(15, 0))
+    ];
 
     private void SetWorkingHours(string range)
     {

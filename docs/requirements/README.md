@@ -46,7 +46,7 @@ outcome depends on the host acting on it.
 | **Snap interval** | The granularity a *dragged* appointment lands on, rounded to the nearest boundary. 15 minutes by default, and independent of the slot length — the two answer different questions. |
 | **Page** | A horizontally moving period — a week, three days, one day, or a month. The agenda is continuous and has no horizontal page. |
 | **Day window** | The range of hours shown vertically, 08:00–23:00 by default. |
-| **Working time** | Recurring working days and one same-day working interval, used only for optional shading. |
+| **Working time** | Recurring working days and one same-day working interval, or same-day working intervals per weekday, used only for optional shading. |
 
 ## Where the build does not yet meet these
 
