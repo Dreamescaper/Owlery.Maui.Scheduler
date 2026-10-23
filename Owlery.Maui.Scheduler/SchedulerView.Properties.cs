@@ -475,7 +475,10 @@ public partial class SchedulerView
         set => SetValue(ShowCurrentDayCircleProperty, value);
     }
 
-    /// <summary>Whether time outside the working interval is shaded on working days.</summary>
+    /// <summary>
+    /// Whether time outside working hours is shaded on working days: outside the shared interval, or outside
+    /// the day's own intervals when <see cref="WeeklyWorkingHours"/> is set.
+    /// </summary>
     /// <remarks>Only applies to the timeline; a month has no hours.</remarks>
     public bool ShowNonWorkingHoursShading
     {

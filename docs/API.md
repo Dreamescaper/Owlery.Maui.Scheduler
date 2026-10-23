@@ -201,10 +201,10 @@ rebuilds nothing and is read the next time the timeline appears.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `ShowNonWorkingDaysShading` | `bool` | `true` | Whether days absent from `WorkingDays` have a distinct background in timeline and month views. |
+| `ShowNonWorkingDaysShading` | `bool` | `true` | Whether non-working days have a distinct background in timeline and month views: days absent from `WorkingDays`, or, when `WeeklyWorkingHours` is set, days without an entry there. |
 | `ShowCurrentDayBackground` | `bool` | `true` | Whether today's column, cell or agenda rows receive `CurrentDayBackgroundColor`. Independent of `ShowCurrentDayCircle` and of the current-time indicator. |
 | `ShowCurrentDayCircle` | `bool` | `true` | Whether today's day number is drawn inside a filled circle on every surface. The circle is filled with `CurrentDayCircleColor` and the number drawn in `CurrentDayTextColor`. Independent of `ShowCurrentDayBackground`: mark the day without shading its cells, or the reverse. |
-| `ShowNonWorkingHoursShading` | `bool` | `false` | Whether time before and after the working interval is shaded on working days. Ignored in month view. |
+| `ShowNonWorkingHoursShading` | `bool` | `false` | Whether time outside working hours is shaded on working days: before and after the shared interval, or, when `WeeklyWorkingHours` is set, everywhere outside that day's intervals, including the gaps of a split day. Ignored in month view. |
 | `WorkingDays` | `IReadOnlyCollection<DayOfWeek>` | Monday–Friday | Days regarded as working. Replace the collection to report a change; in-place mutations are not observed. An empty collection makes every day non-working, and `null` restores the default week rather than throwing later from inside a draw. |
 | `WorkingHoursStart` | `TimeOnly` | `09:00` | Beginning of the same-day working interval. |
 | `WorkingHoursEnd` | `TimeOnly` | `17:00` | End of the same-day working interval. Equal or earlier than `WorkingHoursStart` suppresses hour shading rather than throwing. |
