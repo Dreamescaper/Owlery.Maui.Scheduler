@@ -35,6 +35,57 @@ internal sealed class TransitionPagePlacement
     }
 
     /// <summary>
+    /// Whether both neighbouring pages stay clear of the viewport for the whole of a transition, which
+    /// is what lets their layout wait until it has finished.
+    /// </summary>
+    /// <remarks>
+    /// Checking the first and last frames is exact rather than a sample. A page's edges are linear in
+    /// the transition's progress — its column width and its shift both are — so a page that is clear
+    /// on the same side at both ends is clear throughout. Growing a day into a week is the case that
+    /// passes; shrinking, or a transition re-aimed at a page it shares no day with, does not.
+    /// </remarks>
+    public static bool NeighboursStayOffScreen(
+        DayCountTransition transition, double viewportWidth, int dayCount, double scrollX)
+    {
+        var progress = transition.Progress;
+
+        try
+        {
+            return StaysClear(0) && StaysClear(PageGeometry.SlotCount - 1);
+        }
+        finally
+        {
+            transition.Progress = progress;
+        }
+
+        bool StaysClear(int slotIndex)
+        {
+            var (firstLeft, firstRight) = Edges(slotIndex, 0);
+            var (lastLeft, lastRight) = Edges(slotIndex, 1);
+
+            // Half a unit of tolerance: at rest a neighbour ends exactly where the viewport begins.
+            return (firstRight <= 0.5 && lastRight <= 0.5)
+                || (firstLeft >= viewportWidth - 0.5 && lastLeft >= viewportWidth - 0.5);
+        }
+
+        (double Left, double Right) Edges(int slotIndex, double at)
+        {
+            transition.Progress = at;
+
+            var geometry = new SchedulerGeometry
+            {
+                ViewportWidth = viewportWidth,
+                VisibleDays = dayCount,
+                DayWidthOverride = transition.DayWidth,
+                AnimationOffsetX = transition.OffsetX
+            };
+
+            var left = (slotIndex * geometry.PageSpan) + geometry.AnimationOffsetX - scrollX;
+            return (left, left + geometry.PageSpan);
+        }
+    }
+
+    /// <summary>
     /// Records that something other than the transition moved a page, which may have left it on
     /// screen at a position the transition did not choose.
     /// </summary>

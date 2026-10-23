@@ -193,6 +193,15 @@ public partial class SchedulerView : ContentView
     /// <summary>Which pages that transition still has to re-place frame by frame.</summary>
     private readonly TransitionPagePlacement transitionPlacement = new();
 
+    /// <summary>
+    /// Set around the rebuild a day-count transition starts from, so it lays out the centre page and
+    /// leaves the neighbours stale for the transition to fill once it has finished.
+    /// </summary>
+    private bool rebuildCentreOnly;
+
+    /// <summary>Counts the transitions that deferred their neighbours, so a superseded one fills nothing.</summary>
+    private int staleFillGeneration;
+
     /// <summary>Whether the day count has changed in this tick and the date may still be following it.</summary>
     private bool dayCountChangePending;
 
@@ -705,6 +714,10 @@ public partial class SchedulerView : ContentView
 
         if (navigationSliding)
             FinishNavigationSlide();
+
+        // A transition cut off here may never finish, and its pages would stay stale and the pager
+        // locked once the view came back.
+        FillStalePages();
         verticalScrollRetryTimer = null;
     }
 
@@ -864,7 +877,24 @@ public partial class SchedulerView : ContentView
         var previousDayWidth = geometry.ViewportWidth / previousDayCount;
         var previousPageStart = slots[1].PageStart;
 
-        ApplyGeometry();
+        // Growing is the direction whose neighbours can be off screen for the whole transition, and the
+        // expensive one: three weeks of views against three days. Whether they really are is checked
+        // once the transition has been aimed; until then the rebuild lays out the centre page alone.
+        var deferNeighbours = Math.Clamp(newDays, 1, 7) > previousDayCount
+            && Handler is not null && IsLoaded && geometry.ViewportWidth > 0 && !dragArmed;
+
+        if (deferNeighbours)
+            staleFillGeneration++;
+
+        rebuildCentreOnly = deferNeighbours;
+        try
+        {
+            ApplyGeometry();
+        }
+        finally
+        {
+            rebuildCentreOnly = false;
+        }
 
         var newDayWidth = geometry.ViewportWidth / Math.Clamp(newDays, 1, 7);
 
@@ -875,6 +905,7 @@ public partial class SchedulerView : ContentView
         if (Handler is null || !IsLoaded || geometry.ViewportWidth <= 0
             || Math.Abs(previousDayWidth - newDayWidth) < 0.5)
         {
+            FillStalePages();
             return;
         }
 
@@ -888,8 +919,12 @@ public partial class SchedulerView : ContentView
         transition.AimAt(slots[CentreSlot].PageStart, geometry.VisibleDays);
         dayCountTransition = transition;
 
+        FillStalePagesUnlessOffScreen(transition);
+
         // The rebuild above placed every page at rest, which is not where the first frame puts them.
         transitionPlacement.MovedAll();
+
+        var fill = staleFillGeneration;
 
         new Animation(
             progress =>
@@ -908,6 +943,14 @@ public partial class SchedulerView : ContentView
                 geometry.DayWidthOverride = null;
                 geometry.AnimationOffsetX = 0;
                 ApplyDayWidth();
+
+                // On the next turn, so the frame this lands on is presented before the work begins. A
+                // transition superseded by another leaves the filling to that one.
+                Dispatcher.Dispatch(() =>
+                {
+                    if (fill == staleFillGeneration)
+                        FillStalePages();
+                });
             });
     }
 

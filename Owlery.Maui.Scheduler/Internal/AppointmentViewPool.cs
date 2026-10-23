@@ -64,6 +64,16 @@ internal sealed class PageSlot
 {
     public DateOnly PageStart { get; set; }
 
+    /// <summary>
+    /// Whether <see cref="PageStart"/> has moved on without the page being laid out for it.
+    /// </summary>
+    /// <remarks>
+    /// Only a growing day-count transition leaves a page like this, and only while it is off screen
+    /// (docs/design/timeline.md, §16). Anything that compares <see cref="PageStart"/> to decide a page
+    /// is already right has to ask this too.
+    /// </remarks>
+    public bool Stale { get; set; }
+
     public List<View> Views { get; } = [];
 
     /// <summary>Where each of <see cref="Views"/> sits, kept so they can be re-placed without a re-layout.</summary>

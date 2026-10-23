@@ -819,7 +819,22 @@ public partial class SchedulerView
         if (view.ViewMode is SchedulerViewMode.Agenda)
             view.agendaNavigationInProgress = true;
 
-        view.RebuildAll(target);
+        // A re-aim keeps deferring if the day count's own rebuild did. Whether the re-aimed transition
+        // still keeps the neighbours off screen is asked again once the pages are placed.
+        var reaimed = view.dayCountChangePending && view.HasStalePages ? view.dayCountTransition : null;
+
+        view.rebuildCentreOnly = reaimed is not null;
+        try
+        {
+            view.RebuildAll(target);
+        }
+        finally
+        {
+            view.rebuildCentreOnly = false;
+        }
+
+        if (reaimed is not null)
+            view.FillStalePagesUnlessOffScreen(reaimed);
 
         if (view.ViewMode is SchedulerViewMode.Agenda)
         {

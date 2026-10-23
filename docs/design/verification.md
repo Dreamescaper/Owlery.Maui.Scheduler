@@ -579,3 +579,20 @@ that case needs next, and this change does not touch it.
 
 Not covered: Android, and a physical device. A simulator on a Mac CPU understates what a phone pays;
 the split between the parts is what carries over.
+
+### Deferring the neighbouring pages
+
+The same probe, with the on-screen skip kept and the deferral of the neighbours' layout
+([section 16](timeline.md)) turned on and off, interleaved, six recorded round trips per case. Day
+to week:
+
+| per month | setup, off → on | tap to first motion | frames of motion | longest step | pause after the last frame | tap to settled |
+|---|---|---|---|---|---|---|
+| 25 | 41 → 40ms | 77 → 68ms | 13 → 13 | 39 → 33ms | 17 → 33ms | 283 → 300ms |
+| 100 | 52 → 31ms | 114 → 61ms | 11 → 13 | 62 → 33ms | 40 → 67ms | 326 → 333ms |
+| 500 | 199 → 100ms | 420 → 188ms | 2 → 4 | 221 → 85ms | 167 → 308ms | 615 → 664ms |
+
+Week to day is unaffected, since a shrinking change never defers. `VisibleDatesChanged` arrived 199ms
+after the tap without the deferral and 527ms after it with, at five hundred a month. At that volume the
+four frames of motion are still about 80ms apart: the centre page alone is some 115 views, and each is
+laid out again every frame.

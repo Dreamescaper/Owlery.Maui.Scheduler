@@ -138,4 +138,60 @@ public class TransitionPagePlacementTests
 
         Assert.That(placement.ShouldPlace(2, onScreen: false), Is.True);
     }
+
+    /// <summary>
+    /// The two growing changes a host actually makes: back out of a single day, and out to a whole
+    /// week. The week starts on the page's first day, so every day held still lies inside it.
+    /// </summary>
+    [Test]
+    public void Neighbours_can_wait_when_a_single_day_grows_or_a_page_grows_into_a_week()
+    {
+        for (var from = 1; from < 7; from++)
+        for (var to = from + 1; to <= 7; to++)
+        {
+            if (from != 1 && to != 7)
+                continue;
+
+            // Every starting page that lies wholly inside the page it grows into.
+            for (var held = 0; held + from <= to; held++)
+            {
+                var transition = new DayCountTransition(Viewport / from, Viewport / to, Monday.AddDays(held), from);
+                transition.AimAt(Monday, to);
+
+                Assert.That(
+                    TransitionPagePlacement.NeighboursStayOffScreen(transition, Viewport, to, ScrollX),
+                    Is.True, $"{from} -> {to}, from day {held}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Growing is not enough on its own. Three days from Wednesday becoming four from Monday keeps
+    /// Wednesday where it was, at the left edge, so the page after the new one — from Friday — begins
+    /// two columns in, on screen.
+    /// </summary>
+    [Test]
+    public void Neighbours_cannot_wait_when_growing_leaves_the_next_page_inside_the_viewport()
+    {
+        var transition = new DayCountTransition(Viewport / 3, Viewport / 4, Wednesday, 3);
+        transition.AimAt(Monday, 4);
+
+        Assert.That(TransitionPagePlacement.NeighboursStayOffScreen(transition, Viewport, 4, ScrollX), Is.False);
+    }
+
+    [Test]
+    public void Neighbours_cannot_wait_when_shrinking_or_when_no_day_is_shared()
+    {
+        var shrinking = new DayCountTransition(Viewport / 7, Viewport, Monday, 7);
+        shrinking.AimAt(Wednesday, 1);
+
+        var unrelated = new DayCountTransition(Viewport, Viewport / 7, Monday.AddDays(30), 1);
+        unrelated.AimAt(Monday, 7);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(TransitionPagePlacement.NeighboursStayOffScreen(shrinking, Viewport, 1, ScrollX), Is.False);
+            Assert.That(TransitionPagePlacement.NeighboursStayOffScreen(unrelated, Viewport, 7, ScrollX), Is.False);
+        });
+    }
 }
